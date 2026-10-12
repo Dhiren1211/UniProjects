@@ -1,0 +1,287 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-pretendard);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* ---- UniProject design tokens (design.md) ---- */
+  --color-primary-50: var(--up-primary-50);
+  --color-primary-100: var(--up-primary-100);
+  --color-primary-500: var(--up-primary-500);
+  --color-primary-600: var(--up-primary-600);
+  --color-primary-700: var(--up-primary-700);
+  --color-canvas: var(--up-canvas);
+  --color-surface-muted: var(--up-surface-muted);
+  --color-night: var(--up-night);
+  --color-ink-900: var(--up-ink-900);
+  --color-ink-700: var(--up-ink-700);
+  --color-ink-500: var(--up-ink-500);
+  --color-up-border: var(--up-border);
+  --color-up-border-strong: var(--up-border-strong);
+  --color-success: var(--up-success);
+  --color-success-soft: var(--up-success-soft);
+  --color-warning: var(--up-warning);
+  --color-warning-soft: var(--up-warning-soft);
+  --color-danger: var(--up-danger);
+  --color-danger-soft: var(--up-danger-soft);
+  --color-info: var(--up-info);
+  --color-info-soft: var(--up-info-soft);
+}
+
+:root {
+  --radius: 0.75rem; /* 12px base → cards rounded-xl = 16px */
+
+  /* UniProjects palette — Kyungsung teal on cool neutrals (crest blue #005baa, red #d71920, gold #fcaf17)
+     --up-night is the single dark-surface color shared by the hero, CTA panel, and footer. */
+  --up-night: #062530;
+  --up-primary-50: #e9f7fa;
+  --up-primary-100: #d2eef4;
+  --up-primary-500: #0097b2;
+  --up-primary-600: #00809a;
+  --up-primary-700: #117285;
+  --up-canvas: #f7fafa;
+  --up-surface-muted: #edf3f4;
+  --up-ink-900: #16232a;
+  --up-ink-700: #5a6b72;
+  --up-ink-500: #85979e;
+  --up-border: #e2eaec;
+  --up-border-strong: #d0dcdf;
+  --up-success: #16835b;
+  --up-success-soft: #e7f6ef;
+  --up-warning: #b7791f;
+  --up-warning-soft: #fff4d9;
+  --up-danger: #d71920;
+  --up-danger-soft: #fdecec;
+  --up-info: #00588b;
+  --up-info-soft: #e3f0f8;
+
+  /* shadcn semantic mapping */
+  --background: var(--up-canvas);
+  --foreground: var(--up-ink-900);
+  --card: #ffffff;
+  --card-foreground: var(--up-ink-900);
+  --popover: #ffffff;
+  --popover-foreground: var(--up-ink-900);
+  --primary: var(--up-primary-500);
+  --primary-foreground: #ffffff;
+  --secondary: var(--up-surface-muted);
+  --secondary-foreground: var(--up-ink-900);
+  --muted: var(--up-surface-muted);
+  --muted-foreground: var(--up-ink-700);
+  --accent: var(--up-primary-100);
+  --accent-foreground: var(--up-primary-700);
+  --destructive: var(--up-danger);
+  --border: var(--up-border);
+  --input: var(--up-border);
+  --ring: rgba(0, 151, 178, 0.35);
+  --chart-1: var(--up-primary-500);
+  --chart-2: #005baa;
+  --chart-3: #fcaf17;
+  --chart-4: var(--up-info);
+  --chart-5: var(--up-danger);
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--up-ink-900);
+  --sidebar-primary: var(--up-primary-500);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--up-surface-muted);
+  --sidebar-accent-foreground: var(--up-ink-900);
+  --sidebar-border: var(--up-border);
+  --sidebar-ring: var(--ring);
+}
+
+.dark {
+  --background: #10181c;
+  --foreground: #f3f7f8;
+  --card: #172227;
+  --card-foreground: #f3f7f8;
+  --popover: #172227;
+  --popover-foreground: #f3f7f8;
+  --primary: #2cc4de;
+  --primary-foreground: #03303a;
+  --secondary: #202e34;
+  --secondary-foreground: #f3f7f8;
+  --muted: #202e34;
+  --muted-foreground: #aebfc5;
+  --accent: #0d3d47;
+  --accent-foreground: #a5e6f2;
+  --destructive: #e0444b;
+  --border: #2a3a40;
+  --input: #2a3a40;
+  --ring: rgba(44, 196, 222, 0.4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-pretendard), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "ss01";
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--up-primary-100);
+    color: var(--up-primary-700);
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+  }
+  /* Designer-grade typography: balanced display lines, ragged-right body text */
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar (design.md: long lists scroll nicely) */
+  .nice-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--up-border-strong) transparent;
+  }
+  .nice-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .nice-scroll::-webkit-scrollbar-thumb {
+    background: var(--up-border-strong);
+    border-radius: 999px;
+  }
+  .nice-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* Card hover per design.md §13: border-strong + translateY(-2px) + lifted shadow */
+  .card-hover {
+    transition: transform 180ms ease-out, box-shadow 180ms ease-out, border-color 180ms ease-out;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: var(--up-border-strong);
+    box-shadow:
+      0 2px 4px rgba(20, 20, 30, 0.05),
+      0 16px 32px -8px rgba(20, 20, 30, 0.12);
+  }
+  .shadow-card {
+    box-shadow:
+      0 1px 2px rgba(20, 20, 30, 0.04),
+      0 8px 24px -6px rgba(20, 20, 30, 0.06);
+  }
+  .shadow-float {
+    box-shadow:
+      0 2px 6px rgba(20, 20, 30, 0.06),
+      0 16px 40px -8px rgba(20, 20, 30, 0.14);
+  }
+  /* Focus ring per design.md §24 — brand teal (was the old indigo) */
+  .focus-ring:focus-visible {
+    outline: 3px solid rgba(0, 151, 178, 0.28);
+    outline-offset: 2px;
+  }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollable but chrome-free — console rails / pill strips scroll by wheel & touch.
+   Deliberately UNLAYERED: layered custom utilities get tree-shaken by Tailwind 4 when
+   first compiled before use, which let native scrollbars leak back into the console. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- UniProjects landing keyframes ---- */
+@keyframes up-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes up-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+@keyframes up-aurora {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate(26px, -30px) scale(1.15);
+    opacity: 1;
+  }
+}

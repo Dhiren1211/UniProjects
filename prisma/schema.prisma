@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgres"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// UniProjects — FULL platform for a SINGLE university.
+// The university itself is app-level config (src/lib/config.ts).
+// ============================================================
+
+// ---------- Identity & Auth ----------
+
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  displayName        String
+  email              String   @unique
+  passwordHash       String
+  emailVerified      Boolean  @default(false) // set true after the 6-digit email code flow
+  emailVerifiedAt    DateTime?
+  role               String   @default("STUDENT") // STUDENT | FACULTY | ADMIN
+  bio                String?
+  avatarUrl          String?
+  program            String? // major / program
+  skills             String? // comma separated
+  website            String?
+  github             String?
+  lookingForTeammates Boolean @default(false)
+  departmentId       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  department       Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  sessions         Session[]
+  ownedProjects    Project[]        @relation("ProjectOwner")
+  memberships      ProjectMember[]
+  posts            Post[]
+  comments         Comment[]
+  likes            Like[]
+  bookmarks        Bookmark[]
+  followsGiven     Follow[]         @relation("Follower")
+  joinRequests     JoinRequest[]
+  notifications    Notification[]
+  reportsFiled     Report[]         @relation("Reporter")
+  verificationsReq Verification[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Standalone (no relation) — one row per requested 6-digit email code.
+// Flow: request-code -> verify-code (consumes code, mints a single-use token)
+//       -> /api/auth/register requires that token, then the row is deleted.
+model EmailVerification {
+  id             String    @id @default(cuid())
+  email          String
+  codeHash       String // sha256(email + code + pepper) — the plain code is never stored
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  attempts       Int       @default(0)
+  token          String?   @unique
+  tokenExpiresAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([email])
+}
+
+model Department {
+  id        String    @id @default(cuid())
+  name      String
+  code      String    @unique
+  tagline   String?
+  accent    String    @default("emerald")
+  sortOrder Int       @default(0)
+  projects  Project[]
+  users     User[]
+}
+
+// ---------- Projects ----------
+
+model Project {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  title              String
+  summary            String
+  description        String
+  coverImage         String? // path under /public (e.g. /covers/terrabot.webp)
+  category           String // AI & ML | Web & App | IoT & Hardware | Data & Analytics | Design & Media | Security
+  year               Int
+  semester           String   @default("Spring")
+  program            String?
+  supervisor         String?
+  departmentId       String
+  department         Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ownerId            String?
+  owner              User?    @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  status             String   @default("PUBLISHED") // DRAFT | PUBLISHED
+  allowJoinRequests  Boolean  @default(true)
+  lookingForTeammates Boolean @default(false)
+  verified           Boolean  @default(false)
+  tags               String   @default("")
+  demoUrl            String?
+  repoUrl            String?
+  featured           Boolean  @default(false)
+  views              Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  members      ProjectMember[]
+  technologies ProjectTechnology[]
+  resources    ProjectResource[]
+  images       ProjectImage[]
+  timeline     ProjectTimeline[]
+  comments     Comment[]
+  joinRequests JoinRequest[]
+  verifications Verification[]
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("MEMBER") // OWNER | LEAD | MEMBER
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Technology {
+  id       String              @id @default(cuid())
+  name     String              @unique
+  slug     String              @unique
+  category String              @default("Other")
+  projects ProjectTechnology[]
+}
+
+model ProjectTechnology {
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  technologyId String
+  technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, technologyId])
+}
+
+model ProjectImage {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  url       String
+  caption   String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([projectId, sortOrder])
+}
+
+model ProjectResource {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String // DEMO | GITHUB | DOCUMENT | VIDEO | PRESENTATION
+  label     String
+  url       String // https://… link OR /uploads/... path for uploaded files
+  createdAt DateTime @default(now())
+}
+
+model ProjectTimeline {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  date      DateTime
+  note      String?
+}
+
+// ---------- Community ----------
+
+model Post {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime  @default(now())
+  comments  Comment[]
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  projectId String?
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  postId    String?
+  post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+}
+
+model Like {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String // POST | PROJECT
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+}
+
+model Bookmark {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String // PROJECT | POST
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+}
+
+model Follow {
+  id         String   @id @default(cuid())
+  followerId String
+  follower   User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  targetType String // USER | PROJECT
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([followerId, targetType, targetId])
+}
+
+model JoinRequest {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String?
+  status    String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Verification {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User     @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType  String // PROJECT | POST | USER
+  targetId    String
+  reason      String
+  status      String   @default("OPEN") // OPEN | RESOLVED
+  createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // JOIN_REQUEST | JOIN_APPROVED | JOIN_REJECTED | VERIFICATION | COMMENT | FOLLOW | LIKE | SYSTEM
+  body      String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  location    String?
+  date        DateTime
+  createdAt   DateTime @default(now())
+}
