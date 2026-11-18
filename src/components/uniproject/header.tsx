@@ -4,20 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell,
+  BookOpen,
+  ClipboardList,
   FolderKanban,
-  Home,
   LayoutDashboard,
   LogIn,
   LogOut,
+  Megaphone,
   Menu,
-  MessagesSquare,
   Plus,
   Search,
   Settings,
   ShieldCheck,
   User as UserIcon,
   UserRound,
-  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -50,17 +50,22 @@ import {
   type View,
 } from "./api-client";
 import { UserAvatar } from "./ui-bits";
-import { useAppStore } from "./store";
+import { ThemeToggle } from "./theme-toggle";
+import { canSubmit, useAppStore } from "./store";
+
+type NavView = "home" | "projects" | "announcements" | "guidelines" | "dashboard";
 
 const NAV: {
   label: string;
-  view: "home" | "projects" | "community" | "students";
+  view: NavView;
   icon: LucideIcon;
+  signedInOnly?: boolean;
 }[] = [
-  { label: "Overview", view: "home", icon: Home },
+  { label: "About", view: "home", icon: BookOpen },
   { label: "Projects", view: "projects", icon: FolderKanban },
-  { label: "Community", view: "community", icon: MessagesSquare },
-  { label: "Students", view: "students", icon: Users },
+  { label: "Announcements", view: "announcements", icon: Megaphone },
+  { label: "Guidelines", view: "guidelines", icon: ClipboardList },
+  { label: "Dashboard", view: "dashboard", icon: LayoutDashboard, signedInOnly: true },
 ];
 
 // drawer entrance: rows fade-slide in, staggered
@@ -86,12 +91,17 @@ export function Header({
   active: string;
   onSubmitClick: () => void;
 }) {
-  const { user, openAuth, setSearchOpen, setUser } = useAppStore();
+  const { user, openAuth, setSearchOpen, setUser, settings } = useAppStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
   const reduceMotion = useReducedMotion();
+  // Global search toggle (requirement 2) - hidden entirely when the site disables it.
+  const searchEnabled = settings?.searchEnabled !== false;
+
+  // Visible nav: public items + Dashboard once signed in.
+  const navItems = NAV.filter((item) => !item.signedInOnly || user);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -136,108 +146,73 @@ export function Header({
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-up-border bg-white/85 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-5 md:px-8">
-        {/* Brand */}
+    <header className="sticky top-0 z-40 w-full border-b border-up-border bg-background">
+      <div className="wrap flex h-14 items-center justify-between gap-6 md:h-[72px]">
+        {/* The client's own logo (the crest carries the wordmark) on the left line */}
         <button
           type="button"
           onClick={() => navigate({ name: "home" })}
-          className="flex items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="UniProjects, Kyungsung University: home"
+          className="flex shrink-0 items-center rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <img
-            src={UNIVERSITY.logo}
-            alt="Kyungsung University"
-            className="h-9 w-auto"
-          />
-          <span className="hidden h-5 w-px bg-up-border xl:block" aria-hidden />
-          <span className="hidden flex-col items-start leading-none xl:flex">
-            <span className="text-[13px] font-semibold tracking-tight text-foreground">
-              Project Showcase
-            </span>
-            <span className="mt-0.5 text-[11px] font-medium text-muted-foreground">
-              {UNIVERSITY.name}
-            </span>
-          </span>
+          <img src={UNIVERSITY.logo} alt="" className="h-8 w-auto md:h-9 dark:hidden" />
+          <img src={UNIVERSITY.logoWhite} alt="" className="hidden h-8 w-auto md:h-9 dark:block" />
         </button>
 
-        {/* Desktop nav (md–lg uses the drawer instead — brand + 4 items + actions overflow there).
-            Underline indicator: the active item owns a sliding bar (shared layoutId morphs between
-            buttons); non-active items draw a lighter bar in on hover. */}
-        <nav aria-label="Main" className="hidden items-center gap-0.5 lg:flex">
-          {NAV.map((item) => {
+        {/* Main nav: plain one-word links */}
+        <nav aria-label="Main" className="hidden flex-1 items-center gap-1 lg:flex">
+          {navItems.map((item) => {
             const isActive = active === item.view;
             return (
-              <button
-                key={item.view}
-                type="button"
-                onClick={() => navigate({ name: item.view })}
-                aria-current={isActive ? "page" : undefined}
-                className={cn(
-                  "group relative flex h-9 items-center rounded-full px-3.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                  isActive
-                    ? "text-primary-700"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {isActive ? (
-                  <motion.span
-                    layoutId="nav-active-underline"
-                    transition={
-                      reduceMotion
-                        ? { duration: 0 }
-                        : { type: "spring", stiffness: 420, damping: 34 }
-                    }
-                    className="absolute inset-x-3.5 bottom-0 h-0.5 rounded-full bg-primary"
-                    aria-hidden
-                  />
-                ) : (
-                  <span
-                    className="absolute inset-x-3.5 bottom-0 h-0.5 origin-center scale-x-0 rounded-full bg-primary/40 transition-transform duration-200 ease-out group-hover:scale-x-100"
-                    aria-hidden
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <item.icon className="size-4" aria-hidden />
+              <div key={item.view} className="relative">
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: item.view })}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "relative flex h-11 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[15px] font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    isActive ? "text-foreground" : "text-ink-700 hover:text-foreground",
+                  )}
+                >
                   {item.label}
-                </span>
-              </button>
+                  {isActive ? (
+                    <span className="absolute inset-x-3 bottom-1.5 h-0.5 rounded-full bg-primary" aria-hidden />
+                  ) : null}
+                </button>
+              </div>
             );
           })}
         </nav>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-9 rounded-full text-muted-foreground"
-                aria-label="Search"
-                onClick={() => setSearchOpen(true)}
-              >
-                <Search className="size-4" aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Search · ⌘K</TooltipContent>
-          </Tooltip>
-
-          {user === null ? (
-            /* Sign in as a circular avatar-style icon — the account entry point, tooltip for clarity */
+        {/* Actions: search, account, then the one primary on the right line */}
+        <div className="flex items-center gap-1">
+          {searchEnabled ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <motion.button
-                  type="button"
-                  aria-label="Sign in"
-                  onClick={() => openAuth("login")}
-                  whileTap={reduceMotion ? undefined : { scale: 0.9 }}
-                  className="flex size-9 items-center justify-center rounded-full bg-primary text-white shadow-sm outline-none transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-11 rounded-lg text-ink-700"
+                  aria-label="Search projects"
+                  onClick={() => setSearchOpen(true)}
                 >
-                  <UserRound className="size-[18px]" aria-hidden />
-                </motion.button>
+                  <Search className="size-[18px]" aria-hidden />
+                </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Sign in</TooltipContent>
+              <TooltipContent side="bottom">Search · ⌘K</TooltipContent>
             </Tooltip>
+          ) : null}
+
+          <ThemeToggle />
+
+          {user === null ? (
+            <button
+              type="button"
+              onClick={() => openAuth("login")}
+              className="hidden h-11 items-center rounded-lg px-3 text-[15px] font-medium text-ink-700 outline-none transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:flex"
+            >
+              Sign in
+            </button>
           ) : (
             <>
               <NotifBell navigate={navigate} />
@@ -245,19 +220,16 @@ export function Header({
             </>
           )}
 
-          <span className="hidden h-5 w-px bg-up-border lg:block" aria-hidden />
+          {canSubmit(user) ? (
+            <div className="ml-2 hidden lg:block">
+              <Button onClick={onSubmitClick} className="h-10 gap-1.5 px-4 text-[15px]">
+                <Plus className="size-4" aria-hidden />
+                Submit project
+              </Button>
+            </div>
+          ) : null}
 
-          <div className="hidden lg:block">
-            <Button
-              onClick={onSubmitClick}
-              className="h-9 gap-1.5 rounded-full px-4 text-sm font-semibold"
-            >
-              <Plus className="size-4" aria-hidden />
-              Submit project
-            </Button>
-          </div>
-
-          {/* Hamburger (mobile / tablet — desktop nav owns lg+) */}
+          {/* Menu button (phone and tablet), the secondary look */}
           <motion.button
             ref={menuBtnRef}
             type="button"
@@ -266,15 +238,15 @@ export function Header({
             aria-expanded={menuOpen}
             aria-haspopup="dialog"
             aria-controls="mobile-menu"
-            whileTap={reduceMotion ? undefined : { scale: 0.92 }}
-            className="inline-flex size-11 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
+            whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+            className="ml-1 inline-flex size-11 items-center justify-center rounded-[10px] border border-up-border-strong text-foreground outline-none transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring lg:hidden"
           >
             <Menu className="size-5" aria-hidden />
           </motion.button>
         </div>
       </div>
 
-      {/* Mobile/tablet drawer — portal to <body>: the header's backdrop-filter would otherwise become
+      {/* Mobile/tablet drawer - portal to <body>: the header's backdrop-filter would otherwise become
           the containing block for this fixed overlay and squash it into the 64px header strip.
           AnimatePresence lives INSIDE the portal so its exit animations keep working, and the
           typeof-document guard keeps SSR (no portals on the server) happy. */}
@@ -292,7 +264,7 @@ export function Header({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute inset-0 cursor-default bg-ink-900/40 backdrop-blur-sm"
+                    className="absolute inset-0 cursor-default bg-black/60"
                   />
                   <motion.aside
                     role="dialog"
@@ -310,15 +282,12 @@ export function Header({
                       if (info.offset.x > 80 || info.velocity.x > 420)
                         closeMenu();
                     }}
-                    className="absolute right-0 top-0 flex h-full w-[300px] max-w-[85vw] flex-col bg-white shadow-float"
+                    className="absolute right-0 top-0 flex h-full w-[300px] max-w-[85vw] flex-col bg-card shadow-float"
                   >
                     {/* Drawer header */}
                     <div className="flex h-16 shrink-0 items-center justify-between border-b border-up-border px-5">
-                      <img
-                        src={UNIVERSITY.logo}
-                        alt="Kyungsung University"
-                        className="h-8 w-auto"
-                      />
+                      <img src={UNIVERSITY.logo} alt="Kyungsung University" className="h-8 w-auto dark:hidden" />
+                      <img src={UNIVERSITY.logoWhite} alt="Kyungsung University" className="hidden h-8 w-auto dark:block" />
                       <button
                         ref={closeBtnRef}
                         type="button"
@@ -338,7 +307,7 @@ export function Header({
                         animate="show"
                       >
                         <nav aria-label="Mobile" className="space-y-1">
-                          {NAV.map((item) => {
+                          {navItems.map((item) => {
                             const isActive = active === item.view;
                             return (
                               <motion.button
@@ -365,41 +334,27 @@ export function Header({
                           })}
                         </nav>
 
-                        <motion.div
-                          variants={drawerItem}
-                          className="my-4 border-t border-up-border"
-                          aria-hidden
-                        />
-
-                        <motion.div variants={drawerItem}>
-                          <Button
-                            onClick={() => {
-                              setMenuOpen(false);
-                              onSubmitClick();
-                            }}
-                            className="h-11 w-full rounded-xl font-semibold"
-                          >
-                            <Plus className="size-4" aria-hidden />
-                            Submit project
-                          </Button>
-                        </motion.div>
-
-                        {user?.role === "ADMIN" ? (
-                          <motion.button
-                            type="button"
-                            variants={drawerItem}
-                            onClick={() => navFromDrawer({ name: "admin" })}
-                            aria-current={
-                              active === "admin" ? "page" : undefined
-                            }
-                            className="mt-2 flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <LayoutDashboard
-                              className="size-[18px]"
+                        {canSubmit(user) ? (
+                          <>
+                            <motion.div
+                              variants={drawerItem}
+                              className="my-4 border-t border-up-border"
                               aria-hidden
                             />
-                            Admin panel
-                          </motion.button>
+
+                            <motion.div variants={drawerItem}>
+                              <Button
+                                onClick={() => {
+                                  setMenuOpen(false);
+                                  onSubmitClick();
+                                }}
+                                className="h-11 w-full rounded-xl font-semibold"
+                              >
+                                <Plus className="size-4" aria-hidden />
+                                Submit project
+                              </Button>
+                            </motion.div>
+                          </>
                         ) : null}
                       </motion.div>
                     </div>
@@ -448,7 +403,7 @@ export function Header({
                         </div>
                       </div>
                     ) : (
-                      <div className="shrink-0 border-t border-up-border px-4 py-4">
+                      <div className="shrink-0 space-y-2 border-t border-up-border px-4 py-4">
                         <Button
                           variant="outline"
                           onClick={() => {
@@ -459,6 +414,13 @@ export function Header({
                         >
                           <LogIn className="size-4" aria-hidden />
                           Sign in
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => navFromDrawer({ name: "account-request" })}
+                          className="h-11 w-full rounded-xl font-semibold text-primary-700 hover:bg-primary-50 hover:text-primary-800"
+                        >
+                          Request an account
                         </Button>
                       </div>
                     )}
@@ -480,7 +442,7 @@ function NotifBell({ navigate }: { navigate: Navigate }) {
   const setUnreadNotifs = useAppStore((s) => s.setUnreadNotifs);
 
   useEffect(() => {
-    // NotifBell is only mounted while signed in — it seeds the shared count on entry.
+    // NotifBell is only mounted while signed in - it seeds the shared count on entry.
     if (!user) return;
     const ac = new AbortController();
     fetchNotifications(ac.signal)
@@ -503,7 +465,7 @@ function NotifBell({ navigate }: { navigate: Navigate }) {
           {unread > 0 ? (
             <span
               aria-hidden
-              className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white"
+              className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
             >
               {unread > 9 ? "9+" : unread}
             </span>
@@ -524,7 +486,7 @@ function UserMenu({
 }) {
   const { user } = useAppStore();
   if (!user) return null;
-  const isStaff = user.role === "FACULTY" || user.role === "ADMIN";
+  const isAdminPanel = user.role === "ADMIN" || user.role === "MODERATOR";
 
   return (
     <DropdownMenu>
@@ -556,19 +518,21 @@ function UserMenu({
           <UserIcon className="size-4" aria-hidden />
           My profile
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate({ name: "dashboard" })}>
+          <LayoutDashboard className="size-4" aria-hidden />
+          Dashboard
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate({ name: "settings" })}>
           <Settings className="size-4" aria-hidden />
-          Settings
+          Account settings
         </DropdownMenuItem>
-        {isStaff ? (
-          <DropdownMenuItem onClick={() => navigate({ name: "moderation" })}>
-            <ShieldCheck className="size-4" aria-hidden />
-            Moderation
-          </DropdownMenuItem>
-        ) : null}
-        {user.role === "ADMIN" ? (
+        <DropdownMenuItem onClick={() => navigate({ name: "notifications" })}>
+          <Bell className="size-4" aria-hidden />
+          Notifications
+        </DropdownMenuItem>
+        {isAdminPanel ? (
           <DropdownMenuItem onClick={() => navigate({ name: "admin" })}>
-            <LayoutDashboard className="size-4" aria-hidden />
+            <ShieldCheck className="size-4" aria-hidden />
             Admin panel
           </DropdownMenuItem>
         ) : null}

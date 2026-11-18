@@ -18,6 +18,8 @@ export async function GET() {
         name: d.name,
         code: d.code,
         tagline: d.tagline,
+        website: d.website,
+        capstoneLabel: d.capstoneLabel,
         accent: d.accent,
         projectCount: d._count.projects,
       })),

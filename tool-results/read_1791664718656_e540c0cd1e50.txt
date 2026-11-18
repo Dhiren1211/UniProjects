@@ -1,0 +1,802 @@
+   760→                key={p}
+   761→                type="button"
+   762→                aria-current={p === page ? "page" : undefined}
+   763→                onClick={() => onPage(p)}
+   764→                className={cn(
+   765→                  btn,
+   766→                  p === page
+   767→                    ? "bg-primary-600 text-white shadow-sm"
+   768→                    : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+   769→                )}
+   770→              >
+   771→                {p}
+   772→              </button>
+   773→            )
+   774→          )}
+   775→          <button
+   776→            type="button"
+   777→            className={cn(
+   778→              btn,
+   779→              "text-muted-foreground hover:bg-surface-muted hover:text-foreground",
+   780→              page === totalPages && "pointer-events-none opacity-40"
+   781→            )}
+   782→            onClick={() => onPage(page + 1)}
+   783→            disabled={page === totalPages}
+   784→            aria-label="Next page"
+   785→          >
+   786→            <ChevronRight className="size-4" aria-hidden />
+   787→          </button>
+   788→        </div>
+   789→      ) : null}
+   790→    </nav>
+   791→  );
+   792→}
+   793→
+   794→/** Compact status card — sidebar footer on ≥ lg (dark), top of Overview below lg (light). */
+   795→function SystemMiniCard({
+   796→  storage,
+   797→  className,
+   798→  dark = false,
+   799→}: {
+   800→  storage?: AdminOverviewDTO["storage"];
+   801→  className?: string;
+   802→  dark?: boolean;
+   803→}) {
+   804→  return (
+   805→    <div
+   806→      className={cn(
+   807→        "rounded-xl border p-3",
+   808→        dark ? "border-white/10 bg-white/[0.06]" : "border-up-border bg-surface-muted/50",
+   809→        className
+   810→      )}
+   811→    >
+   812→      <div className="flex items-center gap-2">
+   813→        <span aria-hidden className="relative flex size-2.5 shrink-0">
+   814→          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+   815→          <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+   816→        </span>
+   817→        <p className={cn("text-xs font-semibold", dark ? "text-white" : "text-foreground")}>
+   818→          All systems operational
+   819→        </p>
+   820→      </div>
+   821→      <p
+   822→        className={cn(
+   823→          "mt-1 pl-[18px] text-[11px] leading-relaxed",
+   824→          dark ? "text-white/50" : "text-muted-foreground"
+   825→        )}
+   826→      >
+   827→        SQLite{storage ? ` · ${storage.uploadedFiles} files stored` : ""}
+   828→      </p>
+   829→    </div>
+   830→  );
+   831→}
+   832→
+   833→// ============================================================
+   834→// Shared small pieces
+   835→// ============================================================
+   836→
+   837→function CoverThumb({
+   838→  src,
+   839→  accent,
+   840→  category,
+   841→  className,
+   842→}: {
+   843→  src?: string | null;
+   844→  accent?: string | null;
+   845→  category: string;
+   846→  className?: string;
+   847→}) {
+   848→  if (src) {
+   849→    return (
+   850→      <img
+   851→        src={src}
+   852→        alt=""
+   853→        loading="lazy"
+   854→        className={cn("shrink-0 rounded-lg object-cover", className)}
+   855→      />
+   856→    );
+   857→  }
+   858→  return (
+   859→    <span
+   860→      aria-hidden
+   861→      className={cn(
+   862→        "flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+   863→        accentOf(accent).cover,
+   864→        className
+   865→      )}
+   866→    >
+   867→      <CategoryIcon category={category} className="size-4 text-primary-700" />
+   868→    </span>
+   869→  );
+   870→}
+   871→
+   872→function DeptChip({ code, accent }: { code: string; accent?: string | null }) {
+   873→  return (
+   874→    <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+   875→      <DeptDot accent={accent ?? "teal"} className="size-1.5" />
+   876→      {code}
+   877→    </span>
+   878→  );
+   879→}
+   880→
+   881→function RoleChip({ role }: { role: string }) {
+   882→  if (role === "STUDENT") {
+   883→    return (
+   884→      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+   885→        Student
+   886→      </span>
+   887→    );
+   888→  }
+   889→  return <StaffBadge role={role} />;
+   890→}
+   891→
+   892→/** rAF count-up that respects reduced motion — gives every number a live "landing" feel. */
+   893→function useCountUp(target: number, duration = 900): number {
+   894→  const reduceMotion = useReducedMotion();
+   895→  const [value, setValue] = useState(0);
+   896→  useEffect(() => {
+   897→    if (reduceMotion) return; // derived below — no animation needed
+   898→    let raf = 0;
+   899→    const start = performance.now();
+   900→    const tick = (now: number) => {
+   901→      const t = Math.min(1, (now - start) / duration);
+   902→      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+   903→      setValue(Math.round(target * eased));
+   904→      if (t < 1) raf = requestAnimationFrame(tick);
+   905→    };
+   906→    raf = requestAnimationFrame(tick);
+   907→    return () => cancelAnimationFrame(raf);
+   908→  }, [target, duration, reduceMotion]);
+   909→  return reduceMotion ? target : value;
+   910→}
+   911→
+   912→/** Large KPI tile for the primary metrics row — colored tile, animated number, optional trend chip. */
+   913→function HeroStatCard({
+   914→  label,
+   915→  value,
+   916→  icon: Icon,
+   917→  sub,
+   918→  compactViews = false,
+   919→  delay = 0,
+   920→  tone = "primary",
+   921→  trend,
+   922→}: {
+   923→  label: string;
+   924→  value: number;
+   925→  icon: LucideIcon;
+   926→  sub?: string;
+   927→  /** render the counted value through formatViews (15.5k style) */
+   928→  compactViews?: boolean;
+   929→  delay?: number;
+   930→  tone?: "primary" | "success" | "info";
+   931→  /** real-data trend chip — either a % vs the previous month or a raw delta */
+   932→  trend?: { pct?: number; delta?: number };
+   933→}) {
+   934→  const reduceMotion = useReducedMotion();
+   935→  const shown = useCountUp(value);
+   936→  const tileTone = {
+   937→    primary: "bg-primary-50 text-primary-700 group-hover:bg-primary-100",
+   938→    success: "bg-success-soft text-success group-hover:bg-success-soft/70",
+   939→    info: "bg-info-soft text-info group-hover:bg-info-soft/70",
+   940→  }[tone];
+   941→  const trendDown = trend?.pct !== undefined && trend.pct < 0;
+   942→  return (
+   943→    <motion.div
+   944→      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+   945→      animate={{ opacity: 1, y: 0 }}
+   946→      transition={{ duration: 0.35, delay, ease: "easeOut" }}
+   947→      whileHover={reduceMotion ? undefined : { y: -3 }}
+   948→      className="group relative flex flex-col overflow-hidden rounded-2xl border border-up-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+   949→    >
+   950→      <span
+   951→        aria-hidden
+   952→        className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-primary-50 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+   953→      />
+   954→      <span className={cn("relative flex size-9 items-center justify-center rounded-lg transition-colors", tileTone)}>
+   955→        <Icon className="size-4.5" aria-hidden />
+   956→      </span>
+   957→      <p className="mt-2.5 text-2xl font-bold tabular-nums tracking-tight text-foreground">
+   958→        {compactViews ? formatViews(shown) : shown.toLocaleString()}
+   959→      </p>
+   960→      <p className="mt-0.5 text-sm font-semibold text-foreground">{label}</p>
+   961→      {trend ? (
+   962→        <p
+   963→          className={cn(
+   964→            "mt-1.5 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold",
+   965→            trendDown ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
+   966→          )}
+   967→        >
+   968→          {trendDown ? (
+   969→            <TrendingDown className="size-3" aria-hidden />
+   970→          ) : (
+   971→            <TrendingUp className="size-3" aria-hidden />
+   972→          )}
+   973→          {trend.pct !== undefined
+   974→            ? `${trend.pct > 0 ? "+" : ""}${trend.pct}% vs last month`
+   975→            : `+${trend.delta} this month`}
+   976→        </p>
+   977→      ) : null}
+   978→      {sub ? <p className="mt-auto pt-2 text-xs text-muted-foreground">{sub}</p> : null}
+   979→    </motion.div>
+   980→  );
+   981→}
+   982→
+   983→/** "Needs attention" tile — the three review queues, each row jumps to the right place. */
+   984→function AttentionCard({
+   985→  overview,
+   986→  onAction,
+   987→  delay = 0,
+   988→}: {
+   989→  overview: AdminOverviewDTO;
+   990→  onAction: (target: TabKey, openNew?: boolean) => void;
+   991→  delay?: number;
+   992→}) {
+   993→  const reduceMotion = useReducedMotion();
+   994→  const shown = useCountUp(
+   995→    overview.pendingVerifications + overview.openReports + overview.pendingJoinRequests
+   996→  );
+   997→  const allClear = shown === 0;
+   998→  const queues: {
+   999→    label: string;
+  1000→    count: number;
+  1001→    dot: string;
+  1002→    go: (() => void) | null;
+  1003→    hint: string;
+  1004→  }[] = [
+  1005→    {
+  1006→      label: "To verify",
+  1007→      count: overview.pendingVerifications,
+  1008→      dot: "bg-warning",
+  1009→      go: () => onAction("moderation"),
+  1010→      hint: "Verification requests — review in Moderation",
+  1011→    },
+  1012→    {
+  1013→      label: "Reports",
+  1014→      count: overview.openReports,
+  1015→      dot: "bg-danger",
+  1016→      go: () => onAction("moderation"),
+  1017→      hint: "Review in Moderation",
+  1018→    },
+  1019→    {
+  1020→      label: "Join requests",
+  1021→      count: overview.pendingJoinRequests,
+  1022→      dot: "bg-primary-500",
+  1023→      go: null,
+  1024→      hint: "Reviewed on each project page by the team owner",
+  1025→    },
+  1026→  ];
+  1027→  return (
+  1028→    <motion.div
+  1029→      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+  1030→      animate={{ opacity: 1, y: 0 }}
+  1031→      transition={{ duration: 0.35, delay, ease: "easeOut" }}
+  1032→      whileHover={reduceMotion ? undefined : { y: -3 }}
+  1033→      className={cn(
+  1034→        "relative overflow-hidden rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md",
+  1035→        allClear ? "border-up-border bg-card" : "border-warning/40 bg-warning-soft/50"
+  1036→      )}
+  1037→    >
+  1038→      <div className="flex items-start justify-between gap-3">
+  1039→        <span
+  1040→          className={cn(
+  1041→            "flex size-9 items-center justify-center rounded-lg",
+  1042→            allClear ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+  1043→          )}
+  1044→        >
+  1045→          {allClear ? <BadgeCheck className="size-4.5" aria-hidden /> : <AlertTriangle className="size-4.5" aria-hidden />}
+  1046→        </span>
+  1047→        {allClear ? (
+  1048→          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-bold text-success">
+  1049→            All clear
+  1050→          </span>
+  1051→        ) : null}
+  1052→      </div>
+  1053→      <p className="mt-2.5 text-2xl font-bold tabular-nums tracking-tight text-foreground">
+  1054→        {shown.toLocaleString()}
+  1055→      </p>
+  1056→      <p className="mt-0.5 text-sm font-semibold text-foreground">
+  1057→        {allClear ? "Nothing waiting on you" : "items waiting on you"}
+  1058→      </p>
+  1059→      <ul className="mt-2.5 space-y-1.5">
+  1060→        {queues.map((q) => {
+  1061→          const body = (
+  1062→            <>
+  1063→              <span className="flex min-w-0 items-center gap-2">
+  1064→                <span aria-hidden className={cn("size-2 shrink-0 rounded-full", q.dot)} />
+  1065→                <span className="truncate">{q.label}</span>
+  1066→              </span>
+  1067→              <span className="flex shrink-0 items-center gap-1 font-bold tabular-nums">
+  1068→                {q.count}
+  1069→                {q.go ? <ArrowUpRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden /> : null}
+  1070→              </span>
+  1071→            </>
+  1072→          );
+  1073→          return (
+  1074→            <li key={q.label}>
+  1075→              {q.go ? (
+  1076→                <button
+  1077→                  type="button"
+  1078→                  onClick={q.go}
+  1079→                  title={q.hint}
+  1080→                  className="group flex w-full items-center justify-between gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white"
+  1081→                >
+  1082→                  {body}
+  1083→                </button>
+  1084→              ) : (
+  1085→                <div
+  1086→                  title={q.hint}
+  1087→                  className="flex w-full cursor-help items-center justify-between gap-2 rounded-lg bg-white/50 px-2.5 py-1.5 text-xs font-medium text-foreground"
+  1088→                >
+  1089→                  {body}
+  1090→                </div>
+  1091→              )}
+  1092→            </li>
+  1093→          );
+  1094→        })}
+  1095→      </ul>
+  1096→    </motion.div>
+  1097→  );
+  1098→}
+  1099→
+  1100→/** Dark brand band greeting the operator — mirrors the landing hero's night surface. */
+  1101→function WelcomeBand({
+  1102→  overview,
+  1103→  userName,
+  1104→  onQueues,
+  1105→}: {
+  1106→  overview: AdminOverviewDTO;
+  1107→  userName: string;
+  1108→  onQueues: () => void;
+  1109→}) {
+  1110→  const reduceMotion = useReducedMotion();
+  1111→  const hour = new Date().getHours();
+  1112→  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  1113→  const today = format(new Date(), "EEEE, MMMM d");
+  1114→  const pending = overview.pendingVerifications + overview.openReports;
+  1115→
+  1116→  const chips: { label: string; count: number; dot: string }[] = [
+  1117→    { label: "verifications", count: overview.pendingVerifications, dot: "bg-warning" },
+  1118→    { label: "reports", count: overview.openReports, dot: "bg-danger" },
+  1119→  ].filter((c) => c.count > 0);
+  1120→
+  1121→  return (
+  1122→    <motion.section
+  1123→      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+  1124→      animate={{ opacity: 1, y: 0 }}
+  1125→      transition={{ duration: 0.4, ease: "easeOut" }}
+  1126→      aria-label="Console welcome"
+  1127→      className="relative rounded-2xl border border-up-border bg-card p-5 shadow-sm md:p-6"
+  1128→    >
+  1129→      <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+  1130→        <div className="min-w-0">
+  1131→          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+  1132→            {today} · {UNIVERSITY.shortName} showcase
+  1133→          </p>
+  1134→          <h2 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-2xl">
+  1135→            {greeting}, {userName.split(" ")[0]}
+  1136→          </h2>
+  1137→          <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+  1138→            {pending > 0
+  1139→              ? `${pending} ${pending === 1 ? "item needs" : "items need"} your review — the rest of the showcase is healthy and live.`
+  1140→              : "Everything is reviewed — the showcase is healthy and live."}
+  1141→          </p>
+  1142→        </div>
+  1143→        {chips.length > 0 ? (
+  1144→          <button
+  1145→            type="button"
+  1146→            onClick={onQueues}
+  1147→            className="flex flex-wrap items-center gap-2 rounded-full bg-primary-50 px-4 py-2 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+  1148→          >
+  1149→            {chips.map((c) => (
+  1150→              <span key={c.label} className="inline-flex items-center gap-1.5">
+  1151→                <span aria-hidden className={cn("size-2 rounded-full", c.dot)} />
+  1152→                {c.count} {c.label}
+  1153→              </span>
+  1154→            ))}
+  1155→            <ArrowUpRight className="size-3.5" aria-hidden />
+  1156→          </button>
+  1157→        ) : null}
+  1158→      </div>
+  1159→    </motion.section>
+  1160→  );
+  1161→}
+  1162→
+  1163→// ============================================================
+  1164→// Overview tab — mission control
+  1165→// ============================================================
+  1166→
+  1167→function OverviewTab({
+  1168→  overview,
+  1169→  error,
+  1170→  onRetry,
+  1171→  navigate,
+  1172→  onQuickAction,
+  1173→}: {
+  1174→  overview: AdminOverviewDTO | null;
+  1175→  error: boolean;
+  1176→  onRetry: () => void;
+  1177→  navigate: Navigate;
+  1178→  onQuickAction: (target: TabKey, openNew?: boolean) => void;
+  1179→}) {
+  1180→  const { user } = useAppStore();
+  1181→  const reduceMotion = useReducedMotion();
+  1182→
+  1183→  if (error && !overview) {
+  1184→    return (
+  1185→      <EmptyState
+  1186→        icon={AlertTriangle}
+  1187→        title="Couldn't load the overview"
+  1188→        hint="The admin overview API did not respond. Check the session and try again."
+  1189→        action={
+  1190→          <Button onClick={onRetry} variant="outline" className="rounded-xl font-semibold">
+  1191→            Try again
+  1192→          </Button>
+  1193→        }
+  1194→      />
+  1195→    );
+  1196→  }
+  1197→
+  1198→  if (!overview) {
+  1199→    return (
+  1200→      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+  1201→        <div className="min-w-0 space-y-5">
+  1202→          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  1203→            {Array.from({ length: 4 }).map((_, i) => (
+  1204→              <Skeleton key={i} className="h-36 w-full rounded-2xl" />
+  1205→            ))}
+  1206→          </div>
+  1207→          <div className="grid gap-4 lg:grid-cols-2">
+  1208→            <Skeleton className="h-72 w-full rounded-2xl" />
+  1209→            <Skeleton className="h-72 w-full rounded-2xl" />
+  1210→          </div>
+  1211→          <Skeleton className="h-64 w-full rounded-2xl" />
+  1212→        </div>
+  1213→        <div className="min-w-0 space-y-5">
+  1214→          <Skeleton className="h-80 w-full rounded-2xl" />
+  1215→          <Skeleton className="h-64 w-full rounded-2xl" />
+  1216→        </div>
+  1217→      </div>
+  1218→    );
+  1219→  }
+  1220→
+  1221→  const signups = overview.signupsByMonth;
+  1222→  const lastSignups = signups[signups.length - 1]?.count ?? 0;
+  1223→  const prevSignups = signups[signups.length - 2]?.count ?? 0;
+  1224→  const trendPct =
+  1225→    prevSignups > 0 && lastSignups > 0
+  1226→      ? Math.round(((lastSignups - prevSignups) / prevSignups) * 100)
+  1227→      : null;
+  1228→
+  1229→  return (
+  1230→    <div className="space-y-4">
+  1231→      {/* ---------- welcome band ---------- */}
+  1232→      <WelcomeBand
+  1233→        overview={overview}
+  1234→        userName={user?.displayName ?? "Admin"}
+  1235→        onQueues={() => onQuickAction("moderation")}
+  1236→      />
+  1237→
+  1238→      {/* main grid — dashboard column + activity rail (reference console layout) */}
+  1239→      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+  1240→        <div className="min-w-0 space-y-4">
+  1241→          {/* ---------- primary KPIs ---------- */}
+  1242→          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+  1243→            <HeroStatCard
+  1244→              label="Total users"
+  1245→              value={overview.users}
+  1246→              icon={Users}
+  1247→              tone="primary"
+  1248→              trend={
+  1249→                trendPct !== null && trendPct !== 0
+  1250→                  ? { pct: trendPct }
+  1251→                  : lastSignups > 0
+  1252→                    ? { delta: lastSignups }
+  1253→                    : undefined
+  1254→              }
+  1255→              sub={`${overview.students} students · ${overview.faculty} faculty & staff`}
+  1256→              delay={0.05}
+  1257→            />
+  1258→            <HeroStatCard
+  1259→              label="Projects"
+  1260→              value={overview.projects}
+  1261→              icon={FolderKanban}
+  1262→              tone="success"
+  1263→              sub={`${overview.published} published · ${overview.drafts} drafts`}
+  1264→              delay={0.1}
+  1265→            />
+  1266→            <HeroStatCard
+  1267→              label="Total views"
+  1268→              value={overview.totalViews}
+  1269→              icon={Eye}
+  1270→              tone="info"
+  1271→              compactViews
+  1272→              sub={`${overview.comments} comments · ${overview.posts} posts`}
+  1273→              delay={0.15}
+  1274→            />
+  1275→            <AttentionCard overview={overview} onAction={onQuickAction} delay={0.2} />
+  1276→          </div>
+  1277→
+  1278→          {/* ---------- charts row ---------- */}
+  1279→          <div className="grid gap-3 lg:grid-cols-2">
+  1280→            <GrowthChartCard data={overview.signupsByMonth} />
+  1281→            <RoleDonutCard overview={overview} />
+  1282→          </div>
+  1283→
+  1284→          {/* ---------- recent projects table ---------- */}
+  1285→          <RecentProjectsCard
+  1286→            projects={overview.recentProjects}
+  1287→            navigate={navigate}
+  1288→            onViewAll={() => onQuickAction("projects")}
+  1289→          />
+  1290→        </div>
+  1291→
+  1292→        {/* ---------- right rail ---------- */}
+  1293→        <div className="min-w-0 space-y-4">
+  1294→          <ActivityCard items={overview.activity} navigate={navigate} />
+  1295→          <QuickActionsCard overview={overview} onAction={onQuickAction} />
+  1296→          <SystemCard storage={overview.storage} />
+  1297→        </div>
+  1298→      </div>
+  1299→    </div>
+  1300→  );
+  1301→}
+  1302→
+  1303→// ---------- overview cards ----------
+  1304→
+  1305→function ActivityCard({
+  1306→  items,
+  1307→  navigate,
+  1308→  className,
+  1309→}: {
+  1310→  items: AdminActivityItem[];
+  1311→  navigate: Navigate;
+  1312→  className?: string;
+  1313→}) {
+  1314→  return (
+  1315→    <Panel
+  1316→      title="Recent activities"
+  1317→      caption="Latest actions across the platform"
+  1318→      className={className}
+  1319→      right={
+  1320→        <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+  1321→          {items.length}
+  1322→        </span>
+  1323→      }
+  1324→    >
+  1325→      {items.length === 0 ? (
+  1326→        <p className="mt-5 text-sm text-muted-foreground">
+  1327→          Nothing has happened yet — activity lands here as members work.
+  1328→        </p>
+  1329→      ) : (
+  1330→        <ul className="nice-scroll mt-3 max-h-[22rem] space-y-0.5 overflow-y-auto pr-1">
+  1331→          {items.map((item, i) => (
+  1332→            <ActivityRow
+  1333→              key={item.id}
+  1334→              item={item}
+  1335→              last={i === items.length - 1}
+  1336→              navigate={navigate}
+  1337→            />
+  1338→          ))}
+  1339→        </ul>
+  1340→      )}
+  1341→    </Panel>
+  1342→  );
+  1343→}
+  1344→
+  1345→function ActivityRow({
+  1346→  item,
+  1347→  last,
+  1348→  navigate,
+  1349→}: {
+  1350→  item: AdminActivityItem;
+  1351→  last: boolean;
+  1352→  navigate: Navigate;
+  1353→}) {
+  1354→  const Icon = ACTIVITY_ICONS[item.kind];
+  1355→  const view = item.href ? activityToView(item.href) : null;
+  1356→  const rowClass = "relative flex items-center gap-3 rounded-xl p-2";
+  1357→  const body = (
+  1358→    <>
+  1359→      <span
+  1360→        aria-hidden
+  1361→        className={cn(
+  1362→          "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg",
+  1363→          item.kind === "REPORT"
+  1364→            ? "bg-danger-soft text-danger"
+  1365→            : "bg-primary-50 text-primary-700"
+  1366→        )}
+  1367→      >
+  1368→        <Icon className="size-4" aria-hidden />
+  1369→      </span>
+  1370→      <span className="min-w-0 flex-1">
+  1371→        <span className="block truncate text-sm font-medium text-foreground">{item.text}</span>
+  1372→        {item.detail ? (
+  1373→          <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
+  1374→        ) : null}
+  1375→      </span>
+  1376→      <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+  1377→        {timeAgo(item.createdAt)}
+  1378→      </span>
+  1379→    </>
+  1380→  );
+  1381→  return (
+  1382→    <li className="relative">
+  1383→      {!last ? (
+  1384→        <span
+  1385→          aria-hidden
+  1386→          className="absolute bottom-0 left-[23px] top-10 w-px bg-up-border"
+  1387→        />
+  1388→      ) : null}
+  1389→      {view ? (
+  1390→        <button
+  1391→          type="button"
+  1392→          onClick={() => navigate(view)}
+  1393→          className={cn(rowClass, "w-full text-left transition-colors hover:bg-surface-muted")}
+  1394→        >
+  1395→          {body}
+  1396→        </button>
+  1397→      ) : (
+  1398→        <div className={rowClass}>{body}</div>
+  1399→      )}
+  1400→    </li>
+  1401→  );
+  1402→}
+  1403→
+  1404→/** "Member growth" — hand-rolled SVG area chart of monthly signups (reference dashboard style). */
+  1405→function GrowthChartCard({
+  1406→  data,
+  1407→  className,
+  1408→}: {
+  1409→  data: { month: string; count: number }[];
+  1410→  className?: string;
+  1411→}) {
+  1412→  const reduceMotion = useReducedMotion();
+  1413→  const W = 560;
+  1414→  const H = 230;
+  1415→  const PL = 36;
+  1416→  const PR = 14;
+  1417→  const PT = 16;
+  1418→  const PB = 30;
+  1419→  const iw = W - PL - PR;
+  1420→  const ih = H - PT - PB;
+  1421→  const max = Math.max(1, ...data.map((d) => d.count));
+  1422→  const top = Math.max(4, Math.ceil(max / 4) * 4);
+  1423→  const total = data.reduce((sum, d) => sum + d.count, 0);
+  1424→  const x = (i: number) => PL + (data.length <= 1 ? iw / 2 : (i / (data.length - 1)) * iw);
+  1425→  const y = (v: number) => PT + ih - (v / top) * ih;
+  1426→  const linePath = data.length
+  1427→    ? `M${data.map((d, i) => `${x(i).toFixed(1)},${y(d.count).toFixed(1)}`).join(" L")}`
+  1428→    : "";
+  1429→  const areaPath = data.length
+  1430→    ? `${linePath} L${x(data.length - 1).toFixed(1)},${(PT + ih).toFixed(1)} L${x(0).toFixed(1)},${(PT + ih).toFixed(1)} Z`
+  1431→    : "";
+  1432→  const ticks = [0, 1, 2, 3, 4].map((i) => (top / 4) * i);
+  1433→
+  1434→  return (
+  1435→    <Panel
+  1436→      title="Member growth"
+  1437→      caption={`New signups per month · ${total} total`}
+  1438→      className={className}
+  1439→      right={
+  1440→        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-bold text-primary-700">
+  1441→          <span aria-hidden className="size-2 rounded-full bg-primary-500" />
+  1442→          Signups
+  1443→        </span>
+  1444→      }
+  1445→    >
+  1446→      {data.length === 0 ? (
+  1447→        <p className="mt-5 text-sm text-muted-foreground">No signup data yet.</p>
+  1448→      ) : (
+  1449→        <svg
+  1450→          viewBox={`0 0 ${W} ${H}`}
+  1451→          className="mt-2 h-auto w-full"
+  1452→          role="img"
+  1453→          aria-label={`Area chart of monthly signups, ${total} total`}
+  1454→        >
+  1455→          <defs>
+  1456→            <linearGradient id="growth-fill" x1="0" y1="0" x2="0" y2="1">
+  1457→              <stop offset="0%" stopColor="var(--up-primary-500)" stopOpacity="0.28" />
+  1458→              <stop offset="100%" stopColor="var(--up-primary-500)" stopOpacity="0.02" />
+  1459→            </linearGradient>
+  1460→          </defs>
+  1461→          {ticks.map((t) => (
+  1462→            <g key={t}>
+  1463→              <line
+  1464→                x1={PL}
+  1465→                x2={W - PR}
+  1466→                y1={y(t)}
+  1467→                y2={y(t)}
+  1468→                stroke="var(--up-border)"
+  1469→                strokeDasharray="3 4"
+  1470→              />
+  1471→              <text x={PL - 8} y={y(t) + 3.5} textAnchor="end" fontSize="10" fill="var(--up-ink-500)">
+  1472→                {t}
+  1473→              </text>
+  1474→            </g>
+  1475→          ))}
+  1476→          {reduceMotion ? (
+  1477→            <>
+  1478→              <path d={areaPath} fill="url(#growth-fill)" />
+  1479→              <path
+  1480→                d={linePath}
+  1481→                fill="none"
+  1482→                stroke="var(--up-primary-500)"
+  1483→                strokeWidth="2.5"
+  1484→                strokeLinecap="round"
+  1485→                strokeLinejoin="round"
+  1486→              />
+  1487→            </>
+  1488→          ) : (
+  1489→            <>
+  1490→              <motion.path
+  1491→                d={areaPath}
+  1492→                fill="url(#growth-fill)"
+  1493→                initial={{ opacity: 0 }}
+  1494→                animate={{ opacity: 1 }}
+  1495→                transition={{ duration: 0.7, delay: 0.3 }}
+  1496→              />
+  1497→              <motion.path
+  1498→                d={linePath}
+  1499→                fill="none"
+  1500→                stroke="var(--up-primary-500)"
+  1501→                strokeWidth="2.5"
+  1502→                strokeLinecap="round"
+  1503→                strokeLinejoin="round"
+  1504→                initial={{ pathLength: 0 }}
+  1505→                animate={{ pathLength: 1 }}
+  1506→                transition={{ duration: 0.9, ease: "easeOut" }}
+  1507→              />
+  1508→            </>
+  1509→          )}
+  1510→          {data.map((d, i) => (
+  1511→            <g key={d.month}>
+  1512→              <circle
+  1513→                cx={x(i)}
+  1514→                cy={y(d.count)}
+  1515→                r="3.5"
+  1516→                fill="#fff"
+  1517→                stroke="var(--up-primary-500)"
+  1518→                strokeWidth="2"
+  1519→              >
+  1520→                <title>{`${monthLabel(d.month)}: ${d.count} ${d.count === 1 ? "signup" : "signups"}`}</title>
+  1521→              </circle>
+  1522→              <text
+  1523→                x={x(i)}
+  1524→                y={H - 8}
+  1525→                textAnchor="middle"
+  1526→                fontSize="10"
+  1527→                fontWeight="600"
+  1528→                fill="var(--up-ink-500)"
+  1529→              >
+  1530→                {monthLabel(d.month)}
+  1531→              </text>
+  1532→            </g>
+  1533→          ))}
+  1534→        </svg>
+  1535→      )}
+  1536→    </Panel>
+  1537→  );
+  1538→}
+  1539→
+  1540→/** "Community make-up" — SVG donut of members by role with center total + legend. */
+  1541→function RoleDonutCard({
+  1542→  overview,
+  1543→  className,
+  1544→}: {
+  1545→  overview: AdminOverviewDTO;
+  1546→  className?: string;
+  1547→}) {
+  1548→  const admins = Math.max(0, overview.users - overview.students - overview.faculty);
+  1549→  const slices = [
+  1550→    { label: "Students", value: overview.students, color: "var(--up-primary-500)" },
+  1551→    { label: "Faculty & staff", value: overview.faculty, color: "var(--up-info)" },
+  1552→    { label: "Admins", value: admins, color: "#fcaf17" },
+  1553→  ].filter((s) => s.value > 0);
+  1554→  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  1555→
+  1556→  // dasharray on a 100-unit circumference (r = 15.915) keeps the math readable
+  1557→  const R = 15.915;
+  1558→  let acc = 0;
+  1559→  const segs = slices.map((s) => {
+
+[showing lines 760-1559 of 3641; use offset=1560 with limit to continue reading]

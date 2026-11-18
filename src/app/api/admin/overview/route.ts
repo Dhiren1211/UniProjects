@@ -2,46 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import type { AdminActivityItem, AdminOverviewDTO } from "@/lib/types";
 import { likeCountMap, projectInclude, toListItem } from "../../_utils/serialize";
-import { requireAdmin } from "../_guard";
+import { requireStaff } from "../_guard";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — console-wide counts + recent activity ----------
+// ---------- GET - console-wide counts + recent activity ----------
 
 export async function GET(req: NextRequest) {
   try {
-    const gate = await requireAdmin(req);
+    const gate = await requireStaff(req);
     if (!gate.ok) return gate.denied;
 
     const [
       users,
       students,
-      faculty,
+      professors,
+      moderators,
       projects,
       published,
       drafts,
       featured,
       verified,
       departments,
-      events,
-      posts,
       comments,
       resources,
       viewsAgg,
       pendingVerifications,
       openReports,
       pendingJoinRequests,
+      pendingAccountRequests,
       byCategoryRows,
       deptRows,
+      byClassRows,
       recentProjectRows,
       recentUserRows,
       activityProjectRows,
       activityUserRows,
-      activityPostRows,
+      activityRequestRows,
       activityCommentRows,
       activityReportRows,
       activityJoinRows,
-      activityEventRows,
       activityResourceRows,
       galleryImageCount,
       uploadedResourceCount,
@@ -51,21 +51,21 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       db.user.count(),
       db.user.count({ where: { role: "STUDENT" } }),
-      db.user.count({ where: { role: { in: ["FACULTY", "ADMIN"] } } }),
+      db.user.count({ where: { role: "PROFESSOR" } }),
+      db.user.count({ where: { role: "MODERATOR" } }),
       db.project.count(),
       db.project.count({ where: { status: "PUBLISHED" } }),
       db.project.count({ where: { status: "DRAFT" } }),
       db.project.count({ where: { featured: true } }),
       db.project.count({ where: { verified: true } }),
       db.department.count(),
-      db.event.count(),
-      db.post.count(),
       db.comment.count(),
       db.projectResource.count(),
       db.project.aggregate({ _sum: { views: true } }),
       db.verification.count({ where: { status: "PENDING" } }),
       db.report.count({ where: { status: "OPEN" } }),
       db.joinRequest.count({ where: { status: "PENDING" } }),
+      db.accountRequest.count({ where: { status: "PENDING" } }),
       db.project.groupBy({
         by: ["category"],
         where: { status: "PUBLISHED" },
@@ -80,6 +80,19 @@ export async function GET(req: NextRequest) {
           _count: { select: { projects: { where: { status: "PUBLISHED" } } } },
         },
       }),
+      // Sections: students + projects grouped per classId.
+      Promise.all([
+        db.user.groupBy({
+          by: ["classId"],
+          where: { classId: { not: null } },
+          _count: { _all: true },
+        }),
+        db.project.groupBy({
+          by: ["classId"],
+          where: { classId: { not: null } },
+          _count: { _all: true },
+        }),
+      ]),
       db.project.findMany({
         where: { status: "PUBLISHED" },
         orderBy: { createdAt: "desc" },
@@ -109,10 +122,10 @@ export async function GET(req: NextRequest) {
         take: 8,
         select: { id: true, username: true, displayName: true, role: true, createdAt: true },
       }),
-      db.post.findMany({
+      db.accountRequest.findMany({
         orderBy: { createdAt: "desc" },
         take: 6,
-        select: { id: true, body: true, createdAt: true, user: { select: { displayName: true } } },
+        select: { id: true, name: true, status: true, createdAt: true },
       }),
       db.comment.findMany({
         orderBy: { createdAt: "desc" },
@@ -129,11 +142,6 @@ export async function GET(req: NextRequest) {
         take: 6,
         select: { id: true, status: true, createdAt: true, user: { select: { displayName: true } }, project: { select: { title: true, slug: true } } },
       }),
-      db.event.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 4,
-        select: { id: true, title: true, createdAt: true },
-      }),
       db.projectResource.findMany({
         orderBy: { createdAt: "desc" },
         take: 6,
@@ -143,12 +151,29 @@ export async function GET(req: NextRequest) {
       db.projectImage.count(),
       db.projectResource.count({ where: { url: { startsWith: "/uploads/" } } }),
       db.projectResource.count({ where: { url: { not: { startsWith: "/uploads/" } } } }),
-      db.$queryRaw<{ n: number }[]>`
-        SELECT (SELECT COUNT(*) FROM User WHERE avatarUrl LIKE '/uploads/%')
-             + (SELECT COUNT(*) FROM Project WHERE coverImage LIKE '/uploads/%') AS n
-      `,
+      // Prisma counts instead of raw SQL: the raw query used unquoted camelCase
+      // identifiers, which only worked on SQLite and failed on Postgres.
+      Promise.all([
+        db.user.count({ where: { avatarUrl: { startsWith: "/uploads/" } } }),
+        db.project.count({ where: { coverImage: { startsWith: "/uploads/" } } }),
+      ]).then(([avatars, covers]) => [{ n: avatars + covers }]),
       db.user.findMany({ select: { createdAt: true } }),
     ]);
+
+    const [studentClassRows, projectClassRows] = byClassRows;
+    const classStudentMap = new Map(
+      studentClassRows.map((r) => [r.classId as string, r._count._all])
+    );
+    const classProjectMap = new Map(
+      projectClassRows.map((r) => [r.classId as string, r._count._all])
+    );
+    const byClass: AdminOverviewDTO["byClass"] = [...new Set([...classStudentMap.keys(), ...classProjectMap.keys()])]
+      .sort()
+      .map((classId) => ({
+        classId,
+        students: classStudentMap.get(classId) ?? 0,
+        projects: classProjectMap.get(classId) ?? 0,
+      }));
 
     const likeCounts = await likeCountMap(
       "PROJECT",
@@ -162,21 +187,21 @@ export async function GET(req: NextRequest) {
     const overview: AdminOverviewDTO = {
       users,
       students,
-      faculty,
+      professors,
+      moderators,
       projects,
       published,
       drafts,
       featured,
       verified,
       departments,
-      events,
-      posts,
       comments,
       resources,
       totalViews: viewsAgg._sum.views ?? 0,
       pendingVerifications,
       openReports,
       pendingJoinRequests,
+      pendingAccountRequests,
       byCategory,
       byDepartment: deptRows.map((d) => ({
         code: d.code,
@@ -184,6 +209,7 @@ export async function GET(req: NextRequest) {
         accent: d.accent,
         count: d._count.projects,
       })),
+      byClass,
       recentProjects: recentProjectRows.map((p) => toListItem(p, likeCounts.get(p.id) ?? 0)),
       recentUsers: recentUserRows.map((u) => ({
         id: u.id,
@@ -196,11 +222,10 @@ export async function GET(req: NextRequest) {
       activity: buildActivity({
         projects: activityProjectRows,
         users: activityUserRows,
-        posts: activityPostRows,
+        requests: activityRequestRows,
         comments: activityCommentRows,
         reports: activityReportRows,
         joins: activityJoinRows,
-        events: activityEventRows,
         resources: activityResourceRows,
       }),
       storage: {
@@ -226,11 +251,10 @@ const MAX_ACT = 18;
 function buildActivity(rows: {
   projects: { id: string; slug: string; title: string; status: string; createdAt: Date; department: { code: string } | null }[];
   users: { id: string; username: string; displayName: string; role: string; createdAt: Date }[];
-  posts: { id: string; body: string; createdAt: Date; user: { displayName: string } }[];
+  requests: { id: string; name: string; status: string; createdAt: Date }[];
   comments: { id: string; body: string; createdAt: Date; user: { displayName: string } }[];
   reports: { id: string; reason: string; targetType: string; status: string; createdAt: Date; reporter: { displayName: string } }[];
   joins: { id: string; status: string; createdAt: Date; user: { displayName: string }; project: { title: string; slug: string } }[];
-  events: { id: string; title: string; createdAt: Date }[];
   resources: { id: string; label: string; url: string; createdAt: Date; project: { title: string; slug: string } | null }[];
 }): AdminActivityItem[] {
   const items: AdminActivityItem[] = [];
@@ -239,7 +263,7 @@ function buildActivity(rows: {
     items.push({
       id: `p-${p.id}`,
       kind: "PROJECT",
-      text: p.status === "PUBLISHED" ? `New project published — ${p.title}` : `Draft created — ${p.title}`,
+      text: p.status === "PUBLISHED" ? `New project published - ${p.title}` : `Draft created - ${p.title}`,
       detail: p.department?.code ?? null,
       createdAt: p.createdAt.toISOString(),
       href: `/project/${p.slug}`,
@@ -254,14 +278,15 @@ function buildActivity(rows: {
       createdAt: u.createdAt.toISOString(),
     });
   }
-  for (const po of rows.posts) {
+  for (const r of rows.requests) {
     items.push({
-      id: `po-${po.id}`,
-      kind: "POST",
-      text: `${po.user.displayName} posted in the community`,
-      detail: po.body.slice(0, 80),
-      createdAt: po.createdAt.toISOString(),
-      href: "/community",
+      id: `ar-${r.id}`,
+      kind: "ACCOUNT_REQUEST",
+      text:
+        r.status === "PENDING"
+          ? `Account request from ${r.name}`
+          : `Account request ${r.status.toLowerCase()} - ${r.name}`,
+      createdAt: r.createdAt.toISOString(),
     });
   }
   for (const c of rows.comments) {
@@ -290,14 +315,6 @@ function buildActivity(rows: {
       detail: j.status.toLowerCase(),
       createdAt: j.createdAt.toISOString(),
       href: `/project/${j.project.slug}`,
-    });
-  }
-  for (const ev of rows.events) {
-    items.push({
-      id: `e-${ev.id}`,
-      kind: "EVENT",
-      text: `Event scheduled — ${ev.title}`,
-      createdAt: ev.createdAt.toISOString(),
     });
   }
   for (const res of rows.resources) {

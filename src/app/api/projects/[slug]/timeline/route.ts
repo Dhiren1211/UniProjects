@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSessionUser, isStaff } from "@/lib/auth";
+import { canManageProject } from "../../../_utils/project-access";
+import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { title, date, note? } — add a timeline item (owner / staff) ----------
+// ---------- POST { title, date, note? } - add a timeline item (owner / staff) ----------
 
 const addSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(120),
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can edit the timeline" },
         { status: 403 }
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 }
 
-// ---------- DELETE { itemId } — remove a timeline item (owner / staff) ----------
+// ---------- DELETE { itemId } - remove a timeline item (owner / staff) ----------
 
 const deleteSchema = z.object({ itemId: z.string().min(1) });
 
@@ -69,7 +70,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can edit the timeline" },
         { status: 403 }

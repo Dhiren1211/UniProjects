@@ -6,9 +6,15 @@ import type { UserDirectoryEntry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const deptSelect = { id: true, name: true, code: true, accent: true } as const;
+const deptSelect = {
+  id: true,
+  name: true,
+  code: true,
+  accent: true,
+  capstoneLabel: true,
+} as const;
 
-// ---------- GET — student / member directory ----------
+// ---------- GET - student / member directory ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,6 +23,7 @@ export async function GET(req: NextRequest) {
     const dept = sp.get("dept")?.trim();
     const teammates = sp.get("teammates");
     const sort = sp.get("sort")?.trim();
+    const role = sp.get("role")?.trim();
     const take = Math.min(Number(sp.get("pageSize")) || 60, 100);
 
     const where: Record<string, unknown> = {};
@@ -30,6 +37,11 @@ export async function GET(req: NextRequest) {
     }
     if (dept) where.department = { code: dept };
     if (teammates === "1") where.lookingForTeammates = true;
+    // Public role filter - the account-request form uses ?role=PROFESSOR to
+    // list every registered professor in its "Professor" picker.
+    if (role && ["STUDENT", "PROFESSOR", "MODERATOR", "ADMIN"].includes(role)) {
+      where.role = role;
+    }
 
     const rows = await db.user.findMany({
       where,
@@ -67,7 +79,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---------- PATCH — update the viewer's own profile ----------
+// ---------- PATCH - update the viewer's own profile ----------
 
 const patchSchema = z.object({
   displayName: z.string().trim().min(1, "Name cannot be empty").max(80).optional(),
@@ -79,6 +91,20 @@ const patchSchema = z.object({
     .optional(),
   website: z.union([z.string().trim().max(300), z.literal("")]).nullable().optional(),
   github: z.union([z.string().trim().max(300), z.literal("")]).nullable().optional(),
+  // PROFESSOR only - link to the faculty member's official university profile page
+  universityProfileUrl: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .trim()
+        .max(300, "University profile URL is too long")
+        .refine((v) => /^https?:\/\/\S+$/.test(v), {
+          message: "Enter a full URL starting with http:// or https://",
+        }),
+    ])
+    .optional()
+    .nullable(),
   // optional avatar: a root-relative path ("/avatars/…") or an https URL; "" clears it
   avatarUrl: z
     .union([
@@ -129,6 +155,11 @@ export async function PATCH(req: NextRequest) {
     }
     if (d.website !== undefined) data.website = d.website || null;
     if (d.github !== undefined) data.github = d.github || null;
+    // The official faculty profile link is a professor-only field -
+    // students/staff sending it are ignored rather than rejected.
+    if (d.universityProfileUrl !== undefined && viewer.role === "PROFESSOR") {
+      data.universityProfileUrl = d.universityProfileUrl || null;
+    }
     if (d.avatarUrl !== undefined) data.avatarUrl = d.avatarUrl || null;
     if (d.lookingForTeammates !== undefined) data.lookingForTeammates = d.lookingForTeammates;
     if (d.dept !== undefined) {
@@ -154,7 +185,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Password change — the current password is always verified first.
+    // Password change - the current password is always verified first.
     if (d.newPassword) {
       if (!d.currentPassword) {
         return NextResponse.json(

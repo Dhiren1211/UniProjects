@@ -6,10 +6,10 @@ import type { ReportDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { targetType, targetId, reason } — file a report ----------
+// ---------- POST { targetType, targetId, reason } - file a report ----------
 
 const reportSchema = z.object({
-  targetType: z.enum(["PROJECT", "POST", "USER"]),
+  targetType: z.enum(["PROJECT", "USER"]),
   targetId: z.string().min(1),
   reason: z.string().trim().min(3, "Tell us a bit more (min 3 characters)").max(500),
 });
@@ -31,9 +31,6 @@ export async function POST(req: NextRequest) {
     if (targetType === "PROJECT") {
       const target = await db.project.findUnique({ where: { id: targetId }, select: { id: true } });
       if (!target) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    } else if (targetType === "POST") {
-      const target = await db.post.findUnique({ where: { id: targetId }, select: { id: true } });
-      if (!target) return NextResponse.json({ error: "Post not found" }, { status: 404 });
     } else {
       const target = await db.user.findUnique({ where: { id: targetId }, select: { id: true } });
       if (!target) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -50,7 +47,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ---------- GET — moderation queue (staff only) ----------
+// ---------- GET - moderation queue (staff only) ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,19 +66,15 @@ export async function GET(req: NextRequest) {
 
     // Resolve polymorphic targets in bulk.
     const projectIds = rows.filter((r) => r.targetType === "PROJECT").map((r) => r.targetId);
-    const postIds = rows.filter((r) => r.targetType === "POST").map((r) => r.targetId);
     const userIds = rows.filter((r) => r.targetType === "USER").map((r) => r.targetId);
 
-    const [projects, posts, users] = await Promise.all([
+    const [projects, users] = await Promise.all([
       projectIds.length
         ? db.project.findMany({
             where: { id: { in: projectIds } },
             select: { id: true, title: true, slug: true },
           })
         : Promise.resolve([] as { id: string; title: string; slug: string }[]),
-      postIds.length
-        ? db.post.findMany({ where: { id: { in: postIds } }, select: { id: true, body: true } })
-        : Promise.resolve([] as { id: string; body: string }[]),
       userIds.length
         ? db.user.findMany({
             where: { id: { in: userIds } },
@@ -91,7 +84,6 @@ export async function GET(req: NextRequest) {
     ]);
 
     const projectMap = new Map(projects.map((p) => [p.id, p]));
-    const postMap = new Map(posts.map((p) => [p.id, p]));
     const userMap = new Map(users.map((u) => [u.id, u]));
 
     // OPEN first (newest first within each group)
@@ -105,9 +97,6 @@ export async function GET(req: NextRequest) {
         const p = projectMap.get(r.targetId);
         targetLabel = p?.title ?? "Project";
         targetSlug = p?.slug ?? null;
-      } else if (r.targetType === "POST") {
-        const p = postMap.get(r.targetId);
-        targetLabel = p ? p.body.slice(0, 60) : "Post";
       } else {
         const u = userMap.get(r.targetId);
         targetLabel = u?.displayName ?? "User";

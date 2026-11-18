@@ -1,0 +1,1154 @@
+     1→"use client";
+     2→
+     3→// ============================================================
+     4→// HomeView — "The Campus Spotlight" landing page.
+     5→// Dark immersive hero + live search + parallax collage,
+     6→// project marquee, count-up stats, featured spotlight
+     7→// carousel, department cards, events, latest grid, CTA.
+     8→// ============================================================
+     9→
+    10→import { useEffect, useRef, useState } from "react";
+    11→import { format, formatDistanceToNowStrict } from "date-fns";
+    12→import { animate, motion, useInView, useMotionValue, useSpring, useTransform } from "framer-motion";
+    13→import useEmblaCarousel from "embla-carousel-react";
+    14→import {
+    15→  ArrowRight,
+    16→  ArrowUpRight,
+    17→  BadgeCheck,
+    18→  Building2,
+    19→  CalendarDays,
+    20→  ChevronLeft,
+    21→  ChevronRight,
+    22→  Eye,
+    23→  FolderKanban,
+    24→  Loader2,
+    25→  MapPin,
+    26→  Search,
+    27→  Sparkles,
+    28→  Star,
+    29→  Users,
+    30→} from "lucide-react";
+    31→import { toast } from "sonner";
+    32→import { Button } from "@/components/ui/button";
+    33→import { CATEGORIES, UNIVERSITY, accentOf } from "@/lib/config";
+    34→import { cn } from "@/lib/utils";
+    35→import {
+    36→  fetchDepartments,
+    37→  fetchEvents,
+    38→  fetchProjects,
+    39→  fetchStats,
+    40→  globalSearch,
+    41→  type DepartmentDTO,
+    42→  type EventDTO,
+    43→  type Navigate,
+    44→  type ProjectListItem,
+    45→  type SearchResults,
+    46→  type StatsDTO,
+    47→} from "../api-client";
+    48→import { useAppStore } from "../store";
+    49→import { ProjectCard } from "../project-card";
+    50→import { CategoryIcon, FeaturedBadge, SectionHeading, UserAvatar, VerifiedBadge, formatViews } from "../ui-bits";
+    51→
+    52→const QUICK_CATEGORIES = ["AI & ML", "IoT & Hardware", "Web & App", "Data & Analytics"];
+    53→const HEADLINE_WORDS = ["project.", "idea.", "build.", "team."];
+    54→
+    55→// ---------- tiny animation helpers ----------
+    56→
+    57→function Reveal({
+    58→  children,
+    59→  delay = 0,
+    60→  className,
+    61→}: {
+    62→  children: React.ReactNode;
+    63→  delay?: number;
+    64→  className?: string;
+    65→}) {
+    66→  return (
+    67→    <motion.div
+    68→      initial={{ opacity: 0, y: 26 }}
+    69→      whileInView={{ opacity: 1, y: 0 }}
+    70→      viewport={{ once: true, margin: "-60px" }}
+    71→      transition={{ duration: 0.55, delay, ease: "easeOut" }}
+    72→      className={className}
+    73→    >
+    74→      {children}
+    75→    </motion.div>
+    76→  );
+    77→}
+    78→
+    79→function CountUp({ value, className }: { value: number; className?: string }) {
+    80→  const ref = useRef<HTMLSpanElement>(null);
+    81→  const inView = useInView(ref, { once: true, margin: "-40px" });
+    82→
+    83→  useEffect(() => {
+    84→    if (!inView || !ref.current) return;
+    85→    const controls = animate(0, value, {
+    86→      duration: 1.4,
+    87→      ease: "easeOut",
+    88→      onUpdate: (v) => {
+    89→        if (ref.current) ref.current.textContent = Math.round(v).toLocaleString();
+    90→      },
+    91→    });
+    92→    return () => controls.stop();
+    93→  }, [inView, value]);
+    94→
+    95→  return (
+    96→    <span ref={ref} className={className}>
+    97→      0
+    98→    </span>
+    99→  );
+   100→}
+   101→
+   102→function RotatingWord() {
+   103→  const [idx, setIdx] = useState(0);
+   104→
+   105→  useEffect(() => {
+   106→    const t = setInterval(() => setIdx((i) => (i + 1) % HEADLINE_WORDS.length), 2600);
+   107→    return () => clearInterval(t);
+   108→  }, []);
+   109→
+   110→  return (
+   111→    <span className="relative inline-grid align-bottom">
+   112→      <span className="sr-only">{HEADLINE_WORDS[0]}</span>
+   113→      {HEADLINE_WORDS.map((w, i) => (
+   114→        <motion.span
+   115→          key={w}
+   116→          aria-hidden
+   117→          className="col-start-1 row-start-1 bg-gradient-to-r from-teal-300 via-teal-200 to-cyan-200 bg-clip-text text-transparent"
+   118→          initial={false}
+   119→          animate={
+   120→            i === idx
+   121→              ? { opacity: 1, y: 0, filter: "blur(0px)" }
+   122→              : { opacity: 0, y: 10, filter: "blur(4px)" }
+   123→          }
+   124→          transition={{ duration: 0.45, ease: "easeOut" }}
+   125→        >
+   126→          {w}
+   127→        </motion.span>
+   128→      ))}
+   129→    </span>
+   130→  );
+   131→}
+   132→
+   133→// ---------- decorative backgrounds (shared by hero + CTA) ----------
+   134→
+   135→function DarkBackdrop() {
+   136→  return (
+   137→    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+   138→      <div className="absolute -left-28 -top-32 size-96 rounded-full bg-teal-400/25 blur-3xl [animation:up-aurora_14s_ease-in-out_infinite]" />
+   139→      <div className="absolute -right-28 top-1/4 size-[26rem] rounded-full bg-teal-400/15 blur-3xl [animation:up-aurora_19s_ease-in-out_infinite_reverse]" />
+   140→      <div className="absolute bottom-[-6rem] left-1/3 size-80 rounded-full bg-sky-300/10 blur-3xl [animation:up-aurora_16s_ease-in-out_infinite]" />
+   141→      <div
+   142→        className="absolute inset-0 opacity-40"
+   143→        style={{
+   144→          backgroundImage: "radial-gradient(rgba(255,255,255,0.13) 1px, transparent 1px)",
+   145→          backgroundSize: "26px 26px",
+   146→          maskImage: "radial-gradient(ellipse 85% 75% at 50% 32%, black 25%, transparent 78%)",
+   147→          WebkitMaskImage: "radial-gradient(ellipse 85% 75% at 50% 32%, black 25%, transparent 78%)",
+   148→        }}
+   149→      />
+   150→    </div>
+   151→  );
+   152→}
+   153→
+   154→// ---------- hero search with instant results ----------
+   155→
+   156→function HeroSearch({ navigate }: { navigate: Navigate }) {
+   157→  const [q, setQ] = useState("");
+   158→  const [results, setResults] = useState<SearchResults | null>(null);
+   159→  const [open, setOpen] = useState(false);
+   160→  const [loading, setLoading] = useState(false);
+   161→  const boxRef = useRef<HTMLDivElement>(null);
+   162→  const seqRef = useRef(0);
+   163→
+   164→  useEffect(() => {
+   165→    const query = q.trim();
+   166→    const t = setTimeout(() => {
+   167→      if (query.length < 2) {
+   168→        setResults(null);
+   169→        setOpen(false);
+   170→        setLoading(false);
+   171→        return;
+   172→      }
+   173→      setLoading(true);
+   174→      const seq = ++seqRef.current;
+   175→      globalSearch(query)
+   176→        .then((r) => {
+   177→          if (seq !== seqRef.current) return;
+   178→          setResults(r);
+   179→          setOpen(true);
+   180→        })
+   181→        .catch(() => {})
+   182→        .finally(() => {
+   183→          if (seq === seqRef.current) setLoading(false);
+   184→        });
+   185→    }, 250);
+   186→    return () => clearTimeout(t);
+   187→  }, [q]);
+   188→
+   189→  useEffect(() => {
+   190→    if (!open) return;
+   191→    const onDocDown = (e: MouseEvent) => {
+   192→      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+   193→    };
+   194→    document.addEventListener("mousedown", onDocDown);
+   195→    return () => document.removeEventListener("mousedown", onDocDown);
+   196→  }, [open]);
+   197→
+   198→  const submit = () => {
+   199→    setOpen(false);
+   200→    navigate({ name: "projects", q: q.trim() || undefined });
+   201→  };
+   202→
+   203→  const hasAny = results && (results.projects.length > 0 || results.users.length > 0);
+   204→
+   205→  return (
+   206→    <div ref={boxRef} className="relative w-full max-w-xl">
+   207→      {/* Bar */}
+   208→      <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 p-2 shadow-float backdrop-blur-md transition-colors focus-within:border-teal-300/60 focus-within:ring-2 focus-within:ring-teal-300/30">
+   209→        <Search className="ml-2.5 size-4.5 shrink-0 text-teal-200/70" aria-hidden />
+   210→        <input
+   211→          value={q}
+   212→          onChange={(e) => setQ(e.target.value)}
+   213→          onFocus={() => {
+   214→            if (results && q.trim().length >= 2) setOpen(true);
+   215→          }}
+   216→          onKeyDown={(e) => {
+   217→            if (e.key === "Enter") submit();
+   218→            if (e.key === "Escape") setOpen(false);
+   219→          }}
+   220→          placeholder="Search projects, people, tags…"
+   221→          aria-label="Search the showcase"
+   222→          className="h-9 min-w-0 flex-1 bg-transparent text-[15px] text-white outline-none placeholder:text-teal-100/50"
+   223→        />
+   224→        {loading ? <Loader2 className="size-4 shrink-0 animate-spin text-teal-200/70" aria-hidden /> : null}
+   225→        <Button
+   226→          onClick={submit}
+   227→          className="h-9 rounded-xl bg-teal-400 px-4 text-sm font-semibold text-teal-950 shadow-none hover:bg-teal-300"
+   228→        >
+   229→          Search
+   230→        </Button>
+   231→      </div>
+   232→
+   233→      {/* Dropdown */}
+   234→      {open ? (
+   235→        <div className="absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-up-border bg-popover text-popover-foreground shadow-float">
+   236→          {!hasAny ? (
+   237→            <p className="px-5 py-6 text-center text-sm text-muted-foreground">
+   238→              No matches for <span className="font-semibold text-foreground">“{q.trim()}”</span>
+   239→            </p>
+   240→          ) : (
+   241→            <div className="max-h-80 overflow-y-auto nice-scroll">
+   242→              {results!.projects.length > 0 ? (
+   243→                <div className="p-2">
+   244→                  <p className="px-3 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+   245→                    Projects
+   246→                  </p>
+   247→                  {results!.projects.slice(0, 4).map((p) => (
+   248→                    <button
+   249→                      key={p.id}
+   250→                      type="button"
+   251→                      onClick={() => {
+   252→                        setOpen(false);
+   253→                        navigate({ name: "project", slug: p.slug });
+   254→                      }}
+   255→                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-muted"
+   256→                    >
+   257→                      <span
+   258→                        className={cn(
+   259→                          "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+   260→                          accentOf(p.department.accent).cover
+   261→                        )}
+   262→                      >
+   263→                        <CategoryIcon category={p.category} className="size-4 text-foreground/60" />
+   264→                      </span>
+   265→                      <span className="min-w-0 flex-1">
+   266→                        <span className="block truncate text-sm font-medium text-foreground">{p.title}</span>
+   267→                        <span className="block truncate text-xs text-muted-foreground">{p.category}</span>
+   268→                      </span>
+   269→                      <span className="shrink-0 rounded-full border border-up-border bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+   270→                        {p.department.code}
+   271→                      </span>
+   272→                    </button>
+   273→                  ))}
+   274→                </div>
+   275→              ) : null}
+   276→
+   277→              {results!.users.length > 0 ? (
+   278→                <div className="border-t border-up-border p-2">
+   279→                  <p className="px-3 pb-1.5 pt-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+   280→                    People
+   281→                  </p>
+   282→                  {results!.users.slice(0, 3).map((u) => (
+   283→                    <button
+   284→                      key={u.id}
+   285→                      type="button"
+   286→                      onClick={() => {
+   287→                        setOpen(false);
+   288→                        navigate({ name: "profile", username: u.username });
+   289→                      }}
+   290→                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-surface-muted"
+   291→                    >
+   292→                      <UserAvatar name={u.displayName} avatarUrl={u.avatarUrl} />
+   293→                      <span className="min-w-0 flex-1">
+   294→                        <span className="block truncate text-sm font-medium text-foreground">{u.displayName}</span>
+   295→                        <span className="block truncate text-xs text-muted-foreground">@{u.username}</span>
+   296→                      </span>
+   297→                    </button>
+   298→                  ))}
+   299→                </div>
+   300→              ) : null}
+   301→
+   302→              <button
+   303→                type="button"
+   304→                onClick={submit}
+   305→                className="flex w-full items-center justify-center gap-1.5 border-t border-up-border bg-surface-muted/60 px-4 py-3 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-50"
+   306→              >
+   307→                See all results for “{q.trim()}”
+   308→                <ArrowRight className="size-3.5" aria-hidden />
+   309→              </button>
+   310→            </div>
+   311→          )}
+   312→        </div>
+   313→      ) : null}
+   314→    </div>
+   315→  );
+   316→}
+   317→
+   318→// ---------- floating glass collage (hero right side) ----------
+   319→
+   320→function CollageCard({
+   321→  project,
+   322→  onOpen,
+   323→  style,
+   324→  className,
+   325→}: {
+   326→  project: ProjectListItem;
+   327→  onOpen: (slug: string) => void;
+   328→  style?: React.CSSProperties;
+   329→  className?: string;
+   330→}) {
+   331→  const accent = accentOf(project.department.accent);
+   332→  return (
+   333→    <button
+   334→      type="button"
+   335→      onClick={() => onOpen(project.slug)}
+   336→      style={style}
+   337→      className={cn(
+   338→        "group w-72 rounded-2xl border border-white/12 bg-white/[0.08] p-3 text-left shadow-float ring-1 ring-white/10 backdrop-blur-md transition-colors hover:border-teal-300/40",
+   339→        className
+   340→      )}
+   341→    >
+   342→      <span
+   343→        className={cn(
+   344→          "flex aspect-video items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br",
+   345→          accent.cover
+   346→        )}
+   347→      >
+   348→        {project.coverImage ? (
+   349→          <img
+   350→            src={project.coverImage}
+   351→            alt=""
+   352→            loading="lazy"
+   353→            onError={(e) => {
+   354→              e.currentTarget.style.display = "none";
+   355→            }}
+   356→            className="size-full object-contain"
+   357→          />
+   358→        ) : null}
+   359→        {project.coverImage ? null : (
+   360→          <span className="flex size-10 items-center justify-center rounded-xl bg-white/70 shadow-sm transition-transform duration-200 group-hover:scale-105">
+   361→            <CategoryIcon category={project.category} className="size-5 text-foreground/60" />
+   362→          </span>
+   363→        )}
+   364→      </span>
+   365→      <span className="mt-3 block truncate text-sm font-semibold text-white">{project.title}</span>
+   366→      <span className="mt-2 flex items-center justify-between">
+   367→        <span className={cn("rounded-full border border-white/20 bg-white/10 px-2 py-0.5 text-[10px] font-medium text-teal-100")}>
+   368→          {project.department.code}
+   369→        </span>
+   370→        <span className="flex items-center gap-1 text-[11px] text-teal-100/70">
+   371→          <Eye className="size-3" aria-hidden />
+   372→          {formatViews(project.views)}
+   373→        </span>
+   374→      </span>
+   375→    </button>
+   376→  );
+   377→}
+   378→
+   379→function FloatingCollage({
+   380→  projects,
+   381→  sx,
+   382→  sy,
+   383→  navigate,
+   384→}: {
+   385→  projects: ProjectListItem[] | null;
+   386→  sx: ReturnType<typeof useSpring>;
+   387→  sy: ReturnType<typeof useSpring>;
+   388→  navigate: Navigate;
+   389→}) {
+   390→  // Parallax depths (hooks must be unconditional)
+   391→  const x1 = useTransform(sx, (v) => v * -30);
+   392→  const y1 = useTransform(sy, (v) => v * -22);
+   393→  const x2 = useTransform(sx, (v) => v * 26);
+   394→  const y2 = useTransform(sy, (v) => v * 18);
+   395→  const x3 = useTransform(sx, (v) => v * -14);
+   396→  const y3 = useTransform(sy, (v) => v * 26);
+   397→  const xChip = useTransform(sx, (v) => v * 40);
+   398→  const yChip = useTransform(sy, (v) => v * -34);
+   399→
+   400→  const items = projects?.slice(0, 3) ?? [];
+   401→  const students = items.flatMap((p) => p.members.slice(0, 2));
+   402→
+   403→  return (
+   404→    <div className="relative mx-auto hidden h-[500px] w-full max-w-[560px] lg:block">
+   405→      {/* rings */}
+   406→      <div aria-hidden className="absolute left-1/2 top-1/2 size-[25rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-teal-200/10" />
+   407→      <div aria-hidden className="absolute left-1/2 top-1/2 size-[33rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-teal-200/[0.06]" />
+   408→
+   409→      {items.length === 0
+   410→        ? [0, 1, 2].map((i) => (
+   411→            <div
+   412→              key={i}
+   413→              className={cn(
+   414→                "absolute h-60 w-72 animate-pulse rounded-2xl bg-white/[0.06]",
+   415→                i === 0 && "left-0 top-4 -rotate-6",
+   416→                i === 1 && "right-0 top-24 rotate-[5deg]",
+   417→                i === 2 && "bottom-2 left-[calc(50%-9rem)] rotate-1"
+   418→              )}
+   419→            />
+   420→          ))
+   421→        : null}
+   422→
+   423→      {items[0] ? (
+   424→        <motion.div style={{ x: x1, y: y1 }} className="absolute left-0 top-4">
+   425→          <div className="[animation:up-float_7s_ease-in-out_infinite] -rotate-6">
+   426→            <CollageCard project={items[0]} onOpen={(slug) => navigate({ name: "project", slug })} />
+   427→          </div>
+   428→        </motion.div>
+   429→      ) : null}
+   430→      {items[1] ? (
+   431→        <motion.div style={{ x: x2, y: y2 }} className="absolute right-0 top-24">
+   432→          <div className="[animation:up-float_8s_ease-in-out_-2.5s_infinite] rotate-[5deg]">
+   433→            <CollageCard project={items[1]} onOpen={(slug) => navigate({ name: "project", slug })} />
+   434→          </div>
+   435→        </motion.div>
+   436→      ) : null}
+   437→      {items[2] ? (
+   438→        <motion.div style={{ x: x3, y: y3 }} className="absolute bottom-2 left-[calc(50%-9rem)]">
+   439→          <div className="[animation:up-float_9s_ease-in-out_-5s_infinite] rotate-1">
+   440→            <CollageCard project={items[2]} onOpen={(slug) => navigate({ name: "project", slug })} />
+   441→          </div>
+   442→        </motion.div>
+   443→      ) : null}
+   444→
+   445→      {/* floating chips */}
+   446→      <motion.div style={{ x: xChip, y: yChip }} className="absolute right-4 top-2">
+   447→        <div className="[animation:up-float_6s_ease-in-out_-1s_infinite]">
+   448→          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100 shadow-float backdrop-blur-md">
+   449→            <Star className="size-3.5 fill-amber-300 text-amber-300" aria-hidden />
+   450→            Featured on campus
+   451→          </span>
+   452→        </div>
+   453→      </motion.div>
+   454→      <motion.div style={{ x: xChip, y: yChip }} className="absolute bottom-0 left-6">
+   455→        <div className="[animation:up-float_7.5s_ease-in-out_-4s_infinite]">
+   456→          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-teal-100 shadow-float backdrop-blur-md">
+   457→            <span className="flex -space-x-1.5">
+   458→              {students.slice(0, 3).map((m) => (
+   459→                <UserAvatar key={m.id} name={m.name} avatarUrl={m.avatarUrl} className="size-5 text-[8px]" ring={false} />
+   460→              ))}
+   461→            </span>
+   462→            Student teams
+   463→          </span>
+   464→        </div>
+   465→      </motion.div>
+   466→    </div>
+   467→  );
+   468→}
+   469→
+   470→// ---------- hero ----------
+   471→
+   472→function Hero({
+   473→  navigate,
+   474→  stats,
+   475→  recent,
+   476→}: {
+   477→  navigate: Navigate;
+   478→  stats: StatsDTO | null;
+   479→  recent: ProjectListItem[] | null;
+   480→}) {
+   481→  const ref = useRef<HTMLElement>(null);
+   482→  const mx = useMotionValue(0);
+   483→  const my = useMotionValue(0);
+   484→  const sx = useSpring(mx, { stiffness: 55, damping: 16 });
+   485→  const sy = useSpring(my, { stiffness: 55, damping: 16 });
+   486→
+   487→  const trustAvatars = recent?.flatMap((p) => p.members.slice(0, 1)).slice(0, 5) ?? [];
+   488→
+   489→  return (
+   490→    <section
+   491→      ref={ref}
+   492→      onMouseMove={(e) => {
+   493→        const rect = ref.current?.getBoundingClientRect();
+   494→        if (!rect) return;
+   495→        mx.set((e.clientX - rect.left) / rect.width - 0.5);
+   496→        my.set((e.clientY - rect.top) / rect.height - 0.5);
+   497→      }}
+   498→      onMouseLeave={() => {
+   499→        mx.set(0);
+   500→        my.set(0);
+   501→      }}
+   502→      className="relative overflow-hidden bg-night text-white"
+   503→    >
+   504→      <DarkBackdrop />
+   505→
+   506→      <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-5 pb-16 pt-12 md:px-8 md:pb-20 md:pt-16 lg:grid-cols-[1fr_1.15fr] lg:items-center">
+   507→        {/* ---- left ---- */}
+   508→        <div>
+   509→          <motion.div
+   510→            initial={{ opacity: 0, y: 16 }}
+   511→            animate={{ opacity: 1, y: 0 }}
+   512→            transition={{ duration: 0.5, ease: "easeOut" }}
+   513→          >
+   514→            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] py-1.5 pl-3 pr-3.5 text-xs font-medium text-teal-100/90 backdrop-blur-sm">
+   515→              <span className="relative flex size-2">
+   516→                <span className="absolute inline-flex size-full animate-ping rounded-full bg-teal-400 opacity-60" />
+   517→                <span className="relative inline-flex size-2 rounded-full bg-teal-400" />
+   518→              </span>
+   519→              {UNIVERSITY.name} · {UNIVERSITY.tagline}
+   520→            </span>
+   521→          </motion.div>
+   522→
+   523→          <motion.h1
+   524→            initial={{ opacity: 0, y: 20 }}
+   525→            animate={{ opacity: 1, y: 0 }}
+   526→            transition={{ duration: 0.55, delay: 0.08, ease: "easeOut" }}
+   527→            className="mt-6 text-[2.6rem] font-bold leading-[1.05] tracking-tight md:text-6xl"
+   528→          >
+   529→            One campus.
+   530→            <br />
+   531→            Every <RotatingWord />
+   532→          </motion.h1>
+   533→
+   534→          <motion.p
+   535→            initial={{ opacity: 0, y: 20 }}
+   536→            animate={{ opacity: 1, y: 0 }}
+   537→            transition={{ duration: 0.55, delay: 0.16, ease: "easeOut" }}
+   538→            className="mt-5 max-w-lg text-base leading-relaxed text-teal-100/70 md:text-lg"
+   539→          >
+   540→            {UNIVERSITY.description}
+   541→          </motion.p>
+   542→
+   543→          <motion.div
+   544→            initial={{ opacity: 0, y: 20 }}
+   545→            animate={{ opacity: 1, y: 0 }}
+   546→            transition={{ duration: 0.55, delay: 0.24, ease: "easeOut" }}
+   547→            className="mt-8"
+   548→          >
+   549→            <HeroSearch navigate={navigate} />
+   550→          </motion.div>
+   551→
+   552→          <motion.div
+   553→            initial={{ opacity: 0, y: 20 }}
+   554→            animate={{ opacity: 1, y: 0 }}
+   555→            transition={{ duration: 0.55, delay: 0.32, ease: "easeOut" }}
+   556→            className="mt-4 flex flex-wrap items-center gap-2"
+   557→          >
+   558→            {QUICK_CATEGORIES.map((c) => (
+   559→              <button
+   560→                key={c}
+   561→                type="button"
+   562→                onClick={() => navigate({ name: "projects", category: c })}
+   563→                className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs font-medium text-teal-100/80 transition-colors hover:border-teal-300/40 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60"
+   564→              >
+   565→                {c}
+   566→              </button>
+   567→            ))}
+   568→          </motion.div>
+   569→
+   570→          {/* trust row */}
+   571→          <motion.div
+   572→            initial={{ opacity: 0 }}
+   573→            animate={{ opacity: 1 }}
+   574→            transition={{ duration: 0.6, delay: 0.45 }}
+   575→            className="mt-8 flex items-center gap-3 text-sm text-teal-100/70"
+   576→          >
+   577→            <span className="flex -space-x-2">
+   578→              {trustAvatars.length > 0
+   579→                ? trustAvatars.map((m) => (
+   580→                    <UserAvatar key={m.id} name={m.name} avatarUrl={m.avatarUrl} className="size-7 ring-teal-950" />
+   581→                  ))
+   582→                : [0, 1, 2, 3].map((i) => (
+   583→                    <span key={i} className="size-7 animate-pulse rounded-full bg-white/10 ring-2 ring-night" />
+   584→                  ))}
+   585→            </span>
+   586→            <span>
+   587→              {stats ? (
+   588→                <>
+   589→                  <span className="font-semibold text-white">{stats.students} students</span> already showcasing across{" "}
+   590→                  {stats.departments} departments
+   591→                </>
+   592→              ) : (
+   593→                <span className="inline-block h-4 w-56 animate-pulse rounded bg-white/10" />
+   594→              )}
+   595→            </span>
+   596→          </motion.div>
+   597→        </div>
+   598→
+   599→        {/* ---- right: parallax collage ---- */}
+   600→        <motion.div
+   601→          initial={{ opacity: 0, scale: 0.96, y: 24 }}
+   602→          animate={{ opacity: 1, scale: 1, y: 0 }}
+   603→          transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
+   604→        >
+   605→          <FloatingCollage projects={recent ?? null} sx={sx} sy={sy} navigate={navigate} />
+   606→        </motion.div>
+   607→      </div>
+   608→
+   609→      {/* mobile collage strip */}
+   610→      <div className="relative lg:hidden">
+   611→        <div className="nice-scroll flex snap-x gap-3 overflow-x-auto px-5 pb-8">
+   612→          {(recent ?? []).slice(0, 5).map((p) => (
+   613→            <div key={p.id} className="shrink-0 snap-start">
+   614→              <CollageCard project={p} onOpen={(slug) => navigate({ name: "project", slug })} />
+   615→            </div>
+   616→          ))}
+   617→          {recent === null
+   618→            ? [0, 1, 2].map((i) => (
+   619→                <div key={i} className="h-60 w-72 shrink-0 animate-pulse rounded-2xl bg-white/[0.06]" />
+   620→              ))
+   621→            : null}
+   622→        </div>
+   623→      </div>
+   624→    </section>
+   625→  );
+   626→}
+   627→
+   628→// ---------- marquee ticker ----------
+   629→
+   630→function Marquee({ projects }: { projects: ProjectListItem[] | null }) {
+   631→  if (!projects || projects.length === 0) {
+   632→    return (
+   633→      <div className="border-b border-up-border bg-white py-4">
+   634→        <div className="mx-auto max-w-6xl px-5">
+   635→          <div className="h-4 w-full max-w-md animate-pulse rounded bg-surface-muted" />
+   636→        </div>
+   637→      </div>
+   638→    );
+   639→  }
+   640→
+   641→  return (
+   642→    <div className="relative overflow-hidden border-b border-up-border bg-white py-3.5" aria-label="Latest project titles">
+   643→      <div className="flex w-max [animation:up-marquee_45s_linear_infinite] hover:[animation-play-state:paused]">
+   644→        {[0, 1].map((copy) => (
+   645→          <ul key={copy} aria-hidden={copy === 1} className="flex items-center gap-10 pr-10">
+   646→            {projects.map((p) => (
+   647→              <li key={p.id} className="flex items-center gap-2.5 whitespace-nowrap text-sm">
+   648→                <Sparkles className="size-3.5 text-primary-500" aria-hidden />
+   649→                <span className="font-medium text-foreground">{p.title}</span>
+   650→                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+   651→                  {p.department.code}
+   652→                </span>
+   653→              </li>
+   654→            ))}
+   655→          </ul>
+   656→        ))}
+   657→      </div>
+   658→      {/* soft white fades so titles dissolve at the edges instead of hard-clipping */}
+   659→      <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 z-10 w-24 bg-gradient-to-r from-white via-white/60 to-transparent" />
+   660→      <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-10 w-24 bg-gradient-to-l from-white via-white/60 to-transparent" />
+   661→    </div>
+   662→  );
+   663→}
+   664→
+   665→// ---------- count-up stats ----------
+   666→
+   667→function StatsBand({ stats }: { stats: StatsDTO | null }) {
+   668→  const cells = [
+   669→    { icon: FolderKanban, label: "Projects", value: stats?.projects },
+   670→    { icon: Users, label: "Students involved", value: stats?.students },
+   671→    { icon: Building2, label: "Departments", value: stats?.departments },
+   672→    { icon: BadgeCheck, label: "Faculty verified", value: stats?.verified },
+   673→  ];
+   674→
+   675→  return (
+   676→    <section aria-label="Showcase statistics" className="mx-auto mt-12 w-full max-w-6xl px-5 md:mt-14 md:px-8">
+   677→      <Reveal>
+   678→        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-up-border bg-up-border shadow-sm lg:grid-cols-4">
+   679→          {cells.map((c) => (
+   680→            <div key={c.label} className="flex items-center gap-4 bg-card px-5 py-5 md:px-7">
+   681→              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600">
+   682→                <c.icon className="size-5" aria-hidden />
+   683→              </span>
+   684→              <div className="min-w-0">
+   685→                {c.value === undefined ? (
+   686→                  <span className="block h-7 w-12 animate-pulse rounded bg-surface-muted" />
+   687→                ) : (
+   688→                  <CountUp value={c.value} className="block text-2xl font-bold tabular-nums tracking-tight text-foreground md:text-[1.7rem]" />
+   689→                )}
+   690→                <p className="mt-0.5 text-[11px] font-medium uppercase leading-snug tracking-wide text-muted-foreground">
+   691→                  {c.label}
+   692→                </p>
+   693→              </div>
+   694→            </div>
+   695→          ))}
+   696→        </div>
+   697→      </Reveal>
+   698→    </section>
+   699→  );
+   700→}
+   701→
+   702→// ---------- featured spotlight carousel ----------
+   703→
+   704→function Spotlight({ navigate, projects }: { navigate: Navigate; projects: ProjectListItem[] | null }) {
+   705→  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start" });
+   706→  const [selected, setSelected] = useState(0);
+   707→  const [paused, setPaused] = useState(false);
+   708→  const count = projects?.length ?? 0;
+   709→
+   710→  useEffect(() => {
+   711→    if (!emblaApi) return;
+   712→    const onSelect = () => setSelected(emblaApi.selectedScrollSnap());
+   713→    emblaApi.on("select", onSelect);
+   714→    onSelect();
+   715→    return () => {
+   716→      emblaApi.off("select", onSelect);
+   717→    };
+   718→  }, [emblaApi]);
+   719→
+   720→  useEffect(() => {
+   721→    if (!emblaApi || paused || count < 2) return;
+   722→    const t = setInterval(() => emblaApi.scrollNext(), 6000);
+   723→    return () => clearInterval(t);
+   724→  }, [emblaApi, paused, count]);
+   725→
+   726→  return (
+   727→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   728→      <div className="flex items-end justify-between gap-4">
+   729→        <SectionHeading
+   730→          eyebrow="Editor's picks"
+   731→          title="Featured spotlight"
+   732→          description="Hand-picked builds that define this year on campus."
+   733→        />
+   734→        {count > 1 ? (
+   735→          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+   736→            <button
+   737→              type="button"
+   738→              aria-label="Previous featured project"
+   739→              onClick={() => emblaApi?.scrollPrev()}
+   740→              className="flex size-9 items-center justify-center rounded-full border border-up-border bg-card text-foreground shadow-sm transition-colors hover:border-up-border-strong hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   741→            >
+   742→              <ChevronLeft className="size-4" aria-hidden />
+   743→            </button>
+   744→            <button
+   745→              type="button"
+   746→              aria-label="Next featured project"
+   747→              onClick={() => emblaApi?.scrollNext()}
+   748→              className="flex size-9 items-center justify-center rounded-full border border-up-border bg-card text-foreground shadow-sm transition-colors hover:border-up-border-strong hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   749→            >
+   750→              <ChevronRight className="size-4" aria-hidden />
+   751→            </button>
+   752→          </div>
+   753→        ) : null}
+   754→      </div>
+   755→
+   756→      <Reveal className="mt-6">
+   757→        <div
+   758→          onMouseEnter={() => setPaused(true)}
+   759→          onMouseLeave={() => setPaused(false)}
+   760→        >
+   761→          {projects === null ? (
+   762→            <div className="h-72 animate-pulse rounded-3xl border border-up-border bg-surface-muted md:h-80" />
+   763→          ) : count === 0 ? null : (
+   764→            <>
+   765→              <div className="overflow-hidden" ref={emblaRef}>
+   766→                <div className="flex">
+   767→                  {projects.map((p) => {
+   768→                    const accent = accentOf(p.department.accent);
+   769→                    return (
+   770→                      <div key={p.id} className="min-w-0 flex-[0_0_100%] pl-0 first:pl-0 sm:pl-0 md:flex-[0_0_88%]">
+   771→                        <article className="group mr-0 grid overflow-hidden rounded-3xl border border-up-border bg-card shadow-card md:mr-5 md:grid-cols-[0.85fr_1.15fr]">
+   772→                          <div
+   773→                            className={cn(
+   774→                              "relative flex min-h-44 items-center justify-center overflow-hidden bg-gradient-to-br md:min-h-[290px]",
+   775→                              accent.cover
+   776→                            )}
+   777→                          >
+   778→                            {p.coverImage ? (
+   779→                              <img
+   780→                                src={p.coverImage}
+   781→                                alt=""
+   782→                                loading="lazy"
+   783→                                onError={(e) => {
+   784→                                  e.currentTarget.style.display = "none";
+   785→                                }}
+   786→                                className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+   787→                              />
+   788→                            ) : null}
+   789→                            {p.coverImage ? null : (
+   790→                              <span className="flex size-16 items-center justify-center rounded-2xl bg-white/70 text-foreground/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+   791→                                <CategoryIcon category={p.category} className="size-7" />
+   792→                              </span>
+   793→                            )}
+   794→                            {p.featured ? (
+   795→                              <span className="absolute left-4 top-4">
+   796→                                <FeaturedBadge />
+   797→                              </span>
+   798→                            ) : null}
+   799→                            <span className="absolute right-4 top-4 flex items-center gap-1.5">
+   800→                              {p.verified ? <VerifiedBadge /> : null}
+   801→                              <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-sm", p.coverImage ? "bg-white/90" : "bg-white/85", accent.chip)}>
+   802→                                {p.department.code}
+   803→                              </span>
+   804→                            </span>
+   805→                          </div>
+   806→                          <div className="flex flex-col p-6 md:p-8">
+   807→                            <p className="text-xs font-semibold uppercase tracking-widest text-primary-600">
+   808→                              {p.category} · {p.year} {p.semester}
+   809→                            </p>
+   810→                            <h3 className="mt-2 line-clamp-1 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-primary-700 md:text-2xl">
+   811→                              {p.title}
+   812→                            </h3>
+   813→                            <p className="mt-2.5 line-clamp-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+   814→                              {p.summary}
+   815→                            </p>
+   816→                            <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-6">
+   817→                              <div className="flex items-center gap-2.5">
+   818→                                <div className="flex -space-x-2">
+   819→                                  {p.members.slice(0, 4).map((m) => (
+   820→                                    <UserAvatar key={m.id} name={m.name} avatarUrl={m.avatarUrl} />
+   821→                                  ))}
+   822→                                </div>
+   823→                                <span className="text-xs font-medium text-muted-foreground">
+   824→                                  {p.members.length} {p.members.length === 1 ? "member" : "members"}
+   825→                                </span>
+   826→                              </div>
+   827→                              <Button
+   828→                                onClick={() => navigate({ name: "project", slug: p.slug })}
+   829→                                className="h-9 rounded-xl px-4 text-sm font-semibold"
+   830→                              >
+   831→                                View project
+   832→                                <ArrowUpRight className="size-4" aria-hidden />
+   833→                              </Button>
+   834→                            </div>
+   835→                          </div>
+   836→                        </article>
+   837→                      </div>
+   838→                    );
+   839→                  })}
+   840→                </div>
+   841→              </div>
+   842→
+   843→              {count > 1 ? (
+   844→                <div className="mt-5 flex items-center justify-center gap-1.5">
+   845→                  {projects.map((p, i) => (
+   846→                    <button
+   847→                      key={p.id}
+   848→                      type="button"
+   849→                      aria-label={`Go to featured project ${i + 1}: ${p.title}`}
+   850→                      onClick={() => emblaApi?.scrollTo(i)}
+   851→                      className={cn(
+   852→                        "h-2 rounded-full transition-all duration-300",
+   853→                        i === selected ? "w-8 bg-primary" : "w-2 bg-up-border-strong hover:bg-muted-foreground/40"
+   854→                      )}
+   855→                    />
+   856→                  ))}
+   857→                </div>
+   858→              ) : null}
+   859→            </>
+   860→          )}
+   861→        </div>
+   862→      </Reveal>
+   863→    </section>
+   864→  );
+   865→}
+   866→
+   867→// ---------- departments ----------
+   868→
+   869→function Departments({ navigate, departments }: { navigate: Navigate; departments: DepartmentDTO[] | null }) {
+   870→  if (departments !== null && departments.length === 0) return null;
+   871→
+   872→  return (
+   873→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   874→      <SectionHeading
+   875→        eyebrow="Browse by department"
+   876→        title="Six departments, one showcase"
+   877→        description="Every project belongs to a department — jump straight into the one you care about."
+   878→      />
+   879→      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   880→        {departments === null
+   881→          ? [0, 1, 2, 3, 4, 5].map((i) => (
+   882→              <div key={i} className="h-44 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+   883→            ))
+   884→          : departments.map((d, i) => {
+   885→              const accent = accentOf(d.accent);
+   886→              return (
+   887→                <Reveal key={d.id} delay={Math.min(i * 0.05, 0.3)}>
+   888→                  <button
+   889→                    type="button"
+   890→                    onClick={() => navigate({ name: "projects", dept: d.code })}
+   891→                    className="group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-up-border bg-card p-5 text-left outline-none transition-all duration-300 hover:-translate-y-0.5 hover:border-up-border-strong hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring"
+   892→                  >
+   893→                    {/* No more bottom accent bar — instead the accent floods the whole card:
+   894→                        a circle of the department color swallows it from the bottom-left corner
+   895→                        and every line of text flips to white while it's flooded. */}
+   896→                    <span
+   897→                      aria-hidden
+   898→                      className={cn(
+   899→                        "absolute -bottom-20 -left-14 size-64 origin-center scale-0 rounded-full transition-transform duration-300 ease-out group-hover:scale-[3]",
+   900→                        accent.dot,
+   901→                      )}
+   902→                    />
+   903→                    <div className="relative z-10 flex h-full w-full flex-col">
+   904→                      <div className="flex items-start justify-between">
+   905→                        <span
+   906→                          className={cn(
+   907→                            "flex size-11 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-foreground/70 transition-transform duration-300 group-hover:scale-110",
+   908→                            accent.cover,
+   909→                          )}
+   910→                        >
+   911→                          {d.code.slice(0, 2)}
+   912→                        </span>
+   913→                        <ArrowUpRight
+   914→                          className="size-4 text-muted-foreground opacity-0 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white group-hover:opacity-100"
+   915→                          aria-hidden
+   916→                        />
+   917→                      </div>
+   918→                      <h3 className="mt-3.5 font-semibold tracking-tight text-foreground transition-colors duration-300 group-hover:text-white">
+   919→                        {d.name}
+   920→                      </h3>
+   921→                      {d.tagline ? (
+   922→                        <p className="mt-1 text-sm text-muted-foreground transition-colors duration-300 group-hover:text-white/85">
+   923→                          {d.tagline}
+   924→                        </p>
+   925→                      ) : null}
+   926→                      <p className="mt-auto pt-3.5 text-xs font-medium text-muted-foreground transition-colors duration-300 group-hover:text-white/80">
+   927→                        {d.projectCount} {d.projectCount === 1 ? "project" : "projects"}
+   928→                      </p>
+   929→                    </div>
+   930→                  </button>
+   931→                </Reveal>
+   932→              );
+   933→            })}
+   934→      </div>
+   935→    </section>
+   936→  );
+   937→}
+   938→
+   939→// ---------- events ----------
+   940→
+   941→function EventCard({ event, next }: { event: EventDTO; next?: boolean }) {
+   942→  const d = new Date(event.date);
+   943→  const countdown = formatDistanceToNowStrict(d, { addSuffix: true });
+   944→
+   945→  return (
+   946→    <article className="relative flex h-full items-start gap-4 rounded-2xl border border-up-border bg-card p-5 shadow-sm card-hover">
+   947→      {next ? (
+   948→        <span className="absolute -top-2.5 left-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground shadow-sm">
+   949→          Next up
+   950→        </span>
+   951→      ) : null}
+   952→      <span className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary-700 ring-1 ring-inset ring-primary-100">
+   953→        <span className="text-[10px] font-bold uppercase tracking-wide">{format(d, "MMM")}</span>
+   954→        <span className="text-2xl font-bold leading-none">{format(d, "d")}</span>
+   955→      </span>
+   956→      <div className="flex min-w-0 flex-1 flex-col">
+   957→        <div className="flex items-start justify-between gap-2">
+   958→          <h3 className="font-semibold tracking-tight text-foreground">{event.title}</h3>
+   959→          <span className="mt-0.5 shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+   960→            {countdown}
+   961→          </span>
+   962→        </div>
+   963→        <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-primary-700">
+   964→          <CalendarDays className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+   965→          <span>
+   966→            {format(d, "EEEE, MMM d, yyyy")}
+   967→            <span aria-hidden> · </span>
+   968→            {format(d, "h:mm a")}
+   969→          </span>
+   970→        </p>
+   971→        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{event.description}</p>
+   972→        {event.location ? (
+   973→          <p className="mt-auto flex items-start gap-1.5 pt-3 text-xs text-muted-foreground">
+   974→            <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+   975→            <span>{event.location}</span>
+   976→          </p>
+   977→        ) : null}
+   978→      </div>
+   979→    </article>
+   980→  );
+   981→}
+   982→
+   983→function Events({ events }: { events: EventDTO[] | null }) {
+   984→  if (events !== null && events.length === 0) return null;
+   985→
+   986→  return (
+   987→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   988→      <SectionHeading
+   989→        eyebrow="On campus"
+   990→        title="What's coming up"
+   991→        description="Demo days, critique sessions, and showcases worth marking in your calendar."
+   992→      />
+   993→      <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   994→        {events === null
+   995→          ? [0, 1, 2].map((i) => (
+   996→              <div key={i} className="h-52 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+   997→            ))
+   998→          : events.map((ev, i) => (
+   999→              <Reveal key={ev.id} delay={Math.min(i * 0.06, 0.24)} className="h-full">
+  1000→                <EventCard event={ev} next={i === 0} />
+  1001→              </Reveal>
+  1002→            ))}
+  1003→      </div>
+  1004→    </section>
+  1005→  );
+  1006→}
+  1007→
+  1008→// ---------- latest grid ----------
+  1009→
+  1010→function Latest({ navigate, recent }: { navigate: Navigate; recent: ProjectListItem[] | null }) {
+  1011→  return (
+  1012→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+  1013→      <div className="flex items-end justify-between gap-4">
+  1014→        <SectionHeading
+  1015→          eyebrow="Fresh from the labs"
+  1016→          title="Latest submissions"
+  1017→          description="The most recent projects added to the showcase."
+  1018→        />
+  1019→        <Button
+  1020→          variant="ghost"
+  1021→          onClick={() => navigate({ name: "projects" })}
+  1022→          className="hidden shrink-0 text-primary-700 hover:text-primary-600 sm:inline-flex"
+  1023→        >
+  1024→          View all
+  1025→          <ArrowRight className="size-4" aria-hidden />
+  1026→        </Button>
+  1027→      </div>
+  1028→      <div className="mt-6">
+  1029→        {recent === null ? (
+  1030→          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1031→            {[0, 1, 2].map((i) => (
+  1032→              <div key={i} className="h-64 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+  1033→            ))}
+  1034→          </div>
+  1035→        ) : recent.length === 0 ? (
+  1036→          <p className="rounded-2xl border border-dashed border-up-border-strong bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+  1037→            No projects yet — be the first to submit one.
+  1038→          </p>
+  1039→        ) : (
+  1040→          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1041→            {recent.slice(0, 6).map((p, i) => (
+  1042→              <Reveal key={p.id} delay={Math.min(i * 0.06, 0.3)}>
+  1043→                <ProjectCard project={p} onOpen={(slug) => navigate({ name: "project", slug })} />
+  1044→              </Reveal>
+  1045→            ))}
+  1046→          </div>
+  1047→        )}
+  1048→      </div>
+  1049→      <div className="mt-8 text-center sm:hidden">
+  1050→        <Button variant="outline" className="h-11 rounded-xl px-6 font-semibold" onClick={() => navigate({ name: "projects" })}>
+  1051→          Browse all projects
+  1052→          <ArrowRight className="size-4" aria-hidden />
+  1053→        </Button>
+  1054→      </div>
+  1055→    </section>
+  1056→  );
+  1057→}
+  1058→
+  1059→// ---------- CTA ----------
+  1060→
+  1061→function CtaPanel({ navigate }: { navigate: Navigate }) {
+  1062→  const submit = () => {
+  1063→    const { user, openAuth } = useAppStore.getState();
+  1064→    if (!user) {
+  1065→      toast.info("Sign in to submit a project");
+  1066→      openAuth("login");
+  1067→      return;
+  1068→    }
+  1069→    navigate({ name: "create" });
+  1070→  };
+  1071→
+  1072→  return (
+  1073→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 pb-20 md:mt-24 md:px-8">
+  1074→      <Reveal>
+  1075→        <div className="relative overflow-hidden rounded-3xl bg-night px-6 py-14 text-center text-white md:px-12 md:py-20">
+  1076→          <DarkBackdrop />
+  1077→          <div className="relative">
+  1078→            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-3.5 py-1.5 text-xs font-medium text-teal-100/90 backdrop-blur-sm">
+  1079→              <Sparkles className="size-3.5 text-teal-300" aria-hidden />
+  1080→              Join the showcase
+  1081→            </span>
+  1082→            <h2 className="mx-auto mt-5 max-w-xl text-2xl font-bold tracking-tight md:text-4xl">
+  1083→              Built something worth showing?
+  1084→            </h2>
+  1085→            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-teal-100/70 md:text-base">
+  1086→              Put your project in front of the whole campus — professors, recruiters, and future teammates included.
+  1087→            </p>
+  1088→            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+  1089→              <Button
+  1090→                onClick={submit}
+  1091→                className="h-11 rounded-xl bg-teal-400 px-6 font-semibold text-teal-950 shadow-float hover:bg-teal-300"
+  1092→              >
+  1093→                Submit your project
+  1094→                <ArrowRight className="size-4" aria-hidden />
+  1095→              </Button>
+  1096→              <Button
+  1097→                variant="outline"
+  1098→                onClick={() => navigate({ name: "projects" })}
+  1099→                className="h-11 rounded-xl border-white/20 bg-white/[0.04] px-6 font-semibold text-white hover:bg-white/10 hover:text-white"
+  1100→              >
+  1101→                Browse projects
+  1102→              </Button>
+  1103→            </div>
+  1104→          </div>
+  1105→        </div>
+  1106→      </Reveal>
+  1107→    </section>
+  1108→  );
+  1109→}
+  1110→
+  1111→// ---------- root ----------
+  1112→
+  1113→export function HomeView({ navigate }: { navigate: Navigate }) {
+  1114→  const [stats, setStats] = useState<StatsDTO | null>(null);
+  1115→  const [featured, setFeatured] = useState<ProjectListItem[] | null>(null);
+  1116→  const [recent, setRecent] = useState<ProjectListItem[] | null>(null);
+  1117→  const [departments, setDepartments] = useState<DepartmentDTO[] | null>(null);
+  1118→  const [events, setEvents] = useState<EventDTO[] | null>(null);
+  1119→
+  1120→  useEffect(() => {
+  1121→    const ac = new AbortController();
+  1122→    fetchStats(ac.signal)
+  1123→      .then(setStats)
+  1124→      .catch(() => {});
+  1125→    fetchDepartments(ac.signal)
+  1126→      .then(setDepartments)
+  1127→      .catch(() => {});
+  1128→    fetchEvents(ac.signal)
+  1129→      .then(setEvents)
+  1130→      .catch(() => {});
+  1131→    fetchProjects({ featured: "1", limit: 5 }, ac.signal)
+  1132→      .then(setFeatured)
+  1133→      .catch(() => {});
+  1134→    fetchProjects({ sort: "newest", limit: 6 }, ac.signal)
+  1135→      .then(setRecent)
+  1136→      .catch(() => {});
+  1137→    return () => ac.abort();
+  1138→  }, []);
+  1139→
+  1140→  return (
+  1141→    <div>
+  1142→      <Hero navigate={navigate} stats={stats} recent={recent} />
+  1143→      <Marquee projects={recent} />
+  1144→      <StatsBand stats={stats} />
+  1145→      <Spotlight navigate={navigate} projects={featured} />
+  1146→      <Departments navigate={navigate} departments={departments} />
+  1147→      <Events events={events} />
+  1148→      <Latest navigate={navigate} recent={recent} />
+  1149→      <CtaPanel navigate={navigate} />
+  1150→    </div>
+  1151→  );
+  1152→}
+  1153→
+  1154→

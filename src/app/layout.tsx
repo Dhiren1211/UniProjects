@@ -1,19 +1,34 @@
 import type { Metadata, Viewport } from "next";
+import { DM_Mono, Urbanist } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 
+const urbanist = Urbanist({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-urbanist", display: "swap" });
+const dmMono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-dm-mono", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "UniProjects — Kyungsung University Student Showcase",
+  title: "UniProjects: capstone projects from Kyungsung University students",
   description:
-    "The official showcase of student projects at Kyungsung University. Browse capstones, research builds, and prototypes from every department in one clean, searchable gallery.",
+    "Browse verified capstone design projects built by student teams across every Kyungsung University department, each reviewed by a supervising professor.",
   keywords: ["university projects", "student showcase", "capstone", "Kyungsung University", "UniProjects"],
-  icons: { icon: "/logo.svg" },
+  icons: { icon: "/ks-logo.svg" },
+  openGraph: {
+    type: "website",
+    title: "UniProjects: capstone projects from Kyungsung University students",
+    description: "Verified capstone design projects from every Kyungsung University department.",
+    images: ["/hero/campus.jpg"],
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f7fafa",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafbfc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0d14" },
+  ],
 };
 
 export default function RootLayout({
@@ -22,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${urbanist.variable} ${dmMono.variable}`} suppressHydrationWarning>
       <head>
         <link
           rel="stylesheet"
@@ -30,8 +45,10 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased bg-background text-foreground min-h-screen flex flex-col">
-        {children}
-        <Toaster position="top-center" richColors />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          {children}
+          <Toaster position="top-center" richColors />
+        </ThemeProvider>
       </body>
     </html>
   );

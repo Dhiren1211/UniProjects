@@ -5,7 +5,7 @@ import { getSessionUser, isStaff } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// ---------- PATCH { status: "RESOLVED" } — resolve a report (staff only) ----------
+// ---------- PATCH { status: "RESOLVED" } - resolve a report (staff only) ----------
 
 const patchSchema = z.object({
   status: z.literal("RESOLVED"),

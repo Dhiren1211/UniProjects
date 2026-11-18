@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import type { CommentDTO, PostDTO, ProjectListItem } from "@/lib/types";
+import type { CommentDTO, ProjectListItem } from "@/lib/types";
 
 // ============================================================
 // Shared serializers for routes that need the same DTO shapes
@@ -11,7 +11,9 @@ import type { CommentDTO, PostDTO, ProjectListItem } from "@/lib/types";
 // ---------- project list shape ----------
 
 export const projectInclude = {
-  department: { select: { id: true, name: true, code: true, tagline: true, accent: true } },
+  department: {
+    select: { id: true, name: true, code: true, tagline: true, website: true, capstoneLabel: true, accent: true },
+  },
   members: {
     select: {
       id: true,
@@ -46,6 +48,7 @@ export function toListItem(p: ProjectRow, likeCount = 0): ProjectListItem {
     year: p.year,
     semester: p.semester,
     supervisor: p.supervisor,
+    classId: p.classId,
     tags: p.tags ? p.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
     demoUrl: p.demoUrl,
     repoUrl: p.repoUrl,
@@ -70,7 +73,7 @@ export function toListItem(p: ProjectRow, likeCount = 0): ProjectListItem {
   };
 }
 
-/** likeCount per polymorphic target (Like.targetId is a plain string — groupBy, never _count). */
+/** likeCount per polymorphic target (Like.targetId is a plain string - groupBy, never _count). */
 export async function likeCountMap(
   targetType: string,
   ids: string[]
@@ -82,6 +85,73 @@ export async function likeCountMap(
     _count: { _all: true },
   });
   return new Map(rows.map((r) => [r.targetId, r._count._all]));
+}
+
+// ---------- supervisor → professor resolution ----------
+
+/**
+ * The Project.supervisor column stores a free-text name ("Prof. Dana Kim").
+ * To link it to the matching PROFESSOR account we normalise both sides:
+ * lowercase, title prefixes and dots stripped - "Prof. Dana Kim" → "dana kim".
+ */
+export function normalizeSupervisorName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(prof\.?|dr\.?|professor)\s+/i, "")
+    .replace(/\./g, "")
+    .trim();
+}
+
+type SupervisorEntry = { username: string; displayName: string; avatarUrl: string | null };
+
+let supervisorCache: { map: Map<string, SupervisorEntry>; at: number } | null = null;
+const SUPERVISOR_TTL_MS = 60_000;
+
+/**
+ * Map of every PROFESSOR account by normalised display name.
+ * Cached for 60s - the faculty table is tiny and rarely changes.
+ */
+export async function professorSupervisorMap(): Promise<Map<string, SupervisorEntry>> {
+  if (supervisorCache && Date.now() - supervisorCache.at < SUPERVISOR_TTL_MS) {
+    return supervisorCache.map;
+  }
+  const professors = await db.user.findMany({
+    where: { role: "PROFESSOR" },
+    select: { username: true, displayName: true, avatarUrl: true },
+  });
+  const map = new Map<string, SupervisorEntry>();
+  for (const p of professors) {
+    map.set(normalizeSupervisorName(p.displayName), {
+      username: p.username,
+      displayName: p.displayName,
+      avatarUrl: p.avatarUrl,
+    });
+  }
+  supervisorCache = { map, at: Date.now() };
+  return map;
+}
+
+/**
+ * Fresh (uncached) lookup of a registered PROFESSOR account by free-text
+ * name - "Prof. Dana Kim" and "dana kim" both resolve to Dana Kim's row.
+ * Used for class-ID inheritance: students who name a registered professor
+ * share that professor's classID. Always fresh so the admin console and
+ * the request form reflect classID edits immediately.
+ */
+export async function resolveProfessorByName(name: string): Promise<{
+  id: string;
+  username: string;
+  displayName: string;
+  classId: string | null;
+} | null> {
+  const key = normalizeSupervisorName(name);
+  if (!key) return null;
+  const professors = await db.user.findMany({
+    where: { role: "PROFESSOR" },
+    select: { id: true, username: true, displayName: true, classId: true },
+  });
+  const match = professors.find((p) => normalizeSupervisorName(p.displayName) === key);
+  return match ?? null;
 }
 
 // ---------- comments ----------
@@ -97,74 +167,4 @@ export type CommentRow = Prisma.CommentGetPayload<{ select: typeof commentSelect
 
 export function toCommentDTO(c: CommentRow): CommentDTO {
   return { id: c.id, body: c.body, createdAt: c.createdAt.toISOString(), user: c.user };
-}
-
-// ---------- posts ----------
-
-export const postInclude = {
-  user: {
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      role: true,
-      avatarUrl: true,
-      department: { select: { code: true } },
-    },
-  },
-  comments: { take: 3, orderBy: { createdAt: "desc" as const }, select: commentSelect },
-  _count: { select: { comments: true } },
-} satisfies Prisma.PostInclude;
-
-export type PostRow = Prisma.PostGetPayload<{ include: typeof postInclude }>;
-
-export function toPostDTO(
-  p: PostRow,
-  likeCount: number,
-  liked: boolean,
-  bookmarked: boolean
-): PostDTO {
-  return {
-    id: p.id,
-    body: p.body,
-    createdAt: p.createdAt.toISOString(),
-    user: {
-      id: p.user.id,
-      username: p.user.username,
-      displayName: p.user.displayName,
-      role: p.user.role,
-      avatarUrl: p.user.avatarUrl,
-      departmentCode: p.user.department?.code ?? null,
-    },
-    likeCount,
-    liked,
-    bookmarked,
-    commentCount: p._count.comments,
-    comments: p.comments.map(toCommentDTO),
-  };
-}
-
-/** Attach viewer flags + polymorphic like counts to post rows. */
-export async function mapPosts(rows: PostRow[], viewerId: string | null): Promise<PostDTO[]> {
-  const ids = rows.map((r) => r.id);
-  const likes = await likeCountMap("POST", ids);
-  let likedSet = new Set<string>();
-  let bookmarkedSet = new Set<string>();
-  if (viewerId && ids.length) {
-    const [likedRows, bookmarkedRows] = await Promise.all([
-      db.like.findMany({
-        where: { userId: viewerId, targetType: "POST", targetId: { in: ids } },
-        select: { targetId: true },
-      }),
-      db.bookmark.findMany({
-        where: { userId: viewerId, targetType: "POST", targetId: { in: ids } },
-        select: { targetId: true },
-      }),
-    ]);
-    likedSet = new Set(likedRows.map((r) => r.targetId));
-    bookmarkedSet = new Set(bookmarkedRows.map((r) => r.targetId));
-  }
-  return rows.map((r) =>
-    toPostDTO(r, likes.get(r.id) ?? 0, likedSet.has(r.id), bookmarkedSet.has(r.id))
-  );
 }

@@ -4,27 +4,23 @@ import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
+  ExternalLink,
   FileQuestion,
   FolderKanban,
   Github,
   Globe,
-  MessageSquare,
-  MessagesSquare,
   UserPlus,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { accentOf } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import {
   fetchProfile,
   toggleFollow,
   type Navigate,
-  type PostDTO,
   type ProfileResponse,
-  type ProjectListItem,
 } from "../api-client";
 import { useAppStore } from "../store";
 import { ProjectCard } from "../project-card";
@@ -33,9 +29,7 @@ import {
   MemberAvatar,
   StaffBadge,
   TeammateWantedChip,
-  UserAvatar,
   formatMonthYear,
-  timeAgo,
 } from "../ui-bits";
 
 export function ProfileView({ username, navigate }: { username: string; navigate: Navigate }) {
@@ -76,10 +70,10 @@ export function ProfileView({ username, navigate }: { username: string; navigate
           hint="This person may have left campus, or the link is incorrect."
           action={
             <Button
-              onClick={() => navigate({ name: "students" })}
+              onClick={() => navigate({ name: "projects" })}
               className="rounded-xl font-semibold"
             >
-              Browse the directory
+              Browse projects
             </Button>
           }
         />
@@ -140,7 +134,7 @@ export function ProfileView({ username, navigate }: { username: string; navigate
     );
   }
 
-  const { user, projects, posts } = profile;
+  const { user, projects } = profile;
   const isOwn = viewer?.username === username;
   const accent = user.department ? accentOf(user.department.accent) : null;
 
@@ -205,22 +199,40 @@ export function ProfileView({ username, navigate }: { username: string; navigate
               {/* Meta chips */}
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {user.department ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     {accent ? <span aria-hidden className={cn("size-2 rounded-full", accent.dot)} /> : null}
                     {user.department.name}
                   </span>
                 ) : null}
                 {user.program ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     {user.program}
                   </span>
                 ) : null}
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   <CalendarDays className="size-3.5" aria-hidden />
                   Joined {formatMonthYear(user.createdAt)}
                 </span>
-                {user.website || user.github ? (
+                {user.website || user.github || user.universityProfileUrl ? (
                   <span className="inline-flex items-center gap-1.5">
+                    {user.role === "PROFESSOR" && user.universityProfileUrl ? (
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1.5 rounded-xl px-3 text-xs font-semibold"
+                      >
+                        <a
+                          href={user.universityProfileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={user.universityProfileUrl}
+                        >
+                          <ExternalLink className="size-3.5" aria-hidden />
+                          University profile
+                        </a>
+                      </Button>
+                    ) : null}
                     {user.website ? (
                       <Button
                         asChild
@@ -296,29 +308,17 @@ export function ProfileView({ username, navigate }: { username: string; navigate
         ))}
       </section>
 
-      {/* ---------- Tabs ---------- */}
-      <Tabs defaultValue="projects" className="mt-8">
-        <TabsList className="grid h-10 w-full grid-cols-2 rounded-xl bg-surface-muted p-1 sm:w-72">
-          <TabsTrigger
-            value="projects"
-            className="rounded-lg text-sm font-semibold data-[state=active]:bg-card data-[state=active]:shadow-sm"
-          >
-            Projects
-          </TabsTrigger>
-          <TabsTrigger
-            value="posts"
-            className="rounded-lg text-sm font-semibold data-[state=active]:bg-card data-[state=active]:shadow-sm"
-          >
-            Posts
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="projects" className="mt-6">
+      {/* ---------- Projects ---------- */}
+      <section className="mt-8" aria-label="Projects">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-primary-600">
+          Projects
+        </h2>
+        <div className="mt-4">
           {projects.length === 0 ? (
             <EmptyState title="No projects yet" hint="Submitted projects will appear here." />
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((p: ProjectListItem) => (
+              {projects.map((p: ProfileResponse["projects"][number]) => (
                 <ProjectCard
                   key={p.id}
                   project={p}
@@ -327,56 +327,8 @@ export function ProfileView({ username, navigate }: { username: string; navigate
               ))}
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="posts" className="mt-6">
-          {posts.length === 0 ? (
-            <EmptyState
-              icon={MessagesSquare}
-              title="No posts yet"
-              hint="Community posts by this person will appear here."
-            />
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-up-border bg-card shadow-card">
-              <ul className="divide-y divide-up-border">
-                {posts.map((p: PostDTO) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => navigate({ name: "community" })}
-                      className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted/60"
-                    >
-                      <UserAvatar
-                        name={p.user.displayName}
-                        avatarUrl={p.user.avatarUrl}
-                        ring={false}
-                        className="size-9 text-xs"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="text-sm font-semibold text-foreground">
-                            {p.user.displayName}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {timeAgo(p.createdAt)}
-                          </span>
-                        </div>
-                        <p className="mt-1 line-clamp-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                          {p.body}
-                        </p>
-                        <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <MessageSquare className="size-3.5" aria-hidden />
-                          {p.commentCount} {p.commentCount === 1 ? "comment" : "comments"}
-                        </p>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      </section>
 
       {/* ---------- Skills ---------- */}
       {user.skills.length > 0 ? (

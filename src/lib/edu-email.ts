@@ -1,5 +1,5 @@
 // ============================================================
-// Education-email gate — shared by client (live field feedback)
+// Education-email gate - shared by client (live field feedback)
 // and server (request-code + register enforcement).
 // Accepts: *.edu, *.edu.xx, *.ac.xx, *.ac.xx.yy and a small
 // allowlist for known university domains that fit neither pattern.
@@ -20,4 +20,4 @@ export function isEducationEmail(email: string): boolean {
   return false;
 }
 
-export const EDU_EMAIL_HINT = "Only education emails can register — use your university address (e.g. jane.doe@student.ks.ac.kr).";
+export const EDU_EMAIL_HINT = "Only education emails can register - use your university address (e.g. jane.doe@student.ks.ac.kr).";

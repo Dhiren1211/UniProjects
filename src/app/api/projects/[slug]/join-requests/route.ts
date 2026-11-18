@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSessionUser, isStaff } from "@/lib/auth";
+import { canManageProject } from "../../../_utils/project-access";
+import { getSessionUser } from "@/lib/auth";
 import { notify } from "../../../_utils/notify";
 import type { JoinRequestDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — incoming join requests (owner / staff) ----------
+// ---------- GET - incoming join requests (owner / staff) ----------
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can review join requests" },
         { status: 403 }
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   }
 }
 
-// ---------- PATCH { requestId, decision } — approve / reject ----------
+// ---------- PATCH { requestId, decision } - approve / reject ----------
 
 const patchSchema = z.object({
   requestId: z.string().min(1),
@@ -68,7 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can review join requests" },
         { status: 403 }

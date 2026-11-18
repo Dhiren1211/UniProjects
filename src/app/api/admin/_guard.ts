@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { canAccessAdmin, canConfigureSite } from "@/lib/rbac";
+
+type Viewer = NonNullable<Awaited<ReturnType<typeof getSessionUser>>>;
 
 /**
- * Shared ADMIN gate for /api/admin/** routes.
- * Returns the signed-in viewer on success, or a ready-to-return
- * 401 (guest) / 403 (not an admin) response.
+ * Shared gates for /api/admin/** routes.
+ *
+ * - requireAdmin:  full control (settings, approvals, user writes, emails).
+ * - requireStaff:  the limited moderator tier (projects, users read,
+ *                  moderation, announcements) - admins pass too.
  */
-export async function requireAdmin(
-  req: NextRequest
-): Promise<{
-  ok: true;
-  viewer: NonNullable<Awaited<ReturnType<typeof getSessionUser>>>;
-} | { ok: false; denied: NextResponse }> {
+async function gate(
+  req: NextRequest,
+  test: (role: string | undefined) => boolean,
+  message: string
+): Promise<{ ok: true; viewer: Viewer } | { ok: false; denied: NextResponse }> {
   const viewer = await getSessionUser(req);
   if (!viewer) {
     return {
@@ -19,11 +23,19 @@ export async function requireAdmin(
       denied: NextResponse.json({ error: "Sign in to continue" }, { status: 401 }),
     };
   }
-  if (viewer.role !== "ADMIN") {
+  if (!test(viewer.role)) {
     return {
       ok: false,
-      denied: NextResponse.json({ error: "Admins only" }, { status: 403 }),
+      denied: NextResponse.json({ error: message }, { status: 403 }),
     };
   }
   return { ok: true, viewer };
+}
+
+export function requireAdmin(req: NextRequest) {
+  return gate(req, (role) => canConfigureSite(role), "Administrators only");
+}
+
+export function requireStaff(req: NextRequest) {
+  return gate(req, (role) => canAccessAdmin(role), "Staff only");
 }

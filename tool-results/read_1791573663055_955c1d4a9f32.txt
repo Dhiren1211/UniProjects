@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useMemo, useRef, useState } from "react";
+     4→import {
+     5→  AlertTriangle,
+     6→  ArrowLeft,
+     7→  Check,
+     8→  ChevronLeft,
+     9→  ChevronRight,
+    10→  Crop,
+    11→  Crown,
+    12→  FileCheck2,
+    13→  ImagePlus,
+    14→  Link2,
+    15→  Loader2,
+    16→  Lock,
+    17→  Paperclip,
+    18→  Plus,
+    19→  RotateCcw,
+    20→  Search,
+    21→  ShieldAlert,
+    22→  Trash2,
+    23→  ZoomIn,
+    24→  ZoomOut,
+    25→} from "lucide-react";
+    26→import { toast } from "sonner";
+    27→import Cropper from "react-easy-crop";
+    28→import { Button } from "@/components/ui/button";
+    29→import {
+    30→  Dialog,
+    31→  DialogContent,
+    32→  DialogDescription,
+    33→  DialogFooter,
+    34→  DialogHeader,
+    35→  DialogTitle,
+    36→} from "@/components/ui/dialog";
+    37→import { Input } from "@/components/ui/input";
+    38→import { Label } from "@/components/ui/label";
+    39→import { Slider } from "@/components/ui/slider";
+    40→import {
+    41→  Select,
+    42→  SelectContent,
+    43→  SelectItem,
+    44→  SelectTrigger,
+    45→  SelectValue,
+    46→} from "@/components/ui/select";
+    47→import { Switch } from "@/components/ui/switch";
+    48→import { Textarea } from "@/components/ui/textarea";
+    49→import { CATEGORIES, SEMESTERS, YEARS } from "@/lib/config";
+    50→import { cn } from "@/lib/utils";
+    51→import {
+    52→  addMember,
+    53→  addResource,
+    54→  addTimelineItem,
+    55→  createProject,
+    56→  createTechnology,
+    57→  deleteResource,
+    58→  deleteTimelineItem,
+    59→  fetchDepartments,
+    60→  fetchProject,
+    61→  fetchTechnologies,
+    62→  removeMember,
+    63→  searchUsers,
+    64→  updateMember,
+    65→  updateProject,
+    66→  uploadFile,
+    67→  type DepartmentDTO,
+    68→  type MemberDTO,
+    69→  type Navigate,
+    70→  type ProjectDetail,
+    71→  type ProjectDetailResponse,
+    72→  type ProjectInput,
+    73→  type ResourceDTO,
+    74→  type SafeUserDTO,
+    75→  type TechnologyDTO,
+    76→  type TimelineDTO,
+    77→} from "../api-client";
+    78→import { useAppStore } from "../store";
+    79→import { EmptyState, MemberAvatar } from "../ui-bits";
+    80→
+    81→// ---------- constants / helpers ----------
+    82→
+    83→const STEPS = [
+    84→  { n: 1, label: "Basics", hint: "Title, summary & description" },
+    85→  { n: 2, label: "Media", hint: "Cover image & gallery" },
+    86→  { n: 3, label: "Academics", hint: "Department, year & course" },
+    87→  { n: 4, label: "Team", hint: "Teammates & roles" },
+    88→  { n: 5, label: "Technologies", hint: "Tools & stacks used" },
+    89→  { n: 6, label: "Resources", hint: "Links, files & milestones" },
+    90→] as const;
+    91→
+    92→const RESOURCE_TYPES = [
+    93→  { value: "DEMO", label: "Live demo" },
+    94→  { value: "GITHUB", label: "GitHub repo" },
+    95→  { value: "DOCUMENT", label: "Document" },
+    96→  { value: "VIDEO", label: "Video" },
+    97→  { value: "PRESENTATION", label: "Presentation" },
+    98→] as const;
+    99→
+   100→const URL_RE = /^https?:\/\/\S+/i;
+   101→
+   102→const RESOURCE_FILE_ACCEPT =
+   103→  ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif";
+   104→
+   105→/** Decoded basename of an /uploads/… path (falls back to the raw string). */
+   106→function uploadBaseName(url: string) {
+   107→  const last = url.split("/").pop() ?? url;
+   108→  try {
+   109→    return decodeURIComponent(last);
+   110→  } catch {
+   111→    return last;
+   112→  }
+   113→}
+   114→
+   115→// ---------- cover cropping ----------
+   116→
+   117→type CropArea = { x: number; y: number; width: number; height: number };
+   118→
+   119→/** Covers display at 16:9 on the project page hero. */
+   120→const COVER_ASPECT = 16 / 9;
+   121→const COVER_MAX_EDGE = 1600;
+   122→
+   123→function loadImageEl(src: string): Promise<HTMLImageElement> {
+   124→  return new Promise((resolve, reject) => {
+   125→    const img = new Image();
+   126→    img.onload = () => resolve(img);
+   127→    img.onerror = () => reject(new Error("Couldn't load that image"));
+   128→    img.src = src;
+   129→  });
+   130→}
+   131→
+   132→/** Pixel-crop an image onto a canvas and return an upload-ready JPEG File. */
+   133→async function cropToJpegFile(src: string, area: CropArea): Promise<File> {
+   134→  const img = await loadImageEl(src);
+   135→  const scale = Math.min(1, COVER_MAX_EDGE / Math.max(area.width, 1));
+   136→  const canvas = document.createElement("canvas");
+   137→  canvas.width = Math.max(1, Math.round(area.width * scale));
+   138→  canvas.height = Math.max(1, Math.round(area.height * scale));
+   139→  const ctx = canvas.getContext("2d");
+   140→  if (!ctx) throw new Error("Your browser can't process images right now");
+   141→  ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, canvas.width, canvas.height);
+   142→  const blob = await new Promise<Blob | null>((resolve) =>
+   143→    canvas.toBlob(resolve, "image/jpeg", 0.92)
+   144→  );
+   145→  if (!blob) throw new Error("Couldn't process the cropped image");
+   146→  return new File([blob], `cover-${Date.now()}.jpg`, { type: "image/jpeg" });
+   147→}
+   148→
+   149→type FormState = {
+   150→  title: string;
+   151→  summary: string;
+   152→  description: string;
+   153→  dept: string;
+   154→  category: string;
+   155→  year: string;
+   156→  semester: string;
+   157→  program: string;
+   158→  supervisor: string;
+   159→  allowJoinRequests: boolean;
+   160→  lookingForTeammates: boolean;
+   161→  technologyIds: string[];
+   162→  coverImage: string;
+   163→  galleryImages: string[];
+   164→};
+   165→
+   166→const EMPTY_FORM: FormState = {
+   167→  title: "",
+   168→  summary: "",
+   169→  description: "",
+   170→  dept: "",
+   171→  category: "",
+   172→  year: "",
+   173→  semester: "",
+   174→  program: "",
+   175→  supervisor: "",
+   176→  allowJoinRequests: true,
+   177→  lookingForTeammates: false,
+   178→  technologyIds: [],
+   179→  coverImage: "",
+   180→  galleryImages: [],
+   181→};
+   182→
+   183→type DraftResource = {
+   184→  key: string;
+   185→  type: string;
+   186→  label: string;
+   187→  url: string; // https:// link in "link" mode, /uploads/… path in "upload" mode
+   188→  mode: "link" | "upload";
+   189→  fileName?: string;
+   190→};
+   191→type DraftMilestone = { key: string; title: string; date: string; note: string };
+   192→type DraftMember = { username: string; name: string; role: string };
+   193→
+   194→let rowSeq = 0;
+   195→const newRowKey = () => `row-${++rowSeq}`;
+   196→
+   197→function errOf(e: unknown, fallback: string) {
+   198→  return e instanceof Error ? e.message : fallback;
+   199→}
+   200→
+   201→/** Maps a server error message back to the wizard step that most likely caused it. */
+   202→function stepForMessage(msg: string): number {
+   203→  const m = msg.toLowerCase();
+   204→  if (/technolog/.test(m)) return 5;
+   205→  if (/(member|teammate|username)/.test(m)) return 4;
+   206→  if (/(cover|gallery|image)/.test(m)) return 2;
+   207→  if (/(department|category|semester|supervisor|program|academic|year)/.test(m)) return 3;
+   208→  if (/(url|resource|timeline|milestone|date|link)/.test(m)) return 6;
+   209→  return 1; // title / summary / description and anything generic
+   210→}
+   211→
+   212→function WizardSkeleton() {
+   213→  return (
+   214→    <div className="mx-auto w-full max-w-6xl px-5 py-10 md:px-8 md:py-12">
+   215→      <div className="h-9 w-56 animate-pulse rounded-lg bg-surface-muted" />
+   216→      <div className="mt-8 lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-8">
+   217→        <div className="hidden space-y-3 lg:block" aria-hidden>
+   218→          {STEPS.map((s) => (
+   219→            <div key={s.n} className="flex items-center gap-3 px-2 py-2">
+   220→              <div className="size-7 shrink-0 animate-pulse rounded-full bg-surface-muted" />
+   221→              <div className="min-w-0 flex-1 space-y-1.5">
+   222→                <div className="h-3.5 w-20 animate-pulse rounded bg-surface-muted" />
+   223→                <div className="h-2.5 w-28 animate-pulse rounded bg-surface-muted" />
+   224→              </div>
+   225→            </div>
+   226→          ))}
+   227→        </div>
+   228→        <div className="space-y-5 rounded-2xl border border-up-border bg-card p-6 md:p-8">
+   229→          {[0, 1, 2].map((i) => (
+   230→            <div key={i} className="space-y-2">
+   231→              <div className="h-4 w-28 animate-pulse rounded bg-surface-muted" />
+   232→              <div className="h-10 w-full animate-pulse rounded-xl bg-surface-muted" />
+   233→            </div>
+   234→          ))}
+   235→        </div>
+   236→      </div>
+   237→    </div>
+   238→  );
+   239→}
+   240→
+   241→/** Vertical step rail (≥ lg) — lives on the side of the wizard, shows what each step covers. */
+   242→function StepRail({ current, onGo }: { current: number; onGo: (n: number) => void }) {
+   243→  return (
+   244→    <ol aria-label="Wizard steps" className="space-y-1">
+   245→      {STEPS.map((s, i) => {
+   246→        const done = s.n < current;
+   247→        const isCurrent = s.n === current;
+   248→        const last = i === STEPS.length - 1;
+   249→        return (
+   250→          <li key={s.n} className="relative">
+   251→            {!last ? (
+   252→              <span
+   253→                aria-hidden
+   254→                className={cn(
+   255→                  "absolute left-[21px] top-9 z-10 h-[calc(100%-2.25rem)] w-px",
+   256→                  done ? "bg-primary-100" : "bg-up-border"
+   257→                )}
+   258→              />
+   259→            ) : null}
+   260→            <button
+   261→              type="button"
+   262→              disabled={!done}
+   263→              onClick={() => onGo(s.n)}
+   264→              aria-current={isCurrent ? "step" : undefined}
+   265→              className={cn(
+   266→                "relative flex w-full items-start gap-3 rounded-xl px-2 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+   267→                done && "cursor-pointer hover:bg-surface-muted",
+   268→                isCurrent && "bg-primary-50"
+   269→              )}
+   270→            >
+   271→              <span
+   272→                aria-hidden
+   273→                className={cn(
+   274→                  "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold tabular-nums transition-colors",
+   275→                  done && "border-primary-500 bg-primary-500 text-white",
+   276→                  isCurrent && "border-primary-500 bg-white text-primary-700 shadow-sm",
+   277→                  !done && !isCurrent && "border-up-border-strong bg-white text-muted-foreground"
+   278→                )}
+   279→              >
+   280→                {done ? <Check className="size-3.5" aria-hidden /> : s.n}
+   281→              </span>
+   282→              <span className="min-w-0 pt-0.5">
+   283→                <span
+   284→                  className={cn(
+   285→                    "block text-sm font-semibold leading-tight",
+   286→                    isCurrent ? "text-primary-700" : done ? "text-foreground" : "text-muted-foreground"
+   287→                  )}
+   288→                >
+   289→                  {s.label}
+   290→                </span>
+   291→                <span
+   292→                  className={cn(
+   293→                    "mt-1 block text-xs leading-snug",
+   294→                    isCurrent ? "text-primary-600/90" : "text-muted-foreground/90"
+   295→                  )}
+   296→                >
+   297→                  {s.hint}
+   298→                </span>
+   299→              </span>
+   300→            </button>
+   301→          </li>
+   302→        );
+   303→      })}
+   304→    </ol>
+   305→  );
+   306→}
+   307→
+   308→function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void }) {
+   309→  return (
+   310→    <ol className="flex flex-wrap items-center gap-y-2" aria-label="Wizard steps">
+   311→      {STEPS.map((s, i) => {
+   312→        const done = s.n < current;
+   313→        const isCurrent = s.n === current;
+   314→        return (
+   315→          <li key={s.n} className="flex items-center">
+   316→            {i > 0 ? (
+   317→              <span aria-hidden className="mx-1.5 h-px w-5 bg-up-border-strong md:mx-2 md:w-8" />
+   318→            ) : null}
+   319→            <button
+   320→              type="button"
+   321→              disabled={!done}
+   322→              onClick={() => onGo(s.n)}
+   323→              aria-current={isCurrent ? "step" : undefined}
+   324→              className={cn(
+   325→                "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-all duration-200 md:text-sm",
+   326→                done && "cursor-pointer bg-primary-500 text-white hover:bg-primary-600",
+   327→                isCurrent && "border-2 border-primary-500 bg-white text-primary-700",
+   328→                !done && !isCurrent && "cursor-default bg-surface-muted text-muted-foreground"
+   329→              )}
+   330→            >
+   331→              {done ? <Check className="size-3.5" aria-hidden /> : <span className="tabular-nums">{s.n}</span>}
+   332→              {s.label}
+   333→            </button>
+   334→          </li>
+   335→        );
+   336→      })}
+   337→    </ol>
+   338→  );
+   339→}
+   340→
+   341→/** Debounced user search + per-row role select, shared by the team step. */
+   342→function UserSearchAdd({
+   343→  exclude,
+   344→  onPick,
+   345→}: {
+   346→  exclude: Set<string>;
+   347→  onPick: (u: SafeUserDTO, role: string) => void;
+   348→}) {
+   349→  const [query, setQuery] = useState("");
+   350→  const [debounced, setDebounced] = useState("");
+   351→  const [found, setFound] = useState<SafeUserDTO[] | null>(null);
+   352→  const [foundFor, setFoundFor] = useState("");
+   353→  const [roles, setRoles] = useState<Record<string, string>>({});
+   354→  const [busyName, setBusyName] = useState<string | null>(null);
+   355→
+   356→  useEffect(() => {
+   357→    const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), 300);
+   358→    return () => clearTimeout(t);
+   359→  }, [query]);
+   360→
+   361→  useEffect(() => {
+   362→    const q = debounced;
+   363→    if (q.length < 2) return;
+   364→    const ac = new AbortController();
+   365→    searchUsers(q, ac.signal)
+   366→      .then((rows) => {
+   367→        setFound(rows);
+   368→        setFoundFor(q);
+   369→      })
+   370→      .catch(() => {});
+   371→    return () => ac.abort();
+   372→  }, [debounced]);
+   373→
+   374→  const ready = debounced.length >= 2 && foundFor === debounced;
+   375→  const visible = ready ? (found ?? []).filter((u) => !exclude.has(u.username.toLowerCase())) : null;
+   376→
+   377→  const pick = (u: SafeUserDTO) => {
+   378→    setBusyName(u.id);
+   379→    setQuery("");
+   380→    Promise.resolve(onPick(u, roles[u.id] ?? "MEMBER"))
+   381→      .catch(() => {})
+   382→      .finally(() => setBusyName(null));
+   383→  };
+   384→
+   385→  return (
+   386→    <div>
+   387→      <Label htmlFor="team-search">Find teammates</Label>
+   388→      <div className="relative mt-1.5">
+   389→        <Search
+   390→          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+   391→          aria-hidden
+   392→        />
+   393→        <Input
+   394→          id="team-search"
+   395→          value={query}
+   396→          onChange={(e) => setQuery(e.target.value)}
+   397→          placeholder="Search students by name or username…"
+   398→          className="h-10 rounded-xl bg-white pl-9"
+   399→          autoComplete="off"
+   400→        />
+   401→      </div>
+   402→      <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto nice-scroll">
+   403→        {visible === null ? (
+   404→          <p className="px-1 py-2 text-xs text-muted-foreground">
+   405→            {debounced.length >= 2 ? "Searching…" : "Type at least 2 characters to search."}
+   406→          </p>
+   407→        ) : visible.length === 0 ? (
+   408→          <p className="px-1 py-2 text-xs text-muted-foreground">No matching students.</p>
+   409→        ) : (
+   410→          visible.map((u) => (
+   411→            <div
+   412→              key={u.id}
+   413→              className="flex items-center gap-2.5 rounded-xl border border-up-border bg-white px-3 py-2"
+   414→            >
+   415→              <MemberAvatar name={u.displayName} ring={false} className="size-7" />
+   416→              <div className="min-w-0 flex-1">
+   417→                <p className="truncate text-sm font-medium text-foreground">{u.displayName}</p>
+   418→                <p className="truncate text-xs text-muted-foreground">@{u.username}</p>
+   419→              </div>
+   420→              <Select value={roles[u.id] ?? "MEMBER"} onValueChange={(role) => setRoles((r) => ({ ...r, [u.id]: role }))}>
+   421→                <SelectTrigger
+   422→                  aria-label={`Role for ${u.displayName}`}
+   423→                  className="h-8 w-[92px] rounded-lg text-xs"
+   424→                >
+   425→                  <SelectValue />
+   426→                </SelectTrigger>
+   427→                <SelectContent>
+   428→                  <SelectItem value="LEAD">Lead</SelectItem>
+   429→                  <SelectItem value="MEMBER">Member</SelectItem>
+   430→                </SelectContent>
+   431→              </Select>
+   432→              <Button
+   433→                size="sm"
+   434→                className="h-8 rounded-lg px-3 font-semibold"
+   435→                disabled={busyName === u.id}
+   436→                onClick={() => pick(u)}
+   437→              >
+   438→                {busyName === u.id ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : "Add"}
+   439→              </Button>
+   440→            </div>
+   441→          ))
+   442→        )}
+   443→      </div>
+   444→    </div>
+   445→  );
+   446→}
+   447→
+   448→/** Link / Upload segmented control shown on each resource row. */
+   449→function ResourceModeToggle({
+   450→  value,
+   451→  uploadDisabled,
+   452→  onChange,
+   453→}: {
+   454→  value: "link" | "upload";
+   455→  uploadDisabled?: boolean;
+   456→  onChange: (mode: "link" | "upload") => void;
+   457→}) {
+   458→  return (
+   459→    <div className="inline-flex items-center rounded-lg bg-surface-muted p-0.5" role="group" aria-label="Resource source">
+   460→      <button
+   461→        type="button"
+   462→        aria-pressed={value === "link"}
+   463→        onClick={() => onChange("link")}
+   464→        className={cn(
+   465→          "rounded-[7px] px-2.5 py-1 text-xs font-semibold transition-colors duration-200",
+   466→          value === "link" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+   467→        )}
+   468→      >
+   469→        Link
+   470→      </button>
+   471→      <button
+   472→        type="button"
+   473→        aria-pressed={value === "upload"}
+   474→        disabled={uploadDisabled}
+   475→        title={uploadDisabled ? "Repositories must be links" : undefined}
+   476→        onClick={() => onChange("upload")}
+   477→        className={cn(
+   478→          "rounded-[7px] px-2.5 py-1 text-xs font-semibold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40",
+   479→          value === "upload" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+   480→        )}
+   481→      >
+   482→        Upload
+   483→      </button>
+   484→    </div>
+   485→  );
+   486→}
+   487→
+   488→/** Hidden-file-input flow that uploads a resource file into a row. */
+   489→function ResourceUploadField({
+   490→  busy,
+   491→  pct,
+   492→  done,
+   493→  fileName,
+   494→  onChoose,
+   495→}: {
+   496→  busy: boolean;
+   497→  pct: number;
+   498→  done: boolean;
+   499→  fileName: string | null;
+   500→  onChoose: (file: File) => void;
+   501→}) {
+   502→  const inputRef = useRef<HTMLInputElement>(null);
+   503→  return (
+   504→    <div className="min-w-0">
+   505→      <input
+   506→        ref={inputRef}
+   507→        type="file"
+   508→        accept={RESOURCE_FILE_ACCEPT}
+   509→        className="hidden"
+   510→        onChange={(e) => {
+   511→          const file = e.target.files?.[0];
+   512→          if (file) onChoose(file);
+   513→          e.target.value = "";
+   514→        }}
+   515→      />
+   516→      {done ? (
+   517→        <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-up-border bg-surface-muted px-2.5 py-2 text-xs font-medium text-foreground">
+   518→          <FileCheck2 className="size-3.5 shrink-0 text-success" aria-hidden />
+   519→          <span className="truncate">{fileName ?? "Uploaded file"}</span>
+   520→          <Check className="size-3.5 shrink-0 text-success" aria-hidden />
+   521→        </span>
+   522→      ) : (
+   523→        <Button
+   524→          type="button"
+   525→          variant="outline"
+   526→          size="sm"
+   527→          className="h-9 rounded-lg font-semibold"
+   528→          disabled={busy}
+   529→          onClick={() => inputRef.current?.click()}
+   530→        >
+   531→          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Paperclip className="size-4" aria-hidden />}
+   532→          {busy ? `Uploading ${pct}%` : "Choose file"}
+   533→        </Button>
+   534→      )}
+   535→      {busy ? (
+   536→        <div
+   537→          className="mt-1.5 h-1 w-full max-w-56 overflow-hidden rounded-full bg-surface-muted"
+   538→          role="progressbar"
+   539→          aria-valuemin={0}
+   540→          aria-valuemax={100}
+   541→          aria-valuenow={pct}
+   542→          aria-label="Upload progress"
+   543→        >
+   544→          <div
+   545→            className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+   546→            style={{ width: `${pct}%` }}
+   547→          />
+   548→        </div>
+   549→      ) : null}
+   550→    </div>
+   551→  );
+   552→}
+   553→
+   554→/** Selectable technology chip shared by the preset groups and "Other tools". */
+   555→function TechChip({ tech, on, onToggle }: { tech: TechnologyDTO; on: boolean; onToggle: () => void }) {
+   556→  return (
+   557→    <button
+   558→      type="button"
+   559→      aria-pressed={on}
+   560→      onClick={onToggle}
+   561→      className={cn(
+   562→        "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+   563→        on
+   564→          ? "border-primary-500 bg-primary-500 text-white shadow-sm"
+   565→          : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+   566→      )}
+   567→    >
+   568→      {on ? <Check className="mr-1 inline size-3.5" aria-hidden /> : null}
+   569→      {tech.name}
+   570→    </button>
+   571→  );
+   572→}
+   573→
+   574→// ---------- view ----------
+   575→
+   576→export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; navigate: Navigate }) {
+   577→  const { user, authLoaded, openAuth } = useAppStore();
+   578→  const editing = Boolean(editSlug);
+   579→
+   580→  const [existing, setExisting] = useState<ProjectDetailResponse | null>(null);
+   581→  const [editBlocked, setEditBlocked] = useState(false);
+   582→  const [editFailed, setEditFailed] = useState(false);
+   583→  const [editRetry, setEditRetry] = useState(0);
+   584→
+   585→  const [step, setStep] = useState(1);
+   586→  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+   587→  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+   588→  const [stepError, setStepError] = useState<string | null>(null);
+   589→  const [saving, setSaving] = useState<"" | "draft" | "final">("");
+   590→
+   591→  const [draftMembers, setDraftMembers] = useState<DraftMember[]>([]);
+   592→  const [draftResources, setDraftResources] = useState<DraftResource[]>([]);
+   593→  const [draftTimeline, setDraftTimeline] = useState<DraftMilestone[]>([]);
+   594→  const [memberBusy, setMemberBusy] = useState<string | null>(null);
+   595→
+   596→  const [coverPct, setCoverPct] = useState<number | null>(null);
+   597→  const [coverDrag, setCoverDrag] = useState(false);
+   598→  const [showCoverUrl, setShowCoverUrl] = useState(false);
+   599→  const [coverUrlInput, setCoverUrlInput] = useState("");
+   600→  const [cropOpen, setCropOpen] = useState(false);
+   601→  const [cropSrc, setCropSrc] = useState<string | null>(null);
+   602→  const [cropPoint, setCropPoint] = useState({ x: 0, y: 0 });
+   603→  const [cropZoom, setCropZoom] = useState(1);
+   604→  const [cropArea, setCropArea] = useState<CropArea | null>(null);
+   605→  const [cropBusy, setCropBusy] = useState(false);
+   606→  const cropObjectUrl = useRef<string | null>(null);
+   607→  const [galleryPct, setGalleryPct] = useState<number | null>(null);
+   608→  const [newTech, setNewTech] = useState("");
+   609→  const [techBusy, setTechBusy] = useState(false);
+   610→  const coverInputRef = useRef<HTMLInputElement>(null);
+   611→  const galleryInputRef = useRef<HTMLInputElement>(null);
+   612→
+   613→  const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+   614→  const [techs, setTechs] = useState<TechnologyDTO[] | null>(null);
+   615→
+   616→  const [newRes, setNewRes] = useState<{
+   617→    type: string;
+   618→    label: string;
+   619→    url: string;
+   620→    mode: "link" | "upload";
+   621→    fileName?: string;
+   622→  }>({ type: "DEMO", label: "", url: "", mode: "link" });
+   623→  const [resErr, setResErr] = useState<string | null>(null);
+   624→  const [resBusy, setResBusy] = useState(false);
+   625→  const [resUploads, setResUploads] = useState<Record<string, number>>({});
+   626→  const [newMile, setNewMile] = useState<{ title: string; date: string; note: string }>({
+   627→    title: "",
+   628→    date: "",
+   629→    note: "",
+   630→  });
+   631→  const [mileErr, setMileErr] = useState<string | null>(null);
+   632→  const [mileBusy, setMileBusy] = useState(false);
+   633→
+   634→  // departments are static — load once
+   635→  useEffect(() => {
+   636→    const ac = new AbortController();
+   637→    fetchDepartments(ac.signal)
+   638→      .then(setDepartments)
+   639→      .catch(() => {});
+   640→    return () => ac.abort();
+   641→  }, []);
+   642→
+   643→  // edit mode: load the project and populate the form
+   644→  useEffect(() => {
+   645→    if (!editSlug || !user) return;
+   646→    const ac = new AbortController();
+   647→    fetchProject(editSlug, ac.signal)
+   648→      .then(({ project, viewer }) => {
+   649→        if (!viewer.isOwner) {
+   650→          setEditBlocked(true);
+   651→          return;
+   652→        }
+   653→        setExisting({ project, viewer });
+   654→        setForm({
+   655→          title: project.title,
+   656→          summary: project.summary,
+   657→          description: project.description,
+   658→          dept: project.department.code,
+   659→          category: project.category,
+   660→          year: String(project.year),
+   661→          semester: project.semester,
+   662→          program: project.program ?? "",
+   663→          supervisor: project.supervisor ?? "",
+   664→          allowJoinRequests: project.allowJoinRequests,
+   665→          lookingForTeammates: project.lookingForTeammates,
+   666→          technologyIds: project.technologies.map((t) => t.id),
+   667→          coverImage: project.coverImage ?? "",
+   668→          galleryImages: project.galleryImages ?? [],
+   669→        });
+   670→      })
+   671→      .catch(() => {
+   672→        if (!ac.signal.aborted) setEditFailed(true);
+   673→      });
+   674→    return () => ac.abort();
+   675→  }, [editSlug, user?.id, editRetry]);
+   676→
+   677→  // technologies are only needed on step 5 — lazy load
+   678→  useEffect(() => {
+   679→    if (step !== 5 || techs !== null) return;
+   680→    const ac = new AbortController();
+   681→    fetchTechnologies(ac.signal)
+   682→      .then(setTechs)
+   683→      .catch(() => setTechs([]));
+   684→    return () => ac.abort();
+   685→  }, [step, techs]);
+   686→
+   687→  // "Other" technologies are pulled out of the groups and rendered in their own
+   688→  // always-present block next to the custom-tool input.
+   689→  const { techGroups, otherTechs } = useMemo(() => {
+   690→    const groups: { category: string; items: TechnologyDTO[] }[] = [];
+   691→    const idx = new Map<string, number>();
+   692→    const others: TechnologyDTO[] = [];
+   693→    for (const t of techs ?? []) {
+   694→      if (t.category === "Other") {
+   695→        others.push(t);
+   696→        continue;
+   697→      }
+   698→      const i = idx.get(t.category);
+   699→      if (i === undefined) {
+   700→        idx.set(t.category, groups.length);
+   701→        groups.push({ category: t.category, items: [t] });
+   702→      } else {
+   703→        groups[i].items.push(t);
+   704→      }
+   705→    }
+   706→    return { techGroups: groups, otherTechs: others };
+   707→  }, [techs]);
+   708→
+   709→  // ---------- gates ----------
+   710→
+   711→  if (!authLoaded) return <WizardSkeleton />;
+   712→
+   713→  if (!user) {
+   714→    return (
+   715→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   716→        <EmptyState
+   717→          icon={Lock}
+   718→          title={editing ? "Sign in to edit a project" : "Sign in to submit a project"}
+   719→          hint="You need a student account to publish projects on the showcase."
+   720→          action={
+   721→            <Button onClick={() => openAuth("login")} className="rounded-xl font-semibold">
+   722→              Sign in
+   723→            </Button>
+   724→          }
+   725→        />
+   726→      </div>
+   727→    );
+   728→  }
+   729→
+   730→  if (editing && editBlocked) {
+   731→    return (
+   732→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   733→        <EmptyState
+   734→          icon={ShieldAlert}
+   735→          title="You can't edit this project"
+   736→          hint="Only the project owner can make changes to it."
+   737→          action={
+   738→            <Button onClick={() => navigate({ name: "projects" })} variant="outline" className="rounded-xl font-semibold">
+   739→              Back to projects
+   740→            </Button>
+   741→          }
+   742→        />
+   743→      </div>
+   744→    );
+   745→  }
+   746→
+   747→  if (editing && editFailed) {
+   748→    return (
+   749→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   750→        <EmptyState
+   751→          icon={AlertTriangle}
+   752→          title="Something went wrong"
+   753→          hint="We couldn't load this project for editing."
+   754→          action={
+   755→            <Button
+   756→              onClick={() => {
+   757→                setEditFailed(false);
+   758→                setEditRetry((r) => r + 1);
+   759→              }}
+   760→              variant="outline"
+   761→              className="rounded-xl font-semibold"
+   762→            >
+   763→              Try again
+   764→            </Button>
+   765→          }
+   766→        />
+   767→      </div>
+   768→    );
+   769→  }
+   770→
+   771→  if (editing && !existing) return <WizardSkeleton />;
+   772→
+   773→  const editProject = existing?.project ?? null;
+   774→  const publishNow = editing && editProject ? editProject.status === "DRAFT" : false;
+   775→
+   776→  // ---------- form helpers ----------
+   777→
+   778→  const setField = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+   779→    setForm((f) => ({ ...f, [k]: v }));
+   780→    setErrors((e) => (e[k] ? { ...e, [k]: undefined } : e));
+   781→  };
+   782→
+   783→  const fieldErr = (key: string) =>
+   784→    errors[key] ? <p className="text-xs font-medium text-danger">{errors[key]}</p> : null;
+   785→
+   786→  const validateStep = (s: number): Record<string, string> => {
+   787→    const e: Record<string, string> = {};
+   788→    if (s === 1) {
+   789→      const t = form.title.trim();
+   790→      if (t.length < 4) e.title = "Title must be at least 4 characters";
+   791→      const sum = form.summary.trim();
+   792→      if (sum.length < 20) e.summary = `Summary must be at least 20 characters (${sum.length}/20)`;
+   793→      const d = form.description.trim();
+   794→      if (d.length < 60) e.description = `Description must be at least 60 characters (${d.length}/60)`;
+   795→    }
+   796→    if (s === 2) {
+   797→      if (!form.coverImage.trim()) e.coverImage = "Add a cover image — every project needs one.";
+   798→    }
+   799→    if (s === 3) {
+   800→      if (!form.dept) e.dept = "Choose a department";
+   801→      if (!form.category) e.category = "Choose a category";
+   802→      if (!form.year) e.year = "Choose a year";
+   803→      if (!form.semester) e.semester = "Choose a semester";
+   804→    }
+   805→    return e;
+   806→  };
+   807→
+   808→  const validateCore = (): { step: number; errors: Record<string, string> } | null => {
+   809→    const e1 = validateStep(1);
+   810→    if (Object.keys(e1).length) return { step: 1, errors: e1 };
+   811→    const e2 = validateStep(2);
+   812→    if (Object.keys(e2).length) return { step: 2, errors: e2 };
+   813→    return null;
+   814→  };
+   815→
+   816→  const draftRowError = (): string | null => {
+   817→    for (const r of draftResources) {
+   818→      if (r.mode === "upload") {
+   819→        if (!r.url.startsWith("/uploads/")) return "Upload a file first — or switch the row back to Link.";
+   820→        continue;
+   821→      }
+   822→      if (!r.url.trim()) continue;
+   823→      if (!URL_RE.test(r.url.trim())) return "A resource link is not a valid URL — use the full http(s):// address.";
+   824→    }
+   825→    for (const t of draftTimeline) {
+   826→      if (!t.title.trim() && !t.date && !t.note.trim()) continue;
+   827→      if (!t.title.trim() || !t.date) return "Milestones need both a title and a date (empty rows are ignored).";
+   828→    }
+   829→    return null;
+   830→  };
+   831→
+   832→  const corePayload = (publish: boolean): ProjectInput => ({
+   833→    title: form.title.trim(),
+   834→    summary: form.summary.trim(),
+   835→    description: form.description.trim(),
+   836→    category: form.category,
+   837→    year: Number(form.year),
+   838→    semester: form.semester,
+   839→    dept: form.dept,
+   840→    program: form.program.trim() || undefined,
+   841→    supervisor: form.supervisor.trim() || undefined,
+   842→    tags: [],
+   843→    publish,
+   844→    technologyIds: form.technologyIds,
+   845→    allowJoinRequests: form.allowJoinRequests,
+   846→    lookingForTeammates: form.lookingForTeammates,
+   847→    coverImage: form.coverImage,
+   848→    galleryImages: form.galleryImages,
+   849→    members: draftMembers.map(({ username, role }) => ({ username, role })),
+   850→  });
+   851→
+   852→  const onSubmitError = (err: unknown) => {
+   853→    const msg = errOf(err, "Something went wrong");
+   854→    setStep(stepForMessage(msg));
+   855→    setStepError(msg);
+   856→    toast.error(msg);
+   857→  };
+   858→
+   859→  // ---------- edit-mode live mutations (members / resources / timeline) ----------
+   860→
+   861→  const reloadLists = () => {
+   862→    if (!editSlug) return;
+   863→    fetchProject(editSlug)
+   864→      .then(({ project }) => {
+   865→        setExisting((ex) =>
+   866→          ex
+   867→            ? {
+   868→                ...ex,
+   869→                project: {
+   870→                  ...ex.project,
+   871→                  members: project.members,
+   872→                  resources: project.resources,
+   873→                  timeline: project.timeline,
+   874→                },
+   875→              }
+   876→            : ex
+   877→        );
+   878→      })
+   879→      .catch(() => {});
+   880→  };
+   881→
+   882→  const patchProject = (patch: Partial<ProjectDetail>) =>
+   883→    setExisting((ex) => (ex ? { ...ex, project: { ...ex.project, ...patch } } : ex));
+   884→
+   885→  const changeMemberRole = (m: MemberDTO, role: string) => {
+   886→    if (!editSlug || role === m.role) return;
+   887→    setMemberBusy(m.id);
+   888→    updateMember(editSlug, { memberId: m.id, role })
+   889→      .then(() => {
+   890→        toast.success(`${m.name} is now ${role === "LEAD" ? "a lead" : "a member"}`);
+   891→        reloadLists();
+   892→      })
+   893→      .catch((e: unknown) => toast.error(errOf(e, "Update failed")))
+   894→      .finally(() => setMemberBusy(null));
+   895→  };
+   896→
+   897→  const removeMemberNow = (m: MemberDTO) => {
+   898→    if (!editSlug) return;
+   899→    setMemberBusy(m.id);
+   900→    removeMember(editSlug, { memberId: m.id })
+   901→      .then(() => {
+   902→        toast.success(`${m.name} was removed from the team`);
+   903→        reloadLists();
+   904→      })
+   905→      .catch((e: unknown) => toast.error(errOf(e, "Remove failed")))
+   906→      .finally(() => setMemberBusy(null));
+   907→  };
+   908→
+   909→  const addMemberNow = (u: SafeUserDTO, role: string) => {
+   910→    if (!editSlug) return;
+   911→    addMember(editSlug, { username: u.username, role })
+   912→      .then(() => {
+   913→        toast.success(`${u.displayName} joined the team`);
+   914→        reloadLists();
+   915→      })
+   916→      .catch((e: unknown) => toast.error(errOf(e, "Could not add teammate")));
+   917→  };
+   918→
+   919→  const addResourceNow = () => {
+   920→    if (!editSlug) return;
+   921→    if (!newRes.label.trim()) {
+   922→      setResErr("Give the resource a short label.");
+   923→      return;
+   924→    }
+   925→    if (newRes.mode === "upload") {
+   926→      if (!newRes.url.startsWith("/uploads/")) {
+   927→        setResErr("Upload a file first.");
+   928→        return;
+   929→      }
+   930→    } else if (!URL_RE.test(newRes.url.trim())) {
+   931→      setResErr("Enter a full URL starting with http:// or https://");
+   932→      return;
+   933→    }
+   934→    setResBusy(true);
+   935→    setResErr(null);
+   936→    addResource(editSlug, { type: newRes.type, label: newRes.label.trim(), url: newRes.url.trim() })
+   937→      .then(() => {
+   938→        toast.success("Resource added");
+   939→        setNewRes({ type: "DEMO", label: "", url: "", mode: "link" });
+   940→        reloadLists();
+   941→      })
+   942→      .catch((e: unknown) => setResErr(errOf(e, "Could not add resource")))
+   943→      .finally(() => setResBusy(false));
+   944→  };
+   945→
+   946→  const deleteResourceNow = (r: ResourceDTO) => {
+   947→    if (!editSlug || !editProject) return;
+   948→    deleteResource(editSlug, r.id)
+   949→      .then(() => {
+   950→        toast.success("Resource removed");
+   951→        patchProject({ resources: editProject.resources.filter((x) => x.id !== r.id) });
+   952→      })
+   953→      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+   954→  };
+   955→
+   956→  const addMilestoneNow = () => {
+   957→    if (!editSlug) return;
+   958→    if (!newMile.title.trim()) {
+   959→      setMileErr("Give the milestone a title.");
+   960→      return;
+   961→    }
+   962→    if (!newMile.date) {
+   963→      setMileErr("Pick a date.");
+   964→      return;
+   965→    }
+   966→    setMileBusy(true);
+   967→    setMileErr(null);
+   968→    addTimelineItem(editSlug, { title: newMile.title.trim(), date: newMile.date, note: newMile.note.trim() || undefined })
+   969→      .then(() => {
+   970→        toast.success("Milestone added");
+   971→        setNewMile({ title: "", date: "", note: "" });
+   972→        reloadLists();
+   973→      })
+   974→      .catch((e: unknown) => setMileErr(errOf(e, "Could not add milestone")))
+   975→      .finally(() => setMileBusy(false));
+   976→  };
+   977→
+   978→  const deleteMilestoneNow = (t: TimelineDTO) => {
+   979→    if (!editSlug || !editProject) return;
+   980→    deleteTimelineItem(editSlug, t.id)
+   981→      .then(() => {
+   982→        toast.success("Milestone removed");
+   983→        patchProject({ timeline: editProject.timeline.filter((x) => x.id !== t.id) });
+   984→      })
+   985→      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+   986→  };
+   987→
+   988→  // ---------- media uploads & custom tools ----------
+   989→
+   990→  /** A freshly-picked cover always goes through the crop dialog before it uploads. */
+   991→  const onCoverFile = (file: File) => {
+   992→    if (!file.type.startsWith("image/")) {
+   993→      toast.error("Pick an image file — JPG, PNG, WebP or GIF.");
+   994→      return;
+   995→    }
+   996→    if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
+   997→    const url = URL.createObjectURL(file);
+   998→    cropObjectUrl.current = url;
+   999→    setCropPoint({ x: 0, y: 0 });
+  1000→    setCropZoom(1);
+  1001→    setCropArea(null);
+  1002→    setCropSrc(url);
+  1003→    setCropOpen(true);
+  1004→  };
+  1005→
+  1006→  /** Re-crop an already-uploaded cover — only same-origin /uploads/ images are canvas-safe. */
+  1007→  const startCoverCrop = () => {
+  1008→    if (!form.coverImage.startsWith("/uploads/")) return;
+  1009→    setCropPoint({ x: 0, y: 0 });
+  1010→    setCropZoom(1);
+  1011→    setCropArea(null);
+  1012→    setCropSrc(form.coverImage);
+  1013→    setCropOpen(true);
+  1014→  };
+  1015→
+  1016→  const closeCrop = () => {
+  1017→    setCropOpen(false);
+  1018→    setCropSrc(null);
+  1019→    setCropArea(null);
+  1020→    setCropBusy(false);
+  1021→    if (cropObjectUrl.current) {
+  1022→      URL.revokeObjectURL(cropObjectUrl.current);
+  1023→      cropObjectUrl.current = null;
+  1024→    }
+  1025→  };
+  1026→
+  1027→  const applyCrop = () => {
+  1028→    if (!cropSrc || !cropArea) return;
+  1029→    setCropBusy(true);
+  1030→    cropToJpegFile(cropSrc, cropArea)
+  1031→      .then((file) => uploadFile(file, "cover", setCoverPct))
+  1032→      .then((url) => {
+  1033→        setField("coverImage", url);
+  1034→        toast.success("Cover image updated");
+  1035→        closeCrop();
+  1036→      })
+  1037→      .catch((e: unknown) => toast.error(errOf(e, "Couldn't crop the cover image")))
+  1038→      .finally(() => {
+  1039→        setCropBusy(false);
+  1040→        setCoverPct(null);
+  1041→      });
+  1042→  };
+  1043→
+  1044→  const removeCover = () => setField("coverImage", "");
+  1045→
+  1046→  const applyCoverUrl = () => {
+  1047→    const v = coverUrlInput.trim();
+  1048→    if (!v.startsWith("https://") && !v.startsWith("/")) {
+  1049→      toast.error("Use an https:// link or a /… path");
+  1050→      return;
+  1051→    }
+  1052→    setField("coverImage", v);
+  1053→    setCoverUrlInput("");
+  1054→    setShowCoverUrl(false);
+  1055→  };
+  1056→
+  1057→  const onGalleryFile = (file: File) => {
+  1058→    setGalleryPct(0);
+  1059→    uploadFile(file, "gallery", setGalleryPct)
+  1060→      .then((url) => setForm((f) => ({ ...f, galleryImages: [...f.galleryImages, url].slice(0, 8) })))
+  1061→      .catch((e: unknown) => toast.error(errOf(e, "Couldn't upload the photo")))
+  1062→      .finally(() => setGalleryPct(null));
+  1063→  };
+  1064→
+  1065→  const moveGalleryImage = (i: number, dir: -1 | 1) => {
+  1066→    const j = i + dir;
+  1067→    if (j < 0 || j >= form.galleryImages.length) return;
+  1068→    const next = [...form.galleryImages];
+  1069→    [next[i], next[j]] = [next[j], next[i]];
+  1070→    setField("galleryImages", next);
+  1071→  };
+  1072→
+  1073→  const removeGalleryImage = (i: number) =>
+  1074→    setField("galleryImages", form.galleryImages.filter((_, idx) => idx !== i));
+  1075→
+  1076→  const toggleTech = (id: string) =>
+  1077→    setField(
+  1078→      "technologyIds",
+  1079→      form.technologyIds.includes(id)
+  1080→        ? form.technologyIds.filter((x) => x !== id)
+  1081→        : [...form.technologyIds, id]
+  1082→    );
+  1083→
+  1084→  const addTechnologyNow = () => {
+  1085→    const name = newTech.trim();
+  1086→    if (!name || techBusy) return;
+  1087→    setTechBusy(true);
+  1088→    createTechnology(name)
+  1089→      .then((t) => {
+  1090→        setTechs((list) => (list?.some((x) => x.id === t.id) ? list : [...(list ?? []), t]));
+  1091→        setForm((f) =>
+  1092→          f.technologyIds.includes(t.id) ? f : { ...f, technologyIds: [...f.technologyIds, t.id] }
+  1093→        );
+  1094→        toast.success(`${t.name} added to your tools`);
+  1095→        setNewTech("");
+  1096→      })
+  1097→      .catch((e: unknown) => toast.error(errOf(e, "Couldn't add the tool")))
+  1098→      .finally(() => setTechBusy(false));
+  1099→  };
+  1100→
+  1101→  const runResourceUpload = (key: string, file: File, onDone: (url: string) => void) => {
+  1102→    setResUploads((m) => ({ ...m, [key]: 0 }));
+  1103→    uploadFile(file, "resource", (pct) => setResUploads((m) => ({ ...m, [key]: pct })))
+  1104→      .then(onDone)
+  1105→      .catch((e: unknown) => toast.error(errOf(e, "Upload failed")))
+  1106→      .finally(() =>
+  1107→        setResUploads((m) => {
+  1108→          const next = { ...m };
+  1109→          delete next[key];
+  1110→          return next;
+  1111→        })
+  1112→      );
+  1113→  };
+  1114→
+  1115→  const uploadDraftResource = (key: string, file: File) =>
+  1116→    runResourceUpload(key, file, (url) =>
+  1117→      setDraftResources((list) =>
+  1118→        list.map((x) => (x.key === key ? { ...x, url, fileName: file.name } : x))
+  1119→      )
+  1120→    );
+  1121→
+  1122→  const uploadNewResource = (file: File) =>
+  1123→    runResourceUpload("new", file, (url) => setNewRes((s) => ({ ...s, url, fileName: file.name })));
+  1124→
+  1125→  // ---------- navigation / submit ----------
+  1126→
+  1127→  const goNext = () => {
+  1128→    const e = validateStep(step);
+  1129→    if (Object.keys(e).length) {
+  1130→      setErrors(e);
+  1131→      return;
+  1132→    }
+  1133→    setErrors({});
+  1134→    setStepError(null);
+  1135→    setStep((s) => Math.min(STEPS.length, s + 1));
+  1136→  };
+  1137→
+  1138→  const goBack = () => {
+  1139→    if (step > 1) {
+  1140→      setStep((s) => s - 1);
+  1141→      setStepError(null);
+  1142→      return;
+  1143→    }
+  1144→    navigate(editing && editSlug ? { name: "project", slug: editSlug } : { name: "projects" });
+  1145→  };
+  1146→
+  1147→  const saveDraft = () => {
+  1148→    const core = validateCore();
+  1149→    if (core) {
+  1150→      setStep(core.step);
+  1151→      setErrors(core.errors);
+  1152→      setStepError("Fill in the required fields before saving a draft.");
+  1153→      toast.error("Missing required fields");
+  1154→      return;
+  1155→    }
+  1156→    const rowErr = draftRowError();
+  1157→    if (rowErr) {
+  1158→      setStep(STEPS.length);
+  1159→      setStepError(rowErr);
+  1160→      return;
+  1161→    }
+  1162→    setSaving("draft");
+  1163→    setStepError(null);
+  1164→    createProject(corePayload(false))
+  1165→      .then((created) => {
+  1166→        toast.success("Draft saved — publish whenever you're ready");
+  1167→        navigate({ name: "project", slug: created.slug });
+  1168→      })
+  1169→      .catch(onSubmitError)
+  1170→      .finally(() => setSaving(""));
+  1171→  };
+  1172→
+  1173→  const submitFinal = () => {
+  1174→    const core = validateCore();
+  1175→    if (core) {
+  1176→      setStep(core.step);
+  1177→      setErrors(core.errors);
+  1178→      setStepError("Please fix the highlighted fields first.");
+  1179→      return;
+  1180→    }
+  1181→    const rowErr = editing ? null : draftRowError();
+  1182→    if (rowErr) {
+  1183→      setStepError(rowErr);
+  1184→      return;
+  1185→    }
+  1186→    setSaving("final");
+  1187→    setStepError(null);
+  1188→
+  1189→    if (editing && editSlug) {
+  1190→      updateProject(editSlug, {
+  1191→        title: form.title.trim(),
+  1192→        summary: form.summary.trim(),
+  1193→        description: form.description.trim(),
+  1194→        category: form.category,
+  1195→        year: Number(form.year),
+  1196→        semester: form.semester,
+  1197→        dept: form.dept,
+  1198→        program: form.program.trim() || undefined,
+  1199→        supervisor: form.supervisor.trim() || undefined,
+  1200→        technologyIds: form.technologyIds,
+  1201→        allowJoinRequests: form.allowJoinRequests,
+  1202→        lookingForTeammates: form.lookingForTeammates,
+  1203→        coverImage: form.coverImage,
+  1204→        galleryImages: form.galleryImages,
+  1205→        ...(publishNow ? { status: "PUBLISHED" as const } : {}),
+  1206→      })
+  1207→        .then(() => {
+  1208→          toast.success(publishNow ? "Project published!" : "Changes saved");
+  1209→          navigate({ name: "project", slug: editSlug });
+  1210→        })
+  1211→        .catch(onSubmitError)
+  1212→        .finally(() => setSaving(""));
+  1213→      return;
+  1214→    }
+  1215→
+  1216→    createProject(corePayload(true))
+  1217→      .then((created) => {
+  1218→        const slug = created.slug;
+  1219→        // createProject has no resources/timeline fields — apply them best-effort
+  1220→        const jobs: Promise<unknown>[] = [
+  1221→          ...draftResources
+  1222→            .filter((r) => r.url.trim())
+  1223→            .map((r) =>
+  1224→              addResource(slug, { type: r.type, label: r.label.trim() || r.fileName || r.type, url: r.url.trim() })
+  1225→            ),
+  1226→          ...draftTimeline
+  1227→            .filter((t) => t.title.trim() && t.date)
+  1228→            .map((t) =>
+  1229→              addTimelineItem(slug, {
+  1230→                title: t.title.trim(),
+  1231→                date: t.date,
+  1232→                note: t.note.trim() || undefined,
+  1233→              })
+  1234→            ),
+  1235→        ];
+  1236→        return Promise.all(jobs.map((j) => j.catch(() => null))).then(() => slug);
+  1237→      })
+  1238→      .then((slug) => {
+  1239→        toast.success("Project published!");
+  1240→        navigate({ name: "project", slug });
+  1241→      })
+  1242→      .catch(onSubmitError)
+  1243→      .finally(() => setSaving(""));
+  1244→  };
+  1245→
+  1246→  // ---------- render ----------
+  1247→
+  1248→  const stepLabel = STEPS[step - 1].label;
+  1249→
+  1250→  return (
+  1251→    <div className="mx-auto w-full max-w-6xl px-5 py-8 md:px-8 md:py-10">
+  1252→      {/* Heading */}
+  1253→      <div className="flex flex-wrap items-end justify-between gap-3">
+  1254→        <div>
+  1255→          <p className="text-xs font-semibold uppercase tracking-widest text-primary-600">
+  1256→            {editing ? "Edit project" : "New submission"}
+  1257→          </p>
+  1258→          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+  1259→            {editing ? "Edit project" : "Submit a project"}
+  1260→          </h1>
+  1261→        </div>
+  1262→        <p className="text-sm text-muted-foreground" aria-live="polite">
+  1263→          Step {step} of {STEPS.length} — {stepLabel}
+  1264→        </p>
+  1265→      </div>
+  1266→
+  1267→      {/* < lg: horizontal stepper — ≥ lg the vertical rail sits beside the form */}
+  1268→      <div className="mt-6 lg:hidden">
+  1269→        <Stepper current={step} onGo={(n) => setStep(n)} />
+  1270→      </div>
+  1271→
+  1272→      <div className="mt-6 lg:mt-8 lg:grid lg:grid-cols-[230px_minmax(0,1fr)] lg:gap-8">
+  1273→        {/* Vertical step rail (≥ lg) */}
+  1274→        <aside className="hidden lg:block">
+  1275→          <div className="sticky top-24">
+  1276→            <StepRail current={step} onGo={(n) => setStep(n)} />
+  1277→          </div>
+  1278→        </aside>
+  1279→
+  1280→        <div className="min-w-0">
+  1281→          {stepError ? (
+  1282→            <div
+  1283→              role="alert"
+  1284→              className="mb-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
+  1285→            >
+  1286→              {stepError}
+  1287→            </div>
+  1288→          ) : null}
+  1289→
+  1290→      {/* Step card */}
+  1291→      <section className="rounded-2xl border border-up-border bg-card p-6 md:p-8">
+  1292→        {/* ---------- Step 1: Basics ---------- */}
+  1293→        {step === 1 ? (
+  1294→          <div className="space-y-5">
+  1295→            <div className="space-y-1.5">
+  1296→              <Label htmlFor="f-title">Project title</Label>
+  1297→              <Input
+  1298→                id="f-title"
+  1299→                value={form.title}
+  1300→                maxLength={120}
+  1301→                onChange={(e) => setField("title", e.target.value)}
+  1302→                placeholder="e.g. Smart compost tracker for campus cafeterias"
+  1303→                aria-invalid={Boolean(errors.title)}
+  1304→                className="h-10 rounded-xl bg-white"
+  1305→              />
+  1306→              <div className="flex items-start justify-between gap-3">
+  1307→                {errors.title ? (
+  1308→                  fieldErr("title")
+  1309→                ) : (
+  1310→                  <p className="text-xs text-muted-foreground">A clear, specific name (4–120 characters).</p>
+  1311→                )}
+  1312→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+  1313→                  {form.title.length}/120
+  1314→                </span>
+  1315→              </div>
+  1316→            </div>
+  1317→
+  1318→            <div className="space-y-1.5">
+  1319→              <Label htmlFor="f-summary">One-line summary</Label>
+  1320→              <Input
+  1321→                id="f-summary"
+  1322→                value={form.summary}
+  1323→                maxLength={220}
+  1324→                onChange={(e) => setField("summary", e.target.value)}
+  1325→                placeholder="What does it do, in one sentence?"
+  1326→                aria-invalid={Boolean(errors.summary)}
+  1327→                className="h-10 rounded-xl bg-white"
+  1328→              />
+  1329→              <div className="flex items-start justify-between gap-3">
+  1330→                {errors.summary ? (
+  1331→                  fieldErr("summary")
+  1332→                ) : (
+  1333→                  <p className="text-xs text-muted-foreground">Shown on cards and search results (20–220 characters).</p>
+  1334→                )}
+  1335→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+  1336→                  {form.summary.length}/220
+  1337→                </span>
+  1338→              </div>
+  1339→            </div>
+  1340→
+  1341→            <div className="space-y-1.5">
+  1342→              <Label htmlFor="f-desc">Description</Label>
+  1343→              <Textarea
+  1344→                id="f-desc"
+  1345→                rows={8}
+  1346→                value={form.description}
+  1347→                onChange={(e) => setField("description", e.target.value)}
+  1348→                placeholder={"The problem, your approach, and what you built…\n\nUse plain text — leave a blank line between paragraphs."}
+  1349→                aria-invalid={Boolean(errors.description)}
+  1350→                className="rounded-xl bg-white"
+  1351→              />
+  1352→              <div className="flex items-start justify-between gap-3">
+  1353→                {errors.description ? (
+  1354→                  fieldErr("description")
+  1355→                ) : (
+  1356→                  <p className="text-xs text-muted-foreground">
+  1357→                    Plain text — blank lines become paragraph breaks.
+  1358→                  </p>
+  1359→                )}
+  1360→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+  1361→                  {form.description.length} chars
+  1362→                </span>
+  1363→              </div>
+  1364→            </div>
+  1365→          </div>
+  1366→        ) : null}
+  1367→
+  1368→        {/* ---------- Step 2: Media ---------- */}
+  1369→        {step === 2 ? (
+  1370→          <div className="space-y-8">
+  1371→            {/* Cover image */}
+  1372→            <div>
+  1373→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1374→                <div>
+  1375→                  <p className="font-semibold text-foreground">Cover image</p>
+  1376→                  <p className="text-xs text-muted-foreground">
+  1377→                    Shown on cards and the top of the project page — you pick the exact crop.
+  1378→                  </p>
+  1379→                </div>
+  1380→                <span className="text-xs font-medium text-muted-foreground">Required</span>
+  1381→              </div>
+  1382→
+  1383→              <input
+  1384→                ref={coverInputRef}
+  1385→                type="file"
+  1386→                accept="image/*"
+  1387→                className="hidden"
+  1388→                onChange={(e) => {
+  1389→                  const file = e.target.files?.[0];
+  1390→                  if (file) onCoverFile(file);
+  1391→                  e.target.value = "";
+  1392→                }}
+  1393→              />
+  1394→
+  1395→              {form.coverImage ? (
+  1396→                <div className="mt-3">
+  1397→                  <div className="relative aspect-[16/7] overflow-hidden rounded-2xl border border-up-border bg-surface-muted">
+  1398→                    <img
+  1399→                      src={form.coverImage}
+  1400→                      alt="Cover preview"
+  1401→                      className="absolute inset-0 size-full object-cover"
+  1402→                    />
+  1403→                    {coverPct !== null ? (
+  1404→                      <div className="absolute inset-x-0 bottom-0 bg-white/90 px-4 py-2.5 backdrop-blur">
+  1405→                        <div className="flex items-center justify-between gap-2 pb-1.5">
+  1406→                          <p className="text-xs font-medium text-foreground">Uploading new cover…</p>
+  1407→                          <span className="text-xs tabular-nums text-muted-foreground">{coverPct}%</span>
+  1408→                        </div>
+  1409→                        <div className="h-1 overflow-hidden rounded-full bg-surface-muted">
+  1410→                          <div
+  1411→                            className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+  1412→                            style={{ width: `${coverPct}%` }}
+  1413→                          />
+  1414→                        </div>
+  1415→                      </div>
+  1416→                    ) : null}
+  1417→                  </div>
+  1418→                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+  1419→                    <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+  1420→                      {form.coverImage.startsWith("/uploads/")
+  1421→                        ? uploadBaseName(form.coverImage)
+  1422→                        : form.coverImage}
+  1423→                    </p>
+  1424→                    <div className="flex shrink-0 items-center gap-2">
+  1425→                      {form.coverImage.startsWith("/uploads/") ? (
+  1426→                        <Button
+  1427→                          variant="outline"
+  1428→                          size="sm"
+  1429→                          className="h-8 rounded-lg font-semibold"
+  1430→                          disabled={coverPct !== null}
+  1431→                          onClick={startCoverCrop}
+  1432→                        >
+  1433→                          <Crop className="size-3.5" aria-hidden />
+  1434→                          Crop
+  1435→                        </Button>
+  1436→                      ) : null}
+  1437→                      <Button
+  1438→                        variant="outline"
+  1439→                        size="sm"
+  1440→                        className="h-8 rounded-lg font-semibold"
+  1441→                        disabled={coverPct !== null}
+  1442→                        onClick={() => coverInputRef.current?.click()}
+  1443→                      >
+  1444→                        Replace
+  1445→                      </Button>
+  1446→                      <Button
+  1447→                        variant="ghost"
+  1448→                        size="sm"
+  1449→                        className="h-8 rounded-lg font-semibold text-muted-foreground hover:text-danger"
+  1450→                        disabled={coverPct !== null}
+  1451→                        onClick={removeCover}
+  1452→                      >
+  1453→                        Remove
+  1454→                      </Button>
+  1455→                    </div>
+  1456→                  </div>
+  1457→                </div>
+  1458→              ) : (
+  1459→                <button
+  1460→                  type="button"
+  1461→                  aria-label="Upload cover image"
+  1462→                  disabled={coverPct !== null}
+  1463→                  onClick={() => coverInputRef.current?.click()}
+  1464→                  onDragOver={(e) => {
+  1465→                    e.preventDefault();
+  1466→                    setCoverDrag(true);
+  1467→                  }}
+  1468→                  onDragLeave={() => setCoverDrag(false)}
+  1469→                  onDrop={(e) => {
+  1470→                    e.preventDefault();
+  1471→                    setCoverDrag(false);
+  1472→                    const file = e.dataTransfer.files[0];
+  1473→                    if (file) onCoverFile(file);
+  1474→                  }}
+  1475→                  className={cn(
+  1476→                    "mt-3 flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-white transition-colors duration-200",
+  1477→                    coverDrag
+  1478→                      ? "border-primary-500 bg-primary-50 text-primary-700"
+  1479→                      : "border-up-border-strong text-muted-foreground hover:border-primary-400 hover:text-primary-700"
+  1480→                  )}
+  1481→                >
+  1482→                  {coverPct !== null ? (
+  1483→                    <>
+  1484→                      <Loader2 className="size-5 animate-spin" aria-hidden />
+  1485→                      <p className="text-sm font-medium text-foreground">Uploading… {coverPct}%</p>
+  1486→                      <div className="h-1 w-44 overflow-hidden rounded-full bg-surface-muted">
+  1487→                        <div
+  1488→                          className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+  1489→                          style={{ width: `${coverPct}%` }}
+  1490→                        />
+  1491→                      </div>
+  1492→                    </>
+  1493→                  ) : (
+  1494→                    <>
+  1495→                      <span className="flex size-11 items-center justify-center rounded-xl bg-surface-muted">
+  1496→                        <ImagePlus className="size-5" aria-hidden />
+  1497→                      </span>
+  1498→                      <p className="text-sm font-medium text-foreground">
+  1499→                        {coverDrag ? "Drop to upload" : "Click to upload or drag & drop"}
+  1500→                      </p>
+  1501→                      <p className="text-xs">JPG, PNG, WebP or GIF — up to 6 MB</p>
+  1502→                      <p className="text-[11px] text-muted-foreground/80">
+  1503→                        You'll crop it to fit before it uploads
+  1504→                      </p>
+  1505→                    </>
+  1506→                  )}
+  1507→                </button>
+  1508→              )}
+  1509→
+  1510→              {errors.coverImage ? <div className="mt-2">{fieldErr("coverImage")}</div> : null}
+  1511→
+  1512→              <div className="mt-2.5">
+  1513→                {showCoverUrl ? (
+  1514→                  <div className="flex flex-wrap items-center gap-2">
+  1515→                    <Input
+  1516→                      aria-label="Cover image URL"
+  1517→                      value={coverUrlInput}
+  1518→                      onChange={(e) => setCoverUrlInput(e.target.value)}
+  1519→                      placeholder="https://…"
+  1520→                      inputMode="url"
+  1521→                      className="h-9 min-w-0 flex-1 rounded-lg bg-white sm:max-w-sm"
+  1522→                    />
+  1523→                    <Button variant="outline" size="sm" className="h-9 rounded-lg font-semibold" onClick={applyCoverUrl}>
+  1524→                      Apply
+  1525→                    </Button>
+  1526→                    <Button
+  1527→                      variant="ghost"
+  1528→                      size="sm"
+  1529→                      className="h-9 rounded-lg text-muted-foreground"
+  1530→                      onClick={() => {
+  1531→                        setShowCoverUrl(false);
+  1532→                        setCoverUrlInput("");
+  1533→                      }}
+  1534→                    >
+  1535→                      Cancel
+  1536→                    </Button>
+  1537→                  </div>
+  1538→                ) : (
+  1539→                  <Button
+  1540→                    variant="ghost"
+  1541→                    size="sm"
+  1542→                    className="h-8 rounded-lg text-muted-foreground hover:text-foreground"
+  1543→                    onClick={() => setShowCoverUrl(true)}
+  1544→                  >
+  1545→                    <Link2 className="size-3.5" aria-hidden />
+  1546→                    or paste an image link
+  1547→                  </Button>
+  1548→                )}
+  1549→              </div>
+  1550→            </div>
+  1551→
+  1552→            {/* Gallery */}
+  1553→            <div>
+  1554→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1555→                <div>
+  1556→                  <p className="font-semibold text-foreground">Gallery</p>
+  1557→                  <p className="text-xs text-muted-foreground">
+  1558→                    Optional project photos — shown as a swipeable slider on the project page.
+  1559→                  </p>
+  1560→                </div>
+  1561→                <span className="text-xs tabular-nums text-muted-foreground">
+  1562→                  {form.galleryImages.length}/8
+  1563→                </span>
+  1564→              </div>
+  1565→
+  1566→              <input
+  1567→                ref={galleryInputRef}
+  1568→                type="file"
+  1569→                accept="image/*"
+  1570→                className="hidden"
+  1571→                onChange={(e) => {
+  1572→                  const file = e.target.files?.[0];
+  1573→                  if (file) onGalleryFile(file);
+  1574→                  e.target.value = "";
+  1575→                }}
+  1576→              />
+  1577→
+  1578→              <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+  1579→                {form.galleryImages.map((img, i) => (
+  1580→                  <div
+  1581→                    key={`${i}-${img}`}
+  1582→                    className="relative aspect-square overflow-hidden rounded-xl border border-up-border bg-surface-muted"
+  1583→                  >
+  1584→                    <img
+  1585→                      src={img}
+  1586→                      alt={`Gallery photo ${i + 1}`}
+  1587→                      loading="lazy"
+  1588→                      className="absolute inset-0 size-full object-cover"
+  1589→                    />
+  1590→                    <div className="absolute inset-x-1.5 top-1.5 flex items-center justify-between gap-1">
+  1591→                      <div className="flex gap-1">
+  1592→                        <button
+  1593→                          type="button"
+  1594→                          aria-label={`Move image ${i + 1} left`}
+  1595→                          disabled={i === 0}
+  1596→                          onClick={() => moveGalleryImage(i, -1)}
+  1597→                          className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
+  1598→                        >
+  1599→                          <ChevronLeft className="size-3.5" aria-hidden />
+  1600→                        </button>
+  1601→                        <button
+  1602→                          type="button"
+  1603→                          aria-label={`Move image ${i + 1} right`}
+  1604→                          disabled={i === form.galleryImages.length - 1}
+  1605→                          onClick={() => moveGalleryImage(i, 1)}
+  1606→                          className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
+  1607→                        >
+  1608→                          <ChevronRight className="size-3.5" aria-hidden />
+  1609→                        </button>
+  1610→                      </div>
+  1611→                      <button
+  1612→                        type="button"
+  1613→                        aria-label={`Remove image ${i + 1}`}
+  1614→                        onClick={() => removeGalleryImage(i)}
+  1615→                        className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-danger"
+  1616→                      >
+  1617→                        <Trash2 className="size-3.5" aria-hidden />
+  1618→                      </button>
+  1619→                    </div>
+  1620→                  </div>
+  1621→                ))}
+  1622→                {galleryPct !== null ? (
+  1623→                  <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-up-border bg-surface-muted">
+  1624→                    <Loader2 className="size-5 animate-spin text-primary-600" aria-hidden />
+  1625→                    <p className="text-xs font-medium text-muted-foreground">Uploading {galleryPct}%</p>
+  1626→                    <div className="h-1 w-3/4 overflow-hidden rounded-full bg-white">
+  1627→                      <div
+  1628→                        className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+  1629→                        style={{ width: `${galleryPct}%` }}
+  1630→                      />
+  1631→                    </div>
+  1632→                  </div>
+  1633→                ) : null}
+  1634→                {form.galleryImages.length < 8 ? (
+  1635→                  <button
+  1636→                    type="button"
+  1637→                    aria-label="Add gallery photo"
+  1638→                    disabled={galleryPct !== null}
+  1639→                    onClick={() => galleryInputRef.current?.click()}
+  1640→                    className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-up-border-strong bg-white text-muted-foreground transition-colors duration-200 hover:border-primary-400 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+  1641→                  >
+  1642→                    <Plus className="size-5" aria-hidden />
+  1643→                    <span className="text-[11px] font-semibold">Add photo</span>
+  1644→                  </button>
+  1645→                ) : null}
+  1646→              </div>
+  1647→              <p className="mt-2 text-xs text-muted-foreground">
+  1648→                Up to 8 photos — new ones join the end; use the corner arrows to rearrange.
+  1649→              </p>
+  1650→            </div>
+  1651→          </div>
+  1652→        ) : null}
+  1653→
+  1654→        {/* ---------- Step 3: Academics ---------- */}
+  1655→        {step === 3 ? (
+  1656→          <div className="grid gap-5 sm:grid-cols-2">
+  1657→            <div className="space-y-1.5">
+  1658→              <Label htmlFor="f-dept">Department</Label>
+  1659→              <Select
+  1660→                value={form.dept || "__none__"}
+  1661→                onValueChange={(v) => setField("dept", v === "__none__" ? "" : v)}
+  1662→              >
+  1663→                <SelectTrigger
+  1664→                  id="f-dept"
+  1665→                  aria-label="Department"
+  1666→                  aria-invalid={Boolean(errors.dept)}
+  1667→                  className="h-10 w-full rounded-xl bg-white"
+  1668→                >
+  1669→                  <SelectValue placeholder="Select department" />
+  1670→                </SelectTrigger>
+  1671→                <SelectContent>
+  1672→                  {departments.map((d) => (
+  1673→                    <SelectItem key={d.id} value={d.code}>
+  1674→                      {d.name}
+  1675→                    </SelectItem>
+  1676→                  ))}
+  1677→                </SelectContent>
+  1678→              </Select>
+  1679→              {fieldErr("dept")}
+  1680→            </div>
+  1681→
+  1682→            <div className="space-y-1.5">
+  1683→              <Label htmlFor="f-category">Category</Label>
+  1684→              <Select
+  1685→                value={form.category || "__none__"}
+  1686→                onValueChange={(v) => setField("category", v === "__none__" ? "" : v)}
+  1687→              >
+  1688→                <SelectTrigger
+  1689→                  id="f-category"
+  1690→                  aria-label="Category"
+  1691→                  aria-invalid={Boolean(errors.category)}
+  1692→                  className="h-10 w-full rounded-xl bg-white"
+  1693→                >
+  1694→                  <SelectValue placeholder="Select category" />
+  1695→                </SelectTrigger>
+  1696→                <SelectContent>
+  1697→                  {CATEGORIES.map((c) => (
+  1698→                    <SelectItem key={c} value={c}>
+  1699→                      {c}
+  1700→                    </SelectItem>
+  1701→                  ))}
+  1702→                </SelectContent>
+  1703→              </Select>
+  1704→              {fieldErr("category")}
+  1705→            </div>
+  1706→
+  1707→            <div className="space-y-1.5">
+  1708→              <Label htmlFor="f-year">Year</Label>
+  1709→              <Select
+  1710→                value={form.year || "__none__"}
+  1711→                onValueChange={(v) => setField("year", v === "__none__" ? "" : v)}
+  1712→              >
+  1713→                <SelectTrigger
+  1714→                  id="f-year"
+  1715→                  aria-label="Year"
+  1716→                  aria-invalid={Boolean(errors.year)}
+  1717→                  className="h-10 w-full rounded-xl bg-white"
+  1718→                >
+  1719→                  <SelectValue placeholder="Select year" />
+  1720→                </SelectTrigger>
+  1721→                <SelectContent>
+  1722→                  {YEARS.map((y) => (
+  1723→                    <SelectItem key={y} value={String(y)}>
+  1724→                      {y}
+  1725→                    </SelectItem>
+  1726→                  ))}
+  1727→                </SelectContent>
+  1728→              </Select>
+  1729→              {fieldErr("year")}
+  1730→            </div>
+  1731→
+  1732→            <div className="space-y-1.5">
+  1733→              <Label htmlFor="f-semester">Semester</Label>
+  1734→              <Select
+  1735→                value={form.semester || "__none__"}
+  1736→                onValueChange={(v) => setField("semester", v === "__none__" ? "" : v)}
+  1737→              >
+  1738→                <SelectTrigger
+  1739→                  id="f-semester"
+  1740→                  aria-label="Semester"
+  1741→                  aria-invalid={Boolean(errors.semester)}
+  1742→                  className="h-10 w-full rounded-xl bg-white"
+  1743→                >
+  1744→                  <SelectValue placeholder="Select semester" />
+  1745→                </SelectTrigger>
+  1746→                <SelectContent>
+  1747→                  {SEMESTERS.map((s) => (
+  1748→                    <SelectItem key={s} value={s}>
+  1749→                      {s}
+  1750→                    </SelectItem>
+  1751→                  ))}
+  1752→                </SelectContent>
+  1753→              </Select>
+  1754→              {fieldErr("semester")}
+  1755→            </div>
+  1756→
+  1757→            <div className="space-y-1.5">
+  1758→              <Label htmlFor="f-program">Program (optional)</Label>
+  1759→              <Input
+  1760→                id="f-program"
+  1761→                value={form.program}
+  1762→                maxLength={80}
+  1763→                onChange={(e) => setField("program", e.target.value)}
+  1764→                placeholder="e.g. B.Sc. Computer Science"
+  1765→                className="h-10 rounded-xl bg-white"
+  1766→              />
+  1767→            </div>
+  1768→
+  1769→            <div className="space-y-1.5">
+  1770→              <Label htmlFor="f-supervisor">Supervisor (optional)</Label>
+  1771→              <Input
+  1772→                id="f-supervisor"
+  1773→                value={form.supervisor}
+  1774→                maxLength={80}
+  1775→                onChange={(e) => setField("supervisor", e.target.value)}
+  1776→                placeholder="e.g. Prof. Dana Kim"
+  1777→                className="h-10 rounded-xl bg-white"
+  1778→              />
+  1779→            </div>
+  1780→          </div>
+  1781→        ) : null}
+  1782→
+  1783→        {/* ---------- Step 4: Team ---------- */}
+  1784→        {step === 4 ? (
+  1785→          <div className="space-y-6">
+  1786→            <div className="flex items-center gap-3 rounded-2xl border border-primary-100 bg-primary-50/60 px-4 py-3">
+  1787→              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+  1788→                <Crown className="size-4" aria-hidden />
+  1789→              </span>
+  1790→              <div className="min-w-0">
+  1791→                <p className="truncate text-sm font-semibold text-foreground">{user.displayName}</p>
+  1792→                <p className="truncate text-xs text-muted-foreground">
+  1793→                  @{user.username} · You — project owner
+  1794→                </p>
+  1795→              </div>
+  1796→            </div>
+  1797→
+  1798→            <div>
+  1799→              <Label>Teammates</Label>
+  1800→              <p className="mt-1 text-xs text-muted-foreground">
+  1801→                {editing
+  1802→                  ? "Changes apply immediately."
+  1803→                  : "They'll be tagged on the project when you publish."}
+  1804→              </p>
+  1805→
+  1806→              <div className="mt-3 space-y-2">
+  1807→                {/* create mode: local draft rows */}
+  1808→                {!editing
+  1809→                  ? draftMembers.map((m) => (
+  1810→                      <div
+  1811→                        key={m.username}
+  1812→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1813→                      >
+  1814→                        <MemberAvatar name={m.name} ring={false} />
+  1815→                        <div className="min-w-0 flex-1">
+  1816→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1817→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1818→                        </div>
+  1819→                        <Select
+  1820→                          value={m.role}
+  1821→                          onValueChange={(role) =>
+  1822→                            setDraftMembers((list) =>
+  1823→                              list.map((x) => (x.username === m.username ? { ...x, role } : x))
+  1824→                            )
+  1825→                          }
+  1826→                        >
+  1827→                          <SelectTrigger
+  1828→                            aria-label={`Role for ${m.name}`}
+  1829→                            className="h-8 w-[100px] rounded-lg text-xs"
+  1830→                          >
+  1831→                            <SelectValue />
+  1832→                          </SelectTrigger>
+  1833→                          <SelectContent>
+  1834→                            <SelectItem value="LEAD">Lead</SelectItem>
+  1835→                            <SelectItem value="MEMBER">Member</SelectItem>
+  1836→                          </SelectContent>
+  1837→                        </Select>
+  1838→                        <Button
+  1839→                          variant="ghost"
+  1840→                          size="icon"
+  1841→                          aria-label={`Remove ${m.name}`}
+  1842→                          className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1843→                          onClick={() =>
+  1844→                            setDraftMembers((list) => list.filter((x) => x.username !== m.username))
+  1845→                          }
+  1846→                        >
+  1847→                          <Trash2 className="size-4" aria-hidden />
+  1848→                        </Button>
+  1849→                      </div>
+  1850→                    ))
+  1851→                  : null}
+  1852→
+  1853→                {/* edit mode: live member rows */}
+  1854→                {editing && editProject
+  1855→                  ? editProject.members.map((m) => (
+  1856→                      <div
+  1857→                        key={m.id}
+  1858→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1859→                      >
+  1860→                        <MemberAvatar name={m.name} ring={false} />
+  1861→                        <div className="min-w-0 flex-1">
+  1862→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1863→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1864→                        </div>
+  1865→                        {m.role === "OWNER" ? (
+  1866→                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+  1867→                            <Crown className="size-3" aria-hidden />
+  1868→                            Owner
+  1869→                          </span>
+  1870→                        ) : (
+  1871→                          <>
+  1872→                            <Select
+  1873→                              value={m.role}
+  1874→                              disabled={memberBusy === m.id}
+  1875→                              onValueChange={(role) => changeMemberRole(m, role)}
+  1876→                            >
+  1877→                              <SelectTrigger
+  1878→                                aria-label={`Role for ${m.name}`}
+  1879→                                className="h-8 w-[100px] rounded-lg text-xs"
+  1880→                              >
+  1881→                                <SelectValue />
+  1882→                              </SelectTrigger>
+  1883→                              <SelectContent>
+  1884→                                <SelectItem value="LEAD">Lead</SelectItem>
+  1885→                                <SelectItem value="MEMBER">Member</SelectItem>
+  1886→                              </SelectContent>
+  1887→                            </Select>
+  1888→                            <Button
+  1889→                              variant="ghost"
+  1890→                              size="icon"
+  1891→                              aria-label={`Remove ${m.name}`}
+  1892→                              disabled={memberBusy === m.id}
+  1893→                              className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1894→                              onClick={() => removeMemberNow(m)}
+  1895→                            >
+  1896→                              <Trash2 className="size-4" aria-hidden />
+  1897→                            </Button>
+  1898→                          </>
+  1899→                        )}
+  1900→                      </div>
+  1901→                    ))
+  1902→                  : null}
+  1903→
+  1904→                {(!editing && draftMembers.length === 0) || (editing && editProject && editProject.members.length <= 1) ? (
+  1905→                  <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1906→                    Flying solo for now — search below to add teammates.
+  1907→                  </p>
+  1908→                ) : null}
+  1909→              </div>
+  1910→
+  1911→              <div className="mt-4">
+  1912→                <UserSearchAdd
+  1913→                  exclude={
+  1914→                    editing
+  1915→                      ? new Set([user.username.toLowerCase(), ...(editProject?.members.map((m) => m.username.toLowerCase()) ?? [])])
+  1916→                      : new Set([user.username.toLowerCase(), ...draftMembers.map((m) => m.username.toLowerCase())])
+  1917→                  }
+  1918→                  onPick={(u, role) => {
+  1919→                    if (editing) {
+  1920→                      addMemberNow(u, role);
+  1921→                      return;
+  1922→                    }
+  1923→                    if (draftMembers.some((m) => m.username === u.username)) return;
+  1924→                    setDraftMembers((list) => [
+  1925→                      ...list,
+  1926→                      { username: u.username, name: u.displayName, role },
+  1927→                    ]);
+  1928→                    toast.success(`${u.displayName} added to the team`);
+  1929→                  }}
+  1930→                />
+  1931→              </div>
+  1932→            </div>
+  1933→
+  1934→            <div className="grid gap-3 sm:grid-cols-2">
+  1935→              <label
+  1936→                htmlFor="sw-join"
+  1937→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1938→              >
+  1939→                <span className="min-w-0">
+  1940→                  <span className="block text-sm font-medium text-foreground">Allow join requests</span>
+  1941→                  <span className="block text-xs text-muted-foreground">
+  1942→                    Students can ask to join your team.
+  1943→                  </span>
+  1944→                </span>
+  1945→                <Switch
+  1946→                  id="sw-join"
+  1947→                  checked={form.allowJoinRequests}
+  1948→                  onCheckedChange={(v) => setField("allowJoinRequests", v)}
+  1949→                />
+  1950→              </label>
+  1951→              <label
+  1952→                htmlFor="sw-teammates"
+  1953→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1954→              >
+  1955→                <span className="min-w-0">
+  1956→                  <span className="block text-sm font-medium text-foreground">Looking for teammates</span>
+  1957→                  <span className="block text-xs text-muted-foreground">
+  1958→                    Shows an “open to teammates” badge.
+  1959→                  </span>
+  1960→                </span>
+  1961→                <Switch
+  1962→                  id="sw-teammates"
+  1963→                  checked={form.lookingForTeammates}
+  1964→                  onCheckedChange={(v) => setField("lookingForTeammates", v)}
+  1965→                />
+  1966→              </label>
+  1967→            </div>
+  1968→          </div>
+  1969→        ) : null}
+  1970→
+  1971→        {/* ---------- Step 5: Technologies ---------- */}
+  1972→        {step === 5 ? (
+  1973→          <div>
+  1974→            {techs === null ? (
+  1975→              <div className="flex flex-wrap gap-2" aria-hidden>
+  1976→                {Array.from({ length: 14 }).map((_, i) => (
+  1977→                  <div key={i} className="h-8 w-24 animate-pulse rounded-full bg-surface-muted" />
+  1978→                ))}
+  1979→              </div>
+  1980→            ) : (
+  1981→              <div className="space-y-6">
+  1982→                {techGroups.length === 0 ? (
+  1983→                  <p className="text-sm text-muted-foreground">
+  1984→                    No preset technologies right now — add the tools your team used below.
+  1985→                  </p>
+  1986→                ) : (
+  1987→                  techGroups.map((g) => (
+  1988→                    <div key={g.category}>
+  1989→                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1990→                        {g.category}
+  1991→                      </p>
+  1992→                      <div className="mt-2.5 flex flex-wrap gap-2">
+  1993→                        {g.items.map((t) => (
+  1994→                          <TechChip
+  1995→                            key={t.id}
+  1996→                            tech={t}
+  1997→                            on={form.technologyIds.includes(t.id)}
+  1998→                            onToggle={() => toggleTech(t.id)}
+  1999→                          />
+  2000→                        ))}
+
+[showing lines 1-2000 of 2591; use offset=2001 with limit to continue reading]

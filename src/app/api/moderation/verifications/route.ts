@@ -3,11 +3,12 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/auth";
 import { notify } from "../../_utils/notify";
+import { isProjectProfessor } from "../../_utils/project-access";
 import type { VerificationDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — verification queue (staff only) ----------
+// ---------- GET - verification queue (staff only) ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,13 +22,17 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       include: {
         requester: { select: { id: true, username: true, displayName: true } },
-        project: { select: { slug: true, title: true } },
+        project: { select: { id: true, slug: true, title: true, ownerId: true, classId: true, supervisor: true } },
       },
     });
 
+    // Professors only see requests for their own projects (section or named supervisor)
+    const visible =
+      viewer.role === "PROFESSOR" ? rows.filter((r) => isProjectProfessor(viewer, r.project)) : rows;
+
     // PENDING first (newest first within each group)
-    const pending = rows.filter((r) => r.status === "PENDING");
-    const rest = rows.filter((r) => r.status !== "PENDING");
+    const pending = visible.filter((r) => r.status === "PENDING");
+    const rest = visible.filter((r) => r.status !== "PENDING");
 
     const verifications: VerificationDTO[] = [...pending, ...rest].map((v) => ({
       id: v.id,
@@ -35,7 +40,7 @@ export async function GET(req: NextRequest) {
       status: v.status,
       createdAt: v.createdAt.toISOString(),
       requester: v.requester,
-      project: v.project,
+      project: { slug: v.project.slug, title: v.project.title },
     }));
 
     return NextResponse.json({ verifications });
@@ -45,7 +50,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---------- PATCH { verificationId, decision } — approve / reject ----------
+// ---------- PATCH { verificationId, decision } - approve / reject ----------
 
 const patchSchema = z.object({
   verificationId: z.string().min(1),
@@ -71,10 +76,18 @@ export async function PATCH(req: NextRequest) {
 
     const verification = await db.verification.findUnique({
       where: { id: verificationId },
-      include: { project: { select: { id: true, slug: true, title: true } } },
+      include: { project: { select: { id: true, slug: true, title: true, ownerId: true, classId: true, supervisor: true } } },
     });
     if (!verification) {
       return NextResponse.json({ error: "Verification not found" }, { status: 404 });
+    }
+
+    // Professors may only decide verifications for their own projects (section or named supervisor).
+    if (viewer.role === "PROFESSOR" && !isProjectProfessor(viewer, verification.project)) {
+      return NextResponse.json({ error: "Only this project's professor can verify it" }, { status: 403 });
+    }
+    if (verification.status !== "PENDING") {
+      return NextResponse.json({ error: "This request has already been decided" }, { status: 409 });
     }
 
     await db.verification.update({

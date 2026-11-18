@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { getSessionUser, isStaff } from "@/lib/auth";
+import { canManageProject, isProjectProfessor } from "../../_utils/project-access";
+import { getSessionUser, isStaff, toSafeUser } from "@/lib/auth";
 import { CATEGORIES, SEMESTERS } from "@/lib/config";
+import { normalizeSupervisorName, professorSupervisorMap } from "../../_utils/serialize";
 import type { ProjectDetail, ViewerDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 const detailInclude = {
-  department: { select: { id: true, name: true, code: true, tagline: true, accent: true } },
+  department: {
+    select: { id: true, name: true, code: true, tagline: true, website: true, capstoneLabel: true, accent: true },
+  },
   members: {
     select: {
       id: true,
@@ -58,6 +62,7 @@ function toDetail(p: DetailRow, likeCount = 0): ProjectDetail {
     semester: p.semester,
     program: p.program,
     supervisor: p.supervisor,
+    classId: p.classId,
     tags: p.tags ? p.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
     demoUrl: p.demoUrl,
     repoUrl: p.repoUrl,
@@ -90,12 +95,13 @@ function toDetail(p: DetailRow, likeCount = 0): ProjectDetail {
       user: c.user,
     })),
     likeCount,
+    supervisorUsername: null, // resolved by the GET handler
   };
 }
 
 async function buildViewer(
   req: NextRequest,
-  project: { id: string; ownerId: string | null; verified: boolean; allowJoinRequests: boolean }
+  project: { id: string; ownerId: string | null; verified: boolean; allowJoinRequests: boolean; classId: string | null; supervisor: string | null }
 ): Promise<ViewerDTO> {
   const viewer = await getSessionUser(req);
   if (!viewer) {
@@ -108,6 +114,7 @@ async function buildViewer(
       liked: false,
       joinRequestStatus: null,
       canVerify: false,
+      pendingVerification: null,
     };
   }
   const [member, bookmark, follow, like, joinReq] = await Promise.all([
@@ -128,30 +135,32 @@ async function buildViewer(
     }),
   ]);
 
+  const canVerify =
+    isStaff(viewer.role) &&
+    !project.verified &&
+    (viewer.role !== "PROFESSOR" || isProjectProfessor(viewer, project));
+  const pending = canVerify
+    ? await db.verification.findFirst({
+        where: { projectId: project.id, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        include: { requester: { select: { displayName: true } } },
+      })
+    : null;
+
   return {
-    user: {
-      id: viewer.id,
-      username: viewer.username,
-      displayName: viewer.displayName,
-      email: viewer.email,
-      role: viewer.role,
-      bio: viewer.bio,
-      avatarUrl: viewer.avatarUrl,
-      program: viewer.program,
-      skills: viewer.skills ? viewer.skills.split(",").map((s) => s.trim()).filter(Boolean) : [],
-      website: viewer.website,
-      github: viewer.github,
-      lookingForTeammates: viewer.lookingForTeammates,
-      department: viewer.department,
-      createdAt: viewer.createdAt.toISOString(),
-    },
-    isOwner: project.ownerId === viewer.id || isStaff(viewer.role),
+    user: toSafeUser(viewer),
+    // owner tools: leader, the project's own professor, admin/moderator
+    isOwner: await canManageProject(viewer, project),
     isMember: !!member,
     bookmarked: !!bookmark,
     following: !!follow,
     liked: !!like,
     joinRequestStatus: (joinReq?.status as ViewerDTO["joinRequestStatus"]) ?? null,
-    canVerify: isStaff(viewer.role) && !project.verified,
+    // Professors may verify only projects inside their own sections.
+    canVerify,
+    pendingVerification: pending
+      ? { id: pending.id, requester: pending.requester.displayName, createdAt: pending.createdAt.toISOString() }
+      : null,
   };
 }
 
@@ -167,6 +176,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     });
     const viewer = await buildViewer(req, p);
 
+    // Link the free-text supervisor to the matching PROFESSOR account so the
+    // detail page can offer a click-through to the faculty profile.
+    const detail = toDetail(p, likeCount);
+    if (p.supervisor) {
+      const prof = (await professorSupervisorMap()).get(normalizeSupervisorName(p.supervisor));
+      if (prof) detail.supervisorUsername = prof.username;
+    }
+
     // drafts are only visible to the owner / staff
     if (p.status !== "PUBLISHED" && !viewer.isOwner) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -174,7 +191,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
 
     db.project.update({ where: { id: p.id }, data: { views: { increment: 1 } } }).catch(() => {});
 
-    return NextResponse.json({ project: toDetail(p, likeCount), viewer });
+    return NextResponse.json({ project: detail, viewer });
   } catch (e) {
     console.error("GET /api/projects/[slug]", e);
     return NextResponse.json({ error: "Failed to load project" }, { status: 500 });
@@ -188,7 +205,7 @@ const isImageTarget = (v: string) => /^(https?:\/\/|\/(uploads|covers|gallery)\/
 const imageTargetSchema = z
   .string()
   .trim()
-  .min(1, "Add a cover image — upload one or paste a link")
+  .min(1, "Add a cover image - upload one or paste a link")
   .max(300)
   .refine(isImageTarget, "Cover must be an uploaded file, an in-app image path, or an https link");
 
@@ -231,7 +248,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    const owner = project.ownerId === viewer.id || isStaff(viewer.role);
+    const owner = await canManageProject(viewer, project);
     if (!owner) return NextResponse.json({ error: "Only the project owner can edit it" }, { status: 403 });
 
     const parsed = patchSchema.safeParse(await req.json());
@@ -306,7 +323,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json({ error: "Only the project owner can delete it" }, { status: 403 });
     }
 

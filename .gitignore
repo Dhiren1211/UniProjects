@@ -42,6 +42,7 @@ yarn-error.log*
 next-env.d.ts
 local-*
 .claude
+.z-ai-config
 *.log
 dev.log
 dev.out.log
@@ -51,9 +52,8 @@ prompt
 server.log
 # Skills directory
 /skills/
+# design-taste skill working files
+.taste-skill/
 
-.env
-.env.*
-!.env.example
-node_modules/
-.next/
+# local AI agent skills
+/.agents/

@@ -27,7 +27,7 @@ function toAdminProjectRow(p: AdminProjectRowModel, likeCount: number): AdminPro
   };
 }
 
-// ---------- GET ?query=&status=&dept= — every project, any status ----------
+// ---------- GET ?query=&status=&dept= - every project, any status ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---------- PATCH { id, featured?, status? } — feature / publish toggle ----------
+// ---------- PATCH { id, featured?, status? } - feature / publish toggle ----------
 
 const patchSchema = z
   .object({
@@ -121,7 +121,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// ---------- DELETE ?id= — remove a project (children cascade) ----------
+// ---------- DELETE ?id= - remove a project (children cascade) ----------
 
 export async function DELETE(req: NextRequest) {
   try {

@@ -8,7 +8,7 @@ import type { CommentDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — project discussion, newest first ----------
+// ---------- GET - project discussion, newest first ----------
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
   }
 }
 
-// ---------- POST { body } — add a comment ----------
+// ---------- POST { body } - add a comment ----------
 
 const postSchema = z.object({
   body: z.string().trim().min(1, "Write something first").max(2000, "Comment is too long"),

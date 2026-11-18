@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSessionUser, isStaff } from "@/lib/auth";
+import { canManageProject } from "../../../_utils/project-access";
+import { getSessionUser } from "@/lib/auth";
 import { notify } from "../../../_utils/notify";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { username, role } — add a member (owner / staff) ----------
+// ---------- POST { username, role } - add a member (owner / staff) ----------
 
 const addSchema = z.object({
   username: z.string().trim().min(1, "Username is required"),
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can add members" },
         { status: 403 }
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 }
 
-// ---------- PATCH { memberId, role } — change role (owner / staff) ----------
+// ---------- PATCH { memberId, role } - change role (owner / staff) ----------
 
 const patchSchema = z.object({
   memberId: z.string().min(1),
@@ -77,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can manage members" },
         { status: 403 }
@@ -157,7 +158,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
       );
     }
 
-    const canManage = project.ownerId === viewer.id || isStaff(viewer.role);
+    const canManage = await canManageProject(viewer, project);
     if (member.userId !== viewer.id && !canManage) {
       return NextResponse.json(
         { error: "You can only remove yourself from this project" },

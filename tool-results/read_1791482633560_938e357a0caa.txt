@@ -1,0 +1,618 @@
+  1019→            </div>
+  1020→          </div>
+  1021→        ) : null}
+  1022→
+  1023→        {/* ---------- Step 3: Team ---------- */}
+  1024→        {step === 3 ? (
+  1025→          <div className="space-y-6">
+  1026→            <div className="flex items-center gap-3 rounded-2xl border border-primary-100 bg-primary-50/60 px-4 py-3">
+  1027→              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+  1028→                <Crown className="size-4" aria-hidden />
+  1029→              </span>
+  1030→              <div className="min-w-0">
+  1031→                <p className="truncate text-sm font-semibold text-foreground">{user.displayName}</p>
+  1032→                <p className="truncate text-xs text-muted-foreground">
+  1033→                  @{user.username} · You — project owner
+  1034→                </p>
+  1035→              </div>
+  1036→            </div>
+  1037→
+  1038→            <div>
+  1039→              <Label>Teammates</Label>
+  1040→              <p className="mt-1 text-xs text-muted-foreground">
+  1041→                {editing
+  1042→                  ? "Changes apply immediately."
+  1043→                  : "They'll be tagged on the project when you publish."}
+  1044→              </p>
+  1045→
+  1046→              <div className="mt-3 space-y-2">
+  1047→                {/* create mode: local draft rows */}
+  1048→                {!editing
+  1049→                  ? draftMembers.map((m) => (
+  1050→                      <div
+  1051→                        key={m.username}
+  1052→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1053→                      >
+  1054→                        <MemberAvatar name={m.name} ring={false} />
+  1055→                        <div className="min-w-0 flex-1">
+  1056→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1057→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1058→                        </div>
+  1059→                        <Select
+  1060→                          value={m.role}
+  1061→                          onValueChange={(role) =>
+  1062→                            setDraftMembers((list) =>
+  1063→                              list.map((x) => (x.username === m.username ? { ...x, role } : x))
+  1064→                            )
+  1065→                          }
+  1066→                        >
+  1067→                          <SelectTrigger
+  1068→                            aria-label={`Role for ${m.name}`}
+  1069→                            className="h-8 w-[100px] rounded-lg text-xs"
+  1070→                          >
+  1071→                            <SelectValue />
+  1072→                          </SelectTrigger>
+  1073→                          <SelectContent>
+  1074→                            <SelectItem value="LEAD">Lead</SelectItem>
+  1075→                            <SelectItem value="MEMBER">Member</SelectItem>
+  1076→                          </SelectContent>
+  1077→                        </Select>
+  1078→                        <Button
+  1079→                          variant="ghost"
+  1080→                          size="icon"
+  1081→                          aria-label={`Remove ${m.name}`}
+  1082→                          className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1083→                          onClick={() =>
+  1084→                            setDraftMembers((list) => list.filter((x) => x.username !== m.username))
+  1085→                          }
+  1086→                        >
+  1087→                          <Trash2 className="size-4" aria-hidden />
+  1088→                        </Button>
+  1089→                      </div>
+  1090→                    ))
+  1091→                  : null}
+  1092→
+  1093→                {/* edit mode: live member rows */}
+  1094→                {editing && editProject
+  1095→                  ? editProject.members.map((m) => (
+  1096→                      <div
+  1097→                        key={m.id}
+  1098→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1099→                      >
+  1100→                        <MemberAvatar name={m.name} ring={false} />
+  1101→                        <div className="min-w-0 flex-1">
+  1102→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1103→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1104→                        </div>
+  1105→                        {m.role === "OWNER" ? (
+  1106→                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+  1107→                            <Crown className="size-3" aria-hidden />
+  1108→                            Owner
+  1109→                          </span>
+  1110→                        ) : (
+  1111→                          <>
+  1112→                            <Select
+  1113→                              value={m.role}
+  1114→                              disabled={memberBusy === m.id}
+  1115→                              onValueChange={(role) => changeMemberRole(m, role)}
+  1116→                            >
+  1117→                              <SelectTrigger
+  1118→                                aria-label={`Role for ${m.name}`}
+  1119→                                className="h-8 w-[100px] rounded-lg text-xs"
+  1120→                              >
+  1121→                                <SelectValue />
+  1122→                              </SelectTrigger>
+  1123→                              <SelectContent>
+  1124→                                <SelectItem value="LEAD">Lead</SelectItem>
+  1125→                                <SelectItem value="MEMBER">Member</SelectItem>
+  1126→                              </SelectContent>
+  1127→                            </Select>
+  1128→                            <Button
+  1129→                              variant="ghost"
+  1130→                              size="icon"
+  1131→                              aria-label={`Remove ${m.name}`}
+  1132→                              disabled={memberBusy === m.id}
+  1133→                              className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1134→                              onClick={() => removeMemberNow(m)}
+  1135→                            >
+  1136→                              <Trash2 className="size-4" aria-hidden />
+  1137→                            </Button>
+  1138→                          </>
+  1139→                        )}
+  1140→                      </div>
+  1141→                    ))
+  1142→                  : null}
+  1143→
+  1144→                {(!editing && draftMembers.length === 0) || (editing && editProject && editProject.members.length <= 1) ? (
+  1145→                  <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1146→                    Flying solo for now — search below to add teammates.
+  1147→                  </p>
+  1148→                ) : null}
+  1149→              </div>
+  1150→
+  1151→              <div className="mt-4">
+  1152→                <UserSearchAdd
+  1153→                  exclude={
+  1154→                    editing
+  1155→                      ? new Set([user.username.toLowerCase(), ...(editProject?.members.map((m) => m.username.toLowerCase()) ?? [])])
+  1156→                      : new Set([user.username.toLowerCase(), ...draftMembers.map((m) => m.username.toLowerCase())])
+  1157→                  }
+  1158→                  onPick={(u, role) => {
+  1159→                    if (editing) {
+  1160→                      addMemberNow(u, role);
+  1161→                      return;
+  1162→                    }
+  1163→                    if (draftMembers.some((m) => m.username === u.username)) return;
+  1164→                    setDraftMembers((list) => [
+  1165→                      ...list,
+  1166→                      { username: u.username, name: u.displayName, role },
+  1167→                    ]);
+  1168→                    toast.success(`${u.displayName} added to the team`);
+  1169→                  }}
+  1170→                />
+  1171→              </div>
+  1172→            </div>
+  1173→
+  1174→            <div className="grid gap-3 sm:grid-cols-2">
+  1175→              <label
+  1176→                htmlFor="sw-join"
+  1177→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1178→              >
+  1179→                <span className="min-w-0">
+  1180→                  <span className="block text-sm font-medium text-foreground">Allow join requests</span>
+  1181→                  <span className="block text-xs text-muted-foreground">
+  1182→                    Students can ask to join your team.
+  1183→                  </span>
+  1184→                </span>
+  1185→                <Switch
+  1186→                  id="sw-join"
+  1187→                  checked={form.allowJoinRequests}
+  1188→                  onCheckedChange={(v) => setField("allowJoinRequests", v)}
+  1189→                />
+  1190→              </label>
+  1191→              <label
+  1192→                htmlFor="sw-teammates"
+  1193→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1194→              >
+  1195→                <span className="min-w-0">
+  1196→                  <span className="block text-sm font-medium text-foreground">Looking for teammates</span>
+  1197→                  <span className="block text-xs text-muted-foreground">
+  1198→                    Shows an “open to teammates” badge.
+  1199→                  </span>
+  1200→                </span>
+  1201→                <Switch
+  1202→                  id="sw-teammates"
+  1203→                  checked={form.lookingForTeammates}
+  1204→                  onCheckedChange={(v) => setField("lookingForTeammates", v)}
+  1205→                />
+  1206→              </label>
+  1207→            </div>
+  1208→          </div>
+  1209→        ) : null}
+  1210→
+  1211→        {/* ---------- Step 4: Technologies ---------- */}
+  1212→        {step === 4 ? (
+  1213→          <div>
+  1214→            {techs === null ? (
+  1215→              <div className="flex flex-wrap gap-2" aria-hidden>
+  1216→                {Array.from({ length: 14 }).map((_, i) => (
+  1217→                  <div key={i} className="h-8 w-24 animate-pulse rounded-full bg-surface-muted" />
+  1218→                ))}
+  1219→              </div>
+  1220→            ) : techGroups.length === 0 ? (
+  1221→              <p className="text-sm text-muted-foreground">
+  1222→                No technologies available right now — you can continue without them.
+  1223→              </p>
+  1224→            ) : (
+  1225→              <div className="space-y-6">
+  1226→                {techGroups.map((g) => (
+  1227→                  <div key={g.category}>
+  1228→                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1229→                      {g.category}
+  1230→                    </p>
+  1231→                    <div className="mt-2.5 flex flex-wrap gap-2">
+  1232→                      {g.items.map((t) => {
+  1233→                        const on = form.technologyIds.includes(t.id);
+  1234→                        return (
+  1235→                          <button
+  1236→                            key={t.id}
+  1237→                            type="button"
+  1238→                            aria-pressed={on}
+  1239→                            onClick={() =>
+  1240→                              setField(
+  1241→                                "technologyIds",
+  1242→                                on
+  1243→                                  ? form.technologyIds.filter((x) => x !== t.id)
+  1244→                                  : [...form.technologyIds, t.id]
+  1245→                              )
+  1246→                            }
+  1247→                            className={cn(
+  1248→                              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+  1249→                              on
+  1250→                                ? "border-primary-500 bg-primary-500 text-white shadow-sm"
+  1251→                                : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+  1252→                            )}
+  1253→                          >
+  1254→                            {on ? <Check className="mr-1 inline size-3.5" aria-hidden /> : null}
+  1255→                            {t.name}
+  1256→                          </button>
+  1257→                        );
+  1258→                      })}
+  1259→                    </div>
+  1260→                  </div>
+  1261→                ))}
+  1262→                <p className="text-xs text-muted-foreground" aria-live="polite">
+  1263→                  {form.technologyIds.length} selected — pick the tools your team actually used.
+  1264→                </p>
+  1265→              </div>
+  1266→            )}
+  1267→          </div>
+  1268→        ) : null}
+  1269→
+  1270→        {/* ---------- Step 5: Resources & timeline ---------- */}
+  1271→        {step === 5 ? (
+  1272→          <div className="space-y-8">
+  1273→            {/* Resources */}
+  1274→            <div>
+  1275→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1276→                <div>
+  1277→                  <p className="font-semibold text-foreground">Resources</p>
+  1278→                  <p className="text-xs text-muted-foreground">
+  1279→                    {editing
+  1280→                      ? "Added and removed immediately."
+  1281→                      : "Demo, repo, docs, slides — up to 6 links."}
+  1282→                  </p>
+  1283→                </div>
+  1284→                {!editing ? (
+  1285→                  <Button
+  1286→                    variant="outline"
+  1287→                    size="sm"
+  1288→                    className="h-9 rounded-lg font-semibold"
+  1289→                    disabled={draftResources.length >= 6}
+  1290→                    onClick={() =>
+  1291→                      setDraftResources((list) => [
+  1292→                        ...list,
+  1293→                        { key: newRowKey(), type: "DEMO", label: "", url: "" },
+  1294→                      ])
+  1295→                    }
+  1296→                  >
+  1297→                    <Plus className="size-4" aria-hidden />
+  1298→                    Add resource
+  1299→                  </Button>
+  1300→                ) : null}
+  1301→              </div>
+  1302→
+  1303→              {/* create mode: local rows */}
+  1304→              {!editing ? (
+  1305→                <div className="mt-3 space-y-2.5">
+  1306→                  {draftResources.map((r, i) => (
+  1307→                    <div
+  1308→                      key={r.key}
+  1309→                      className="grid gap-2 rounded-xl border border-up-border bg-white p-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-center"
+  1310→                    >
+  1311→                      <Select value={r.type} onValueChange={(v) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, type: v } : x)))}>
+  1312→                        <SelectTrigger aria-label="Resource type" className="h-9 w-full rounded-lg text-xs">
+  1313→                          <SelectValue />
+  1314→                        </SelectTrigger>
+  1315→                        <SelectContent>
+  1316→                          {RESOURCE_TYPES.map((t) => (
+  1317→                            <SelectItem key={t.value} value={t.value}>
+  1318→                              {t.label}
+  1319→                            </SelectItem>
+  1320→                          ))}
+  1321→                        </SelectContent>
+  1322→                      </Select>
+  1323→                      <Input
+  1324→                        aria-label={`Resource ${i + 1} label`}
+  1325→                        placeholder="Label — e.g. Figma prototype"
+  1326→                        value={r.label}
+  1327→                        onChange={(e) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, label: e.target.value } : x)))}
+  1328→                        className="h-9 rounded-lg"
+  1329→                      />
+  1330→                      <Input
+  1331→                        aria-label={`Resource ${i + 1} URL`}
+  1332→                        placeholder="https://…"
+  1333→                        inputMode="url"
+  1334→                        value={r.url}
+  1335→                        onChange={(e) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, url: e.target.value } : x)))}
+  1336→                        className="h-9 rounded-lg"
+  1337→                      />
+  1338→                      <Button
+  1339→                        variant="ghost"
+  1340→                        size="icon"
+  1341→                        aria-label={`Remove resource ${i + 1}`}
+  1342→                        className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1343→                        onClick={() => setDraftResources((list) => list.filter((x) => x.key !== r.key))}
+  1344→                      >
+  1345→                        <Trash2 className="size-4" aria-hidden />
+  1346→                      </Button>
+  1347→                    </div>
+  1348→                  ))}
+  1349→                  {draftResources.length === 0 ? (
+  1350→                    <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1351→                      No resources yet — add demo links, repositories, documents or slides.
+  1352→                    </p>
+  1353→                  ) : null}
+  1354→                </div>
+  1355→              ) : (
+  1356→                <div className="mt-3 space-y-4">
+  1357→                  <ul className="space-y-2">
+  1358→                    {(editProject?.resources ?? []).map((r) => (
+  1359→                      <li
+  1360→                        key={r.id}
+  1361→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1362→                      >
+  1363→                        <span className="min-w-0 flex-1">
+  1364→                          <span className="block truncate text-sm font-medium text-foreground">
+  1365→                            {r.label}
+  1366→                          </span>
+  1367→                          <span className="block truncate text-xs text-muted-foreground">
+  1368→                            {RESOURCE_TYPES.find((t) => t.value === r.type)?.label ?? r.type} · {r.url}
+  1369→                          </span>
+  1370→                        </span>
+  1371→                        <Button
+  1372→                          variant="ghost"
+  1373→                          size="icon"
+  1374→                          aria-label={`Delete resource: ${r.label}`}
+  1375→                          className="size-9 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+  1376→                          onClick={() => deleteResourceNow(r)}
+  1377→                        >
+  1378→                          <Trash2 className="size-4" aria-hidden />
+  1379→                        </Button>
+  1380→                      </li>
+  1381→                    ))}
+  1382→                    {(editProject?.resources ?? []).length === 0 ? (
+  1383→                      <li className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1384→                        No resources yet — add the first one below.
+  1385→                      </li>
+  1386→                    ) : null}
+  1387→                  </ul>
+  1388→                  <div className="grid gap-2 rounded-xl border border-dashed border-up-border-strong bg-surface-muted/60 p-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-start">
+  1389→                    <Select value={newRes.type} onValueChange={(v) => setNewRes((s) => ({ ...s, type: v }))}>
+  1390→                      <SelectTrigger aria-label="Resource type" className="h-9 w-full rounded-lg text-xs">
+  1391→                        <SelectValue />
+  1392→                      </SelectTrigger>
+  1393→                      <SelectContent>
+  1394→                        {RESOURCE_TYPES.map((t) => (
+  1395→                          <SelectItem key={t.value} value={t.value}>
+  1396→                            {t.label}
+  1397→                          </SelectItem>
+  1398→                        ))}
+  1399→                      </SelectContent>
+  1400→                    </Select>
+  1401→                    <Input
+  1402→                      aria-label="New resource label"
+  1403→                      placeholder="Label"
+  1404→                      value={newRes.label}
+  1405→                      onChange={(e) => setNewRes((s) => ({ ...s, label: e.target.value }))}
+  1406→                      className="h-9 rounded-lg bg-white"
+  1407→                    />
+  1408→                    <Input
+  1409→                      aria-label="New resource URL"
+  1410→                      placeholder="https://…"
+  1411→                      inputMode="url"
+  1412→                      value={newRes.url}
+  1413→                      onChange={(e) => setNewRes((s) => ({ ...s, url: e.target.value }))}
+  1414→                      className="h-9 rounded-lg bg-white"
+  1415→                    />
+  1416→                    <Button
+  1417→                      size="sm"
+  1418→                      className="h-9 rounded-lg px-4 font-semibold"
+  1419→                      disabled={resBusy}
+  1420→                      onClick={addResourceNow}
+  1421→                    >
+  1422→                      {resBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1423→                      Add
+  1424→                    </Button>
+  1425→                    {resErr ? (
+  1426→                      <p className="text-xs font-medium text-danger sm:col-span-4">{resErr}</p>
+  1427→                    ) : null}
+  1428→                  </div>
+  1429→                </div>
+  1430→              )}
+  1431→            </div>
+  1432→
+  1433→            {/* Timeline */}
+  1434→            <div>
+  1435→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1436→                <div>
+  1437→                  <p className="font-semibold text-foreground">Timeline</p>
+  1438→                  <p className="text-xs text-muted-foreground">
+  1439→                    {editing
+  1440→                      ? "Key moments, shown as a timeline on the project page."
+  1441→                      : "Optional — up to 3 key moments (kickoff, demo day, …)."}
+  1442→                  </p>
+  1443→                </div>
+  1444→                {!editing ? (
+  1445→                  <Button
+  1446→                    variant="outline"
+  1447→                    size="sm"
+  1448→                    className="h-9 rounded-lg font-semibold"
+  1449→                    disabled={draftTimeline.length >= 3}
+  1450→                    onClick={() =>
+  1451→                      setDraftTimeline((list) => [...list, { key: newRowKey(), title: "", date: "", note: "" }])
+  1452→                    }
+  1453→                  >
+  1454→                    <Plus className="size-4" aria-hidden />
+  1455→                    Add milestone
+  1456→                  </Button>
+  1457→                ) : null}
+  1458→              </div>
+  1459→
+  1460→              {!editing ? (
+  1461→                <div className="mt-3 space-y-2.5">
+  1462→                  {draftTimeline.map((t, i) => (
+  1463→                    <div
+  1464→                      key={t.key}
+  1465→                      className="grid gap-2 rounded-xl border border-up-border bg-white p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-center"
+  1466→                    >
+  1467→                      <Input
+  1468→                        aria-label={`Milestone ${i + 1} title`}
+  1469→                        placeholder="Title — e.g. Kickoff"
+  1470→                        value={t.title}
+  1471→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, title: e.target.value } : x)))}
+  1472→                        className="h-9 rounded-lg"
+  1473→                      />
+  1474→                      <Input
+  1475→                        aria-label={`Milestone ${i + 1} date`}
+  1476→                        type="date"
+  1477→                        value={t.date}
+  1478→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, date: e.target.value } : x)))}
+  1479→                        className="h-9 rounded-lg"
+  1480→                      />
+  1481→                      <Input
+  1482→                        aria-label={`Milestone ${i + 1} note`}
+  1483→                        placeholder="Note (optional)"
+  1484→                        value={t.note}
+  1485→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, note: e.target.value } : x)))}
+  1486→                        className="h-9 rounded-lg"
+  1487→                      />
+  1488→                      <Button
+  1489→                        variant="ghost"
+  1490→                        size="icon"
+  1491→                        aria-label={`Remove milestone ${i + 1}`}
+  1492→                        className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1493→                        onClick={() => setDraftTimeline((list) => list.filter((x) => x.key !== t.key))}
+  1494→                      >
+  1495→                        <Trash2 className="size-4" aria-hidden />
+  1496→                      </Button>
+  1497→                    </div>
+  1498→                  ))}
+  1499→                  {draftTimeline.length === 0 ? (
+  1500→                    <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1501→                      No milestones yet — optional, but they make the timeline pop.
+  1502→                    </p>
+  1503→                  ) : null}
+  1504→                </div>
+  1505→              ) : (
+  1506→                <div className="mt-3 space-y-4">
+  1507→                  <ol className="relative ml-1 space-y-5 border-l-2 border-up-border pl-6">
+  1508→                    {(editProject?.timeline ?? []).map((t) => (
+  1509→                      <li key={t.id} className="relative">
+  1510→                        <span
+  1511→                          aria-hidden
+  1512→                          className="absolute -left-[31px] top-1 size-2.5 rounded-full bg-primary-500 ring-4 ring-white"
+  1513→                        />
+  1514→                        <div className="flex items-start justify-between gap-3">
+  1515→                          <div className="min-w-0">
+  1516→                            <p className="text-sm font-semibold text-foreground">{t.title}</p>
+  1517→                            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t.date.slice(0, 10)}</p>
+  1518→                            {t.note ? (
+  1519→                              <p className="mt-1 text-sm text-muted-foreground">{t.note}</p>
+  1520→                            ) : null}
+  1521→                          </div>
+  1522→                          <Button
+  1523→                            variant="ghost"
+  1524→                            size="icon"
+  1525→                            aria-label={`Delete milestone: ${t.title}`}
+  1526→                            className="size-8 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+  1527→                            onClick={() => deleteMilestoneNow(t)}
+  1528→                          >
+  1529→                            <Trash2 className="size-3.5" aria-hidden />
+  1530→                          </Button>
+  1531→                        </div>
+  1532→                      </li>
+  1533→                    ))}
+  1534→                    {(editProject?.timeline ?? []).length === 0 ? (
+  1535→                      <li className="text-sm text-muted-foreground">No milestones yet.</li>
+  1536→                    ) : null}
+  1537→                  </ol>
+  1538→                  <div className="grid gap-2 rounded-xl border border-dashed border-up-border-strong bg-surface-muted/60 p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-start">
+  1539→                    <Input
+  1540→                      aria-label="New milestone title"
+  1541→                      placeholder="Title"
+  1542→                      value={newMile.title}
+  1543→                      onChange={(e) => setNewMile((s) => ({ ...s, title: e.target.value }))}
+  1544→                      className="h-9 rounded-lg bg-white"
+  1545→                    />
+  1546→                    <Input
+  1547→                      aria-label="New milestone date"
+  1548→                      type="date"
+  1549→                      value={newMile.date}
+  1550→                      onChange={(e) => setNewMile((s) => ({ ...s, date: e.target.value }))}
+  1551→                      className="h-9 rounded-lg bg-white"
+  1552→                    />
+  1553→                    <Input
+  1554→                      aria-label="New milestone note"
+  1555→                      placeholder="Note (optional)"
+  1556→                      value={newMile.note}
+  1557→                      onChange={(e) => setNewMile((s) => ({ ...s, note: e.target.value }))}
+  1558→                      className="h-9 rounded-lg bg-white"
+  1559→                    />
+  1560→                    <Button
+  1561→                      size="sm"
+  1562→                      className="h-9 rounded-lg px-4 font-semibold"
+  1563→                      disabled={mileBusy}
+  1564→                      onClick={addMilestoneNow}
+  1565→                    >
+  1566→                      {mileBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1567→                      Add
+  1568→                    </Button>
+  1569→                    {mileErr ? (
+  1570→                      <p className="text-xs font-medium text-danger sm:col-span-4">{mileErr}</p>
+  1571→                    ) : null}
+  1572→                  </div>
+  1573→                </div>
+  1574→              )}
+  1575→            </div>
+  1576→          </div>
+  1577→        ) : null}
+  1578→      </section>
+  1579→
+  1580→      {/* Sticky footer */}
+  1581→      <div className="sticky bottom-0 z-20 -mx-5 mt-10 border-t border-up-border bg-white/95 px-5 py-4 backdrop-blur md:-mx-8 md:px-8">
+  1582→        <div className="flex items-center justify-between gap-3">
+  1583→          <Button
+  1584→            variant="ghost"
+  1585→            onClick={goBack}
+  1586→            className="h-10 rounded-xl font-semibold text-muted-foreground hover:text-foreground"
+  1587→          >
+  1588→            <ArrowLeft className="size-4" aria-hidden />
+  1589→            Back
+  1590→          </Button>
+  1591→
+  1592→          <div className="hidden items-center gap-1.5 sm:flex" aria-hidden>
+  1593→            {STEPS.map((s) => (
+  1594→              <span
+  1595→                key={s.n}
+  1596→                className={cn(
+  1597→                  "size-1.5 rounded-full transition-all duration-200",
+  1598→                  s.n === step
+  1599→                    ? "w-5 bg-primary-500"
+  1600→                    : s.n < step
+  1601→                      ? "bg-primary-500/50"
+  1602→                      : "bg-up-border-strong"
+  1603→                )}
+  1604→              />
+  1605→            ))}
+  1606→          </div>
+  1607→
+  1608→          <div className="flex items-center gap-2">
+  1609→            {!editing ? (
+  1610→              <Button
+  1611→                variant="outline"
+  1612→                onClick={saveDraft}
+  1613→                disabled={saving !== ""}
+  1614→                className="h-10 rounded-xl font-semibold"
+  1615→              >
+  1616→                {saving === "draft" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  1617→                Save draft
+  1618→              </Button>
+  1619→            ) : null}
+  1620→            {step < 5 ? (
+  1621→              <Button onClick={goNext} className="h-10 rounded-xl font-semibold">
+  1622→                Continue
+  1623→              </Button>
+  1624→            ) : (
+  1625→              <Button onClick={submitFinal} disabled={saving !== ""} className="h-10 rounded-xl font-semibold">
+  1626→                {saving === "final" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  1627→                {editing ? (publishNow ? "Publish project" : "Save changes") : "Publish project"}
+  1628→              </Button>
+  1629→            )}
+  1630→          </div>
+  1631→        </div>
+  1632→      </div>
+  1633→    </div>
+  1634→  );
+  1635→}
+  1636→

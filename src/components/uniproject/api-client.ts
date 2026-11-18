@@ -1,31 +1,33 @@
 "use client";
 
 // ============================================================
-// UniProjects — typed fetch client. THE contract used by all
+// UniProjects - typed fetch client. THE contract used by all
 // views. Backend routes must match these paths + payloads.
 // ============================================================
 
 import type {
+  AccountRequestDTO,
   AdminDepartmentDTO,
-  AdminEventDTO,
   AdminOverviewDTO,
   AdminProjectRow,
   AdminUserRow,
+  AnnouncementDTO,
+  ApprovalResultDTO,
   CommentDTO,
   DepartmentDTO,
-  EventDTO,
+  EmailLogDTO,
   JoinRequestDTO,
   NotificationDTO,
-  PostDTO,
+  PasswordResetRow,
   ProfileResponse,
   ProjectDetailResponse,
   ProjectListItem,
   ReportDTO,
   SafeUserDTO,
   SearchResults,
+  SiteSettings,
   StatsDTO,
   TechnologyDTO,
-  UserDirectoryEntry,
   VerificationDTO,
 } from "@/lib/types";
 
@@ -35,14 +37,15 @@ export type View =
   | { name: "home" }
   | { name: "projects"; q?: string; dept?: string; category?: string; year?: number }
   | { name: "project"; slug: string }
-  | { name: "community" }
-  | { name: "students" }
   | { name: "profile"; username: string }
   | { name: "settings" }
   | { name: "notifications" }
-  | { name: "moderation" }
-  | { name: "admin" }
-  | { name: "create"; editSlug?: string };
+  | { name: "admin"; tab?: string }
+  | { name: "create"; editSlug?: string }
+  | { name: "announcements" }
+  | { name: "guidelines" }
+  | { name: "dashboard" }
+  | { name: "account-request" };
 
 export type Navigate = (v: View) => void;
 
@@ -78,34 +81,94 @@ export async function login(payload: { login: string; password: string }): Promi
   return data.user;
 }
 
-export async function register(payload: {
-  username: string;
-  displayName: string;
-  email: string;
-  password: string;
-  verifyToken: string;
-}): Promise<SafeUserDTO> {
-  const data = await send<{ user: SafeUserDTO }>("/api/auth/register", "POST", payload);
-  return data.user;
-}
-
-/** Step 1 of the register flow: send a 6-digit code to an education email. */
-export async function requestEmailCode(payload: {
-  email: string;
-}): Promise<{ ok: boolean; devCode: string | null; expiresInMinutes: number; cooldownSeconds: number }> {
-  return send("/api/auth/email/request-code", "POST", payload);
-}
-
-/** Step 2: confirm the code — returns the single-use token register() requires. */
-export async function verifyEmailCode(payload: {
-  email: string;
-  code: string;
-}): Promise<{ ok: boolean; verifyToken: string; expiresInMinutes: number }> {
-  return send("/api/auth/email/verify-code", "POST", payload);
+/**
+ * Forgot password - asks for the university email. The response is
+ * intentionally neutral: a temporary password is only emailed when the
+ * address belongs to a registered account (every attempt lands in the
+ * admin panel's Resets log either way).
+ */
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+  return send<{ ok: boolean; message: string }>("/api/auth/forgot-password", "POST", { email });
 }
 
 export async function logout(): Promise<void> {
   await send<{ ok: boolean }>("/api/auth/logout", "POST");
+}
+
+// ---------- site settings ----------
+
+export async function fetchSettings(signal?: AbortSignal): Promise<SiteSettings> {
+  const data = await get<{ settings: SiteSettings }>("/api/settings", signal);
+  return data.settings;
+}
+
+export async function updateSiteSettings(patch: Partial<SiteSettings>): Promise<SiteSettings> {
+  const data = await send<{ settings: SiteSettings }>("/api/settings", "PUT", patch);
+  return data.settings;
+}
+
+// ---------- account requests (public intake → admin approval) ----------
+
+export type AccountRequestInput = {
+  studentId: string;
+  name: string;
+  capstone: "I" | "II" | "III";
+  year: number;
+  professor: string;
+};
+
+export async function submitAccountRequest(
+  input: AccountRequestInput
+): Promise<{ request: AccountRequestDTO; universityEmail: string; message: string }> {
+  return send("/api/account-requests", "POST", input);
+}
+
+export async function fetchAccountRequests(
+  status?: "PENDING" | "APPROVED" | "REJECTED" | "ALL",
+  signal?: AbortSignal
+): Promise<AccountRequestDTO[]> {
+  const qs = status && status !== "ALL" ? `?status=${status}` : "";
+  const data = await get<{ requests: AccountRequestDTO[] }>(`/api/account-requests${qs}`, signal);
+  return data.requests;
+}
+
+export async function decideAccountRequest(
+  id: string,
+  body: { decision: "APPROVED" | "REJECTED"; classId?: string; teamRole: "LEADER" | "MEMBER"; note?: string }
+): Promise<ApprovalResultDTO> {
+  return send(`/api/account-requests/${id}`, "PATCH", body);
+}
+
+export async function deleteAccountRequest(id: string): Promise<void> {
+  await send<{ ok: boolean }>(`/api/account-requests/${id}`, "DELETE");
+}
+
+// ---------- announcements ----------
+
+export async function fetchAnnouncements(signal?: AbortSignal): Promise<AnnouncementDTO[]> {
+  const data = await get<{ announcements: AnnouncementDTO[] }>("/api/announcements", signal);
+  return data.announcements;
+}
+
+export async function createAnnouncement(input: {
+  title: string;
+  body: string;
+  pinned?: boolean;
+}): Promise<AnnouncementDTO> {
+  const data = await send<{ announcement: AnnouncementDTO }>("/api/announcements", "POST", input);
+  return data.announcement;
+}
+
+export async function updateAnnouncement(
+  id: string,
+  patch: { title?: string; body?: string; pinned?: boolean }
+): Promise<AnnouncementDTO> {
+  const data = await send<{ announcement: AnnouncementDTO }>(`/api/announcements/${id}`, "PATCH", patch);
+  return data.announcement;
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await send<{ ok: boolean }>(`/api/announcements/${id}`, "DELETE");
 }
 
 // ---------- meta ----------
@@ -125,12 +188,7 @@ export async function fetchTechnologies(signal?: AbortSignal): Promise<Technolog
   return data.technologies;
 }
 
-export async function fetchEvents(signal?: AbortSignal): Promise<EventDTO[]> {
-  const data = await get<{ events: EventDTO[] }>("/api/events", signal);
-  return data.events;
-}
-
-/** Register a custom tool ("Other") — returns the existing one if the name is already known. */
+/** Register a custom tool ("Other") - returns the existing one if the name is already known. */
 export async function createTechnology(name: string): Promise<TechnologyDTO> {
   const data = await send<{ technology: TechnologyDTO }>("/api/technologies", "POST", { name });
   return data.technology;
@@ -138,7 +196,7 @@ export async function createTechnology(name: string): Promise<TechnologyDTO> {
 
 // ---------- uploads ----------
 
-export type UploadKind = "avatar" | "cover" | "gallery" | "resource";
+export type UploadKind = "avatar" | "cover" | "gallery" | "resource" | "hero";
 
 /**
  * Upload a file to /api/upload and resolve with its served URL.
@@ -318,7 +376,7 @@ export async function addComment(slug: string, body: string): Promise<CommentDTO
   return data.comment;
 }
 
-// ---------- verification / moderation ----------
+// ---------- verification / reports ----------
 
 export async function requestVerification(slug: string): Promise<void> {
   await send(`/api/projects/${slug}/verify`, "POST");
@@ -380,40 +438,7 @@ export async function toggleLike(payload: {
   return send<{ active: boolean }>("/api/likes", "POST", payload);
 }
 
-// ---------- posts / community ----------
-
-export async function fetchPosts(signal?: AbortSignal): Promise<PostDTO[]> {
-  const data = await get<{ posts: PostDTO[] }>("/api/posts", signal);
-  return data.posts;
-}
-
-export async function createPost(body: string): Promise<PostDTO> {
-  const data = await send<{ post: PostDTO }>("/api/posts", "POST", { body });
-  return data.post;
-}
-
-export async function deletePost(postId: string): Promise<void> {
-  await send(`/api/posts/${postId}`, "DELETE");
-}
-
-export async function addPostComment(postId: string, body: string): Promise<CommentDTO> {
-  const data = await send<{ comment: CommentDTO }>(`/api/posts/${postId}/comments`, "POST", { body });
-  return data.comment;
-}
-
 // ---------- users ----------
-
-export async function fetchStudents(
-  params: Record<string, string | undefined>,
-  signal?: AbortSignal
-): Promise<UserDirectoryEntry[]> {
-  const sp = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v) sp.set(k, v);
-  }
-  const data = await get<{ users: UserDirectoryEntry[] }>(`/api/users?${sp.toString()}`, signal);
-  return data.users;
-}
 
 export async function fetchProfile(username: string, signal?: AbortSignal): Promise<ProfileResponse> {
   return get<ProfileResponse>(`/api/users/${username}`, signal);
@@ -458,7 +483,7 @@ export async function globalSearch(q: string, signal?: AbortSignal): Promise<Sea
   return get<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal);
 }
 
-// ---------- admin panel (ADMIN role only — /api/admin/**) ----------
+// ---------- admin panel (ADMIN + MODERATOR; writes are ADMIN only) ----------
 
 export async function fetchAdminOverview(signal?: AbortSignal): Promise<AdminOverviewDTO> {
   return get<AdminOverviewDTO>("/api/admin/overview", signal);
@@ -504,33 +529,87 @@ export async function fetchAdminUsers(
   return data.users;
 }
 
-export async function updateAdminUserRole(payload: {
+/** Update a member - role / team-leader flag / class / faculty link plus full profile editing (PATCH /api/admin/users, ADMIN only). */
+export async function updateAdminUser(payload: {
   id: string;
-  role: string;
+  role?: string;
+  isTeamLeader?: boolean;
+  classId?: string;
+  /** PROFESSOR only - official university faculty profile link. */
+  universityProfileUrl?: string;
+  // ----- full "Edit member" fields -----
+  displayName?: string;
+  username?: string;
+  email?: string;
+  /** Optional password reset - omitted keeps the current password. */
+  password?: string;
+  studentId?: string;
+  program?: string;
+  /** Department code - "" clears the department. */
+  dept?: string;
+  capstone?: string;
+  cohortYear?: string | number;
+  professorName?: string;
 }): Promise<AdminUserRow> {
   const data = await send<{ user: AdminUserRow }>("/api/admin/users", "PATCH", payload);
   return data.user;
 }
 
 export type AdminUserInput = {
-  username: string;
   displayName: string;
-  email: string;
+  /** Optional when studentId is given - the server derives a<studentId>@ks.ac.kr. */
+  username?: string;
+  /** Optional when studentId is given - the server derives a<studentId>@ks.ac.kr. */
+  email?: string;
   password: string;
   role: string;
   dept?: string;
   program?: string;
+  studentId?: string;
+  classId?: string;
+  capstone?: string;
+  cohortYear?: number;
+  professorName?: string;
+  isTeamLeader: boolean;
 };
 
-/** Console-only member creation — mirrors the public register but with a chosen role/dept. */
+/** Console-only member creation - students key off their student number, staff off a username. */
 export async function createAdminUser(payload: AdminUserInput): Promise<AdminUserRow> {
   const data = await send<{ user: AdminUserRow }>("/api/admin/users", "POST", payload);
   return data.user;
 }
 
-/** Remove a member — their posts/comments/likes cascade; owned projects survive unowned. */
+/** Remove a member - their comments/likes cascade; owned projects survive unowned. */
 export async function deleteAdminUser(id: string): Promise<void> {
   await send<{ ok: boolean }>(`/api/admin/users?id=${encodeURIComponent(id)}`, "DELETE");
+}
+
+/** Admin audit of every public "forgot password" attempt (ADMIN only). */
+export async function fetchAdminPasswordResets(signal?: AbortSignal): Promise<PasswordResetRow[]> {
+  const data = await get<{ resets: PasswordResetRow[] }>("/api/admin/password-resets", signal);
+  return data.resets;
+}
+
+/**
+ * Registered professors for the public request form's picker -
+ * every professor account, newest sections included.
+ */
+export async function fetchProfessorsPublic(signal?: AbortSignal): Promise<SafeUserDTO[]> {
+  const data = await get<{ users: SafeUserDTO[] }>(
+    "/api/users?role=PROFESSOR&pageSize=100",
+    signal
+  );
+  return data.users;
+}
+
+/** Admin email outbox - credentials, password resets and system mail that the platform has "sent". */
+export async function fetchAdminEmails(
+  kind?: "ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM",
+  signal?: AbortSignal
+): Promise<EmailLogDTO[]> {
+  const qs = kind && kind !== "ALL" ? `?kind=${kind}` : "";
+  const data = await get<{ emails: EmailLogDTO[] }>(`/api/admin/emails${qs}`, signal);
+  return data.emails;
 }
 
 export async function fetchAdminDepartments(signal?: AbortSignal): Promise<AdminDepartmentDTO[]> {
@@ -542,6 +621,10 @@ export type AdminDepartmentInput = {
   name: string;
   code: string;
   tagline?: string;
+  /** Official department homepage - "" clears it. */
+  website?: string | null;
+  /** What this faculty calls its capstone course (default "Capstone Design"). */
+  capstoneLabel?: string;
   accent?: string;
   sortOrder?: number;
 };
@@ -570,32 +653,4 @@ export async function updateAdminDepartment(
 
 export async function deleteAdminDepartment(id: string): Promise<void> {
   await send<{ ok: boolean }>(`/api/admin/departments?id=${encodeURIComponent(id)}`, "DELETE");
-}
-
-export async function fetchAdminEvents(signal?: AbortSignal): Promise<AdminEventDTO[]> {
-  const data = await get<{ events: AdminEventDTO[] }>("/api/admin/events", signal);
-  return data.events;
-}
-
-export type AdminEventInput = {
-  title: string;
-  description: string;
-  location?: string;
-  date: string;
-};
-
-export async function createAdminEvent(payload: AdminEventInput): Promise<AdminEventDTO> {
-  const data = await send<{ event: AdminEventDTO }>("/api/admin/events", "POST", payload);
-  return data.event;
-}
-
-export async function updateAdminEvent(
-  payload: { id: string } & Partial<AdminEventInput>
-): Promise<AdminEventDTO> {
-  const data = await send<{ event: AdminEventDTO }>("/api/admin/events", "PATCH", payload);
-  return data.event;
-}
-
-export async function deleteAdminEvent(id: string): Promise<void> {
-  await send<{ ok: boolean }>(`/api/admin/events?id=${encodeURIComponent(id)}`, "DELETE");
 }

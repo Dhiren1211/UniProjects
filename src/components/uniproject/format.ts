@@ -1,5 +1,5 @@
 // ============================================================
-// UniProject — shared formatting helpers (client-safe, deterministic)
+// UniProject - shared formatting helpers (client-safe, deterministic)
 // ============================================================
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const

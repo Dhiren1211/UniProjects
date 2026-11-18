@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→// ============================================================
+     4→// Admin control-center console (ADMIN role only).
+     5→// Two-column shell on ≥ lg: sticky sidebar (brand, grouped nav,
+     6→// system status, back-to-site) + per-tab content with its own
+     7→// header (title / description / "Updated" caption / refresh).
+     8→// Below lg the sidebar collapses into a top bar with pills and
+     9→// the system mini-card moves to the top of Overview.
+    10→// Tabs: overview · projects · users · departments · events ·
+    11→// moderation. All data flows through /api/admin/** via the
+    12→// "admin panel" section of api-client.ts.
+    13→// ============================================================
+    14→
+    15→import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+    16→import { format } from "date-fns";
+    17→import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+    18→import type { LucideIcon } from "lucide-react";
+    19→import {
+    20→  AlertTriangle,
+    21→  ArrowLeft,
+    22→  ArrowUpRight,
+    23→  BadgeCheck,
+    24→  Building2,
+    25→  CalendarDays,
+    26→  CalendarPlus,
+    27→  Dices,
+    28→  Eye,
+    29→  EyeOff,
+    30→  Flag,
+    31→  FolderKanban,
+    32→  GraduationCap,
+    33→  Handshake,
+    34→  LayoutDashboard,
+    35→  Loader2,
+    36→  Lock,
+    37→  MapPin,
+    38→  MessageCircle,
+    39→  MessageSquare,
+    40→  Minus,
+    41→  Paperclip,
+    42→  Pencil,
+    43→  Plus,
+    44→  RefreshCw,
+    45→  Search,
+    46→  ShieldAlert,
+    47→  ShieldCheck,
+    48→  Star,
+    49→  Trash2,
+    50→  TrendingDown,
+    51→  TrendingUp,
+    52→  UserPlus,
+    53→  Users,
+    54→} from "lucide-react";
+    55→import { toast } from "sonner";
+    56→import {
+    57→  AlertDialog,
+    58→  AlertDialogAction,
+    59→  AlertDialogCancel,
+    60→  AlertDialogContent,
+    61→  AlertDialogDescription,
+    62→  AlertDialogFooter,
+    63→  AlertDialogHeader,
+    64→  AlertDialogTitle,
+    65→  AlertDialogTrigger,
+    66→} from "@/components/ui/alert-dialog";
+    67→import { Button } from "@/components/ui/button";
+    68→import {
+    69→  Dialog,
+    70→  DialogContent,
+    71→  DialogDescription,
+    72→  DialogFooter,
+    73→  DialogHeader,
+    74→  DialogTitle,
+    75→} from "@/components/ui/dialog";
+    76→import { Input } from "@/components/ui/input";
+    77→import { Label } from "@/components/ui/label";
+    78→import {
+    79→  Select,
+    80→  SelectContent,
+    81→  SelectItem,
+    82→  SelectTrigger,
+    83→  SelectValue,
+    84→} from "@/components/ui/select";
+    85→import { Skeleton } from "@/components/ui/skeleton";
+    86→import { Switch } from "@/components/ui/switch";
+    87→import { Textarea } from "@/components/ui/textarea";
+    88→import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+    89→import { ACCENTS, UNIVERSITY, accentOf } from "@/lib/config";
+    90→import { cn } from "@/lib/utils";
+    91→import {
+    92→  createAdminDepartment,
+    93→  createAdminEvent,
+    94→  createAdminUser,
+    95→  deleteAdminDepartment,
+    96→  deleteAdminEvent,
+    97→  deleteAdminProject,
+    98→  deleteAdminUser,
+    99→  fetchAdminDepartments,
+   100→  fetchAdminEvents,
+   101→  fetchAdminOverview,
+   102→  fetchAdminProjects,
+   103→  fetchAdminUsers,
+   104→  updateAdminDepartment,
+   105→  updateAdminEvent,
+   106→  updateAdminProject,
+   107→  updateAdminUserRole,
+   108→  type Navigate,
+   109→  type View,
+   110→} from "../api-client";
+   111→import { useAppStore } from "../store";
+   112→import {
+   113→  CategoryIcon,
+   114→  DeptDot,
+   115→  EmptyState,
+   116→  StaffBadge,
+   117→  StatusBadge,
+   118→  UserAvatar,
+   119→  formatViews,
+   120→  timeAgo,
+   121→} from "../ui-bits";
+   122→import type {
+   123→  AdminActivityItem,
+   124→  AdminDepartmentDTO,
+   125→  AdminEventDTO,
+   126→  AdminOverviewDTO,
+   127→  AdminProjectRow,
+   128→  AdminUserRow,
+   129→  DepartmentDTO,
+   130→  SafeUserDTO,
+   131→} from "@/lib/types";
+   132→
+   133→type TabKey = "overview" | "projects" | "users" | "departments" | "events" | "moderation";
+   134→
+   135→/** Sidebar nav — grouped like a real console, not a flat pill strip. */
+   136→type NavItem = {
+   137→  key: TabKey;
+   138→  label: string;
+   139→  icon: LucideIcon;
+   140→  countKey?: "projects" | "users" | "departments" | "events";
+   141→};
+   142→
+   143→const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+   144→  { label: "At a glance", items: [{ key: "overview", label: "Overview", icon: LayoutDashboard }] },
+   145→  {
+   146→    label: "Content",
+   147→    items: [
+   148→      { key: "projects", label: "Projects", icon: FolderKanban, countKey: "projects" },
+   149→      { key: "departments", label: "Departments", icon: Building2, countKey: "departments" },
+   150→      { key: "events", label: "Events", icon: CalendarDays, countKey: "events" },
+   151→    ],
+   152→  },
+   153→  { label: "People", items: [{ key: "users", label: "Users", icon: Users, countKey: "users" }] },
+   154→  { label: "Safety", items: [{ key: "moderation", label: "Moderation", icon: ShieldCheck }] },
+   155→];
+   156→
+   157→/** Flat pill order for the < lg top bar (same as the previous tab strip). */
+   158→const TAB_PILLS: { key: TabKey; label: string; icon: LucideIcon }[] = [
+   159→  { key: "overview", label: "Overview", icon: LayoutDashboard },
+   160→  { key: "projects", label: "Projects", icon: FolderKanban },
+   161→  { key: "users", label: "Users", icon: Users },
+   162→  { key: "departments", label: "Departments", icon: Building2 },
+   163→  { key: "events", label: "Events", icon: CalendarDays },
+   164→  { key: "moderation", label: "Moderation", icon: ShieldCheck },
+   165→];
+   166→
+   167→/** Per-tab content header copy. */
+   168→const TAB_META: Record<TabKey, { title: string; description: string }> = {
+   169→  overview: {
+   170→    title: "Overview",
+   171→    description: "Live health of the showcase — traffic, content and safety queues at a glance.",
+   172→  },
+   173→  projects: {
+   174→    title: "Projects",
+   175→    description: "Feature, publish or remove any project across the campus showcase.",
+   176→  },
+   177→  users: {
+   178→    title: "Users",
+   179→    description: "Manage member roles and keep the university directory in good standing.",
+   180→  },
+   181→  departments: {
+   182→    title: "Departments",
+   183→    description: "Structure the catalogue — departments power filters and project grouping.",
+   184→  },
+   185→  events: {
+   186→    title: "Events",
+   187→    description: "Campus events shown on the homepage — schedule, edit or remove them here.",
+   188→  },
+   189→  moderation: {
+   190→    title: "Moderation",
+   191→    description: "Verification requests and open community reports awaiting review.",
+   192→  },
+   193→};
+   194→
+   195→const ROLE_LABELS: Record<string, string> = {
+   196→  STUDENT: "Student",
+   197→  FACULTY: "Faculty",
+   198→  ADMIN: "Admin",
+   199→};
+   200→
+   201→const ACTIVITY_ICONS: Record<AdminActivityItem["kind"], LucideIcon> = {
+   202→  PROJECT: FolderKanban,
+   203→  USER: UserPlus,
+   204→  POST: MessageSquare,
+   205→  COMMENT: MessageCircle,
+   206→  REPORT: Flag,
+   207→  JOIN: Handshake,
+   208→  EVENT: CalendarDays,
+   209→  RESOURCE: Paperclip,
+   210→};
+   211→
+   212→/** "/project/<slug>" / "/community" → internal view, anything else is not navigable. */
+   213→function activityToView(href: string): View | null {
+   214→  const project = /^\/project\/([^/?#]+)/.exec(href);
+   215→  if (project) return { name: "project", slug: project[1] };
+   216→  if (href.startsWith("/community")) return { name: "community" };
+   217→  return null;
+   218→}
+   219→
+   220→/** "2025-11" → "Nov". */
+   221→function monthLabel(key: string) {
+   222→  const [year, month] = key.split("-");
+   223→  const idx = Number(month) - 1;
+   224→  if (!year || !Number.isFinite(idx) || idx < 0 || idx > 11) return key;
+   225→  return format(new Date(Number(year), idx, 1), "MMM");
+   226→}
+   227→
+   228→/** value → debounced value (300 ms) — keeps search/filters off the network until typing settles. */
+   229→function useDebounced<T>(value: T, delay = 300): T {
+   230→  const [debounced, setDebounced] = useState(value);
+   231→  useEffect(() => {
+   232→    const t = setTimeout(() => setDebounced(value), delay);
+   233→    return () => clearTimeout(t);
+   234→  }, [value, delay]);
+   235→  return debounced;
+   236→}
+   237→
+   238→// ============================================================
+   239→// AdminView — guard + console shell + tab routing
+   240→// ============================================================
+   241→
+   242→export function AdminView({ navigate }: { navigate: Navigate }) {
+   243→  const { user, authLoaded, openAuth } = useAppStore();
+   244→  const reduceMotion = useReducedMotion();
+   245→  const [tab, setTab] = useState<TabKey>("overview");
+   246→  const [overview, setOverview] = useState<AdminOverviewDTO | null>(null);
+   247→  const [overviewError, setOverviewError] = useState(false);
+   248→  const [refreshTick, setRefreshTick] = useState(0);
+   249→  const [refreshing, setRefreshing] = useState(false);
+   250→  const [loadedAt, setLoadedAt] = useState<Partial<Record<TabKey, number>>>({});
+   251→  const [arriveNew, setArriveNew] = useState(false);
+   252→
+   253→  const isAdmin = user?.role === "ADMIN";
+   254→
+   255→  // Keep the "Updated …" captions honest without refetching anything.
+   256→  const [, setClock] = useState(0);
+   257→  useEffect(() => {
+   258→    const t = setInterval(() => setClock((n) => n + 1), 30_000);
+   259→    return () => clearInterval(t);
+   260→  }, []);
+   261→
+   262→  /** Record a finished load: always stops the spinner; timestamps only on success. */
+   263→  const noteLoaded = useCallback((keys: TabKey[], ok: boolean) => {
+   264→    setRefreshing(false);
+   265→    if (!ok) return;
+   266→    const at = Date.now();
+   267→    setLoadedAt((prev) => {
+   268→      const next = { ...prev };
+   269→      for (const key of keys) next[key] = at;
+   270→      return next;
+   271→    });
+   272→  }, []);
+   273→
+   274→  // Stable per-tab onLoaded callbacks — tabs include them in their fetch-effect
+   275→  // deps, so a fresh identity per render would trigger a refetch loop.
+   276→  const overviewLoaded = useCallback(
+   277→    (ok: boolean) => noteLoaded(["overview", "moderation"], ok),
+   278→    [noteLoaded]
+   279→  );
+   280→  const projectsLoaded = useCallback((ok: boolean) => noteLoaded(["projects"], ok), [noteLoaded]);
+   281→  const usersLoaded = useCallback((ok: boolean) => noteLoaded(["users"], ok), [noteLoaded]);
+   282→  const departmentsLoaded = useCallback(
+   283→    (ok: boolean) => noteLoaded(["departments"], ok),
+   284→    [noteLoaded]
+   285→  );
+   286→  const eventsLoaded = useCallback((ok: boolean) => noteLoaded(["events"], ok), [noteLoaded]);
+   287→
+   288→  /** Explicit refresh from the content header — spins the button until data lands. */
+   289→  const refresh = () => {
+   290→    setRefreshing(true);
+   291→    setRefreshTick((n) => n + 1);
+   292→  };
+   293→
+   294→  /** Background re-sync of shared overview data after a mutation (no spinner). */
+   295→  const syncOverview = () => setRefreshTick((n) => n + 1);
+   296→
+   297→  /** Switch tabs; quick actions can request the tab's "New …" dialog to open on arrival. */
+   298→  const goTab = (key: TabKey, openNew = false) => {
+   299→    setTab(key);
+   300→    setArriveNew(openNew);
+   301→  };
+   302→
+   303→  useEffect(() => {
+   304→    if (!authLoaded || !isAdmin) return;
+   305→    let cancelled = false;
+   306→    fetchAdminOverview()
+   307→      .then((data) => {
+   308→        if (cancelled) return;
+   309→        setOverview(data);
+   310→        setOverviewError(false);
+   311→        overviewLoaded(true);
+   312→      })
+   313→      .catch((e) => {
+   314→        if (cancelled) return;
+   315→        setOverviewError(true);
+   316→        overviewLoaded(false);
+   317→        toast.error(e instanceof Error ? e.message : "Could not load the admin overview");
+   318→      });
+   319→    return () => {
+   320→      cancelled = true;
+   321→    };
+   322→  }, [refreshTick, authLoaded, isAdmin, overviewLoaded]);
+   323→
+   324→  // ---------- gates ----------
+   325→
+   326→  if (!authLoaded) {
+   327→    return (
+   328→      <Shell>
+   329→        <div className="space-y-6">
+   330→          <Skeleton className="h-24 w-full rounded-2xl" />
+   331→          <Skeleton className="h-14 w-full rounded-2xl" />
+   332→          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+   333→            {Array.from({ length: 8 }).map((_, i) => (
+   334→              <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+   335→            ))}
+   336→          </div>
+   337→        </div>
+   338→      </Shell>
+   339→    );
+   340→  }
+   341→
+   342→  if (!user || user.role !== "ADMIN") {
+   343→    return (
+   344→      <Shell>
+   345→        <EmptyState
+   346→          icon={user ? ShieldAlert : Lock}
+   347→          title="Admin access required"
+   348→          hint="This console manages the whole showcase — projects, members, departments and events. It is limited to Kyungsung University administrators."
+   349→          action={
+   350→            !user ? (
+   351→              <Button onClick={() => openAuth("login")} className="rounded-xl font-semibold">
+   352→                Sign in
+   353→              </Button>
+   354→            ) : undefined
+   355→          }
+   356→        />
+   357→      </Shell>
+   358→    );
+   359→  }
+   360→
+   361→  const moderationPending = (overview?.pendingVerifications ?? 0) + (overview?.openReports ?? 0);
+   362→  const meta = TAB_META[tab];
+   363→
+   364→  return (
+   365→    <div className="mx-auto w-full max-w-7xl px-5 py-6 pb-20 md:px-8 md:py-8">
+   366→      <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-6 xl:gap-8">
+   367→        <ConsoleSidebar
+   368→          tab={tab}
+   369→          overview={overview}
+   370→          moderationPending={moderationPending}
+   371→          user={user}
+   372→          onTab={goTab}
+   373→          navigate={navigate}
+   374→        />
+   375→
+   376→        <main className="min-w-0">
+   377→          {/* < lg: brand + scrollable pills replace the sidebar */}
+   378→          <ConsoleTopBar
+   379→            tab={tab}
+   380→            moderationPending={moderationPending}
+   381→            user={user}
+   382→            onTab={goTab}
+   383→          />
+   384→
+   385→          {/* < lg: the sidebar system mini-card lives at the top of Overview */}
+   386→          {tab === "overview" && overview ? (
+   387→            <SystemMiniCard storage={overview.storage} className="mt-4 lg:hidden" />
+   388→          ) : null}
+   389→
+   390→          <ContentHeader
+   391→            title={meta.title}
+   392→            description={meta.description}
+   393→            loadedAt={loadedAt[tab]}
+   394→            refreshing={refreshing}
+   395→            onRefresh={refresh}
+   396→            className="mt-6"
+   397→          />
+   398→
+   399→          {/* ---------- active tab ---------- */}
+   400→          <div className="mt-5">
+   401→            <AnimatePresence mode="wait" initial={false}>
+   402→              <motion.div
+   403→                key={tab}
+   404→                initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+   405→                animate={{ opacity: 1, y: 0 }}
+   406→                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
+   407→                transition={{ duration: 0.18, ease: "easeOut" }}
+   408→              >
+   409→            {tab === "overview" ? (
+   410→              <OverviewTab
+   411→                overview={overview}
+   412→                error={overviewError}
+   413→                onRetry={refresh}
+   414→                navigate={navigate}
+   415→                onQuickAction={goTab}
+   416→              />
+   417→            ) : null}
+   418→            {tab === "projects" ? (
+   419→              <ProjectsTab
+   420→                navigate={navigate}
+   421→                onChanged={syncOverview}
+   422→                refreshTick={refreshTick}
+   423→                onLoaded={projectsLoaded}
+   424→              />
+   425→            ) : null}
+   426→            {tab === "users" ? (
+   427→              <UsersTab
+   428→                onChanged={syncOverview}
+   429→                refreshTick={refreshTick}
+   430→                onLoaded={usersLoaded}
+   431→                autoOpenNew={arriveNew}
+   432→              />
+   433→            ) : null}
+   434→            {tab === "departments" ? (
+   435→              <DepartmentsTab
+   436→                onChanged={syncOverview}
+   437→                refreshTick={refreshTick}
+   438→                onLoaded={departmentsLoaded}
+   439→                autoOpenNew={arriveNew}
+   440→              />
+   441→            ) : null}
+   442→            {tab === "events" ? (
+   443→              <EventsTab
+   444→                onChanged={syncOverview}
+   445→                refreshTick={refreshTick}
+   446→                onLoaded={eventsLoaded}
+   447→                autoOpenNew={arriveNew}
+   448→              />
+   449→            ) : null}
+   450→            {tab === "moderation" ? <ModerationTab overview={overview} navigate={navigate} /> : null}
+   451→              </motion.div>
+   452→            </AnimatePresence>
+   453→          </div>
+   454→        </main>
+   455→      </div>
+   456→    </div>
+   457→  );
+   458→}
+   459→
+   460→/** Simple centered container for the auth gates. */
+   461→function Shell({ children }: { children: ReactNode }) {
+   462→  return <div className="mx-auto w-full max-w-6xl px-5 py-10 pb-20 md:px-8 md:py-12">{children}</div>;
+   463→}
+   464→
+   465→// ============================================================
+   466→// Console chrome — sidebar (≥ lg), top bar (< lg), header, cards
+   467→// ============================================================
+   468→
+   469→function ConsoleSidebar({
+   470→  tab,
+   471→  overview,
+   472→  moderationPending,
+   473→  user,
+   474→  onTab,
+   475→  navigate,
+   476→}: {
+   477→  tab: TabKey;
+   478→  overview: AdminOverviewDTO | null;
+   479→  moderationPending: number;
+   480→  user: SafeUserDTO;
+   481→  onTab: (key: TabKey, openNew?: boolean) => void;
+   482→  navigate: Navigate;
+   483→}) {
+   484→  return (
+   485→    <aside className="sticky top-8 hidden h-[calc(100vh-4rem)] w-60 shrink-0 flex-col rounded-2xl border border-up-border bg-card p-4 shadow-sm lg:flex">
+   486→      {/* brand */}
+   487→      <div className="flex items-center gap-2.5 px-1 pb-4 pt-1">
+   488→        <img src="/ks-logo.svg" alt="Kyungsung University crest" className="h-9 w-auto" />
+   489→        <div className="min-w-0">
+   490→          <p className="text-base font-bold leading-tight tracking-tight text-foreground">
+   491→            Console
+   492→          </p>
+   493→          <p className="truncate text-[11px] text-muted-foreground">
+   494→            {UNIVERSITY.shortName} · Project Showcase
+   495→          </p>
+   496→        </div>
+   497→      </div>
+   498→
+   499→      {/* grouped nav */}
+   500→      <nav aria-label="Admin sections" className="nice-scroll min-h-0 flex-1 overflow-y-auto">
+   501→        <div className="space-y-5 pb-2">
+   502→          {NAV_GROUPS.map((group) => (
+   503→            <div key={group.label}>
+   504→              <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+   505→                {group.label}
+   506→              </p>
+   507→              <div className="space-y-0.5">
+   508→                {group.items.map((item) => {
+   509→                  const active = tab === item.key;
+   510→                  const Icon = item.icon;
+   511→                  const count = item.countKey && overview ? overview[item.countKey] : undefined;
+   512→                  return (
+   513→                    <button
+   514→                      key={item.key}
+   515→                      type="button"
+   516→                      onClick={() => onTab(item.key)}
+   517→                      aria-current={active ? "page" : undefined}
+   518→                      className={cn(
+   519→                        "relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors",
+   520→                        active
+   521→                          ? "bg-primary-50 text-primary-700"
+   522→                          : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+   523→                      )}
+   524→                    >
+   525→                      {active ? (
+   526→                        <span
+   527→                          aria-hidden
+   528→                          className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-primary-600"
+   529→                        />
+   530→                      ) : null}
+   531→                      <Icon className="size-4 shrink-0" aria-hidden />
+   532→                      <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
+   533→                      {item.key === "moderation" && moderationPending > 0 ? (
+   534→                        <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger-soft px-1.5 text-[10px] font-bold text-danger">
+   535→                          {moderationPending}
+   536→                        </span>
+   537→                      ) : count && count > 0 ? (
+   538→                        <span
+   539→                          className={cn(
+   540→                            "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums",
+   541→                            active ? "bg-white text-primary-700" : "bg-surface-muted text-muted-foreground"
+   542→                          )}
+   543→                        >
+   544→                          {count}
+   545→                        </span>
+   546→                      ) : null}
+   547→                    </button>
+   548→                  );
+   549→                })}
+   550→              </div>
+   551→            </div>
+   552→          ))}
+   553→        </div>
+   554→      </nav>
+   555→
+   556→      {/* footer: operator, system status, exit */}
+   557→      <div className="mt-3 space-y-3 border-t border-up-border pt-3">
+   558→        <div className="flex items-center gap-2.5 px-1">
+   559→          <UserAvatar name={user.displayName} avatarUrl={user.avatarUrl} className="size-7" ring={false} />
+   560→          <div className="min-w-0 flex-1">
+   561→            <p className="truncate text-xs font-semibold text-foreground">{user.displayName}</p>
+   562→            <p className="truncate text-[11px] text-muted-foreground">@{user.username}</p>
+   563→          </div>
+   564→          <StaffBadge role={user.role} />
+   565→        </div>
+   566→        <SystemMiniCard storage={overview?.storage} />
+   567→        <Button
+   568→          variant="outline"
+   569→          onClick={() => navigate({ name: "home" })}
+   570→          className="w-full justify-start rounded-xl font-medium text-muted-foreground hover:text-foreground"
+   571→        >
+   572→          <ArrowLeft className="size-4" aria-hidden />
+   573→          Back to site
+   574→        </Button>
+   575→      </div>
+   576→    </aside>
+   577→  );
+   578→}
+   579→
+   580→function ConsoleTopBar({
+   581→  tab,
+   582→  moderationPending,
+   583→  user,
+   584→  onTab,
+   585→}: {
+   586→  tab: TabKey;
+   587→  moderationPending: number;
+   588→  user: SafeUserDTO;
+   589→  onTab: (key: TabKey, openNew?: boolean) => void;
+   590→}) {
+   591→  return (
+   592→    <header className="lg:hidden">
+   593→      <div className="flex items-center gap-3 rounded-2xl border border-up-border bg-card p-4 shadow-sm">
+   594→        <img src="/ks-logo.svg" alt="Kyungsung University crest" className="h-8 w-auto" />
+   595→        <span aria-hidden className="h-8 w-px bg-up-border" />
+   596→        <div className="min-w-0 flex-1">
+   597→          <p className="text-base font-bold leading-tight tracking-tight text-foreground">
+   598→            Console
+   599→          </p>
+   600→          <p className="truncate text-[11px] text-muted-foreground">
+   601→            {UNIVERSITY.shortName} · Project Showcase
+   602→          </p>
+   603→        </div>
+   604→        <StaffBadge role={user.role} />
+   605→      </div>
+   606→      <nav aria-label="Admin sections" className="nice-scroll mt-3 overflow-x-auto">
+   607→        <div className="flex min-w-max gap-1.5 pb-1">
+   608→          {TAB_PILLS.map(({ key, label, icon: Icon }) => {
+   609→            const active = tab === key;
+   610→            const showCount = key === "moderation" && moderationPending > 0;
+   611→            return (
+   612→              <button
+   613→                key={key}
+   614→                type="button"
+   615→                onClick={() => onTab(key)}
+   616→                aria-current={active ? "page" : undefined}
+   617→                className={cn(
+   618→                  "inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors",
+   619→                  active
+   620→                    ? "border-primary-100 bg-primary-50 text-primary-700"
+   621→                    : "border-up-border bg-card text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+   622→                )}
+   623→              >
+   624→                <Icon className="size-4" aria-hidden />
+   625→                {label}
+   626→                {showCount ? (
+   627→                  <span
+   628→                    className={cn(
+   629→                      "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+   630→                      active ? "bg-white text-danger" : "bg-danger-soft text-danger"
+   631→                    )}
+   632→                  >
+   633→                    {moderationPending}
+   634→                  </span>
+   635→                ) : null}
+   636→              </button>
+   637→            );
+   638→          })}
+   639→        </div>
+   640→      </nav>
+   641→    </header>
+   642→  );
+   643→}
+   644→
+   645→function ContentHeader({
+   646→  title,
+   647→  description,
+   648→  loadedAt,
+   649→  refreshing,
+   650→  onRefresh,
+   651→  className,
+   652→}: {
+   653→  title: string;
+   654→  description: string;
+   655→  loadedAt?: number;
+   656→  refreshing: boolean;
+   657→  onRefresh: () => void;
+   658→  className?: string;
+   659→}) {
+   660→  return (
+   661→    <div className={cn("flex flex-wrap items-end justify-between gap-x-4 gap-y-3", className)}>
+   662→      <div className="min-w-0">
+   663→        <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-[28px] md:leading-tight">
+   664→          {title}
+   665→        </h1>
+   666→        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+   667→      </div>
+   668→      <div className="flex items-center gap-3 pb-1">
+   669→        <span aria-live="polite" className="hidden text-xs text-muted-foreground sm:block">
+   670→          {loadedAt ? `Updated ${timeAgo(new Date(loadedAt).toISOString())}` : "Loading…"}
+   671→        </span>
+   672→        <Button
+   673→          variant="outline"
+   674→          size="icon"
+   675→          className="size-9 rounded-xl"
+   676→          aria-label="Refresh data"
+   677→          onClick={onRefresh}
+   678→          disabled={refreshing}
+   679→        >
+   680→          <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden />
+   681→        </Button>
+   682→      </div>
+   683→    </div>
+   684→  );
+   685→}
+   686→
+   687→/** Standard white card with a bold title + muted caption (+ optional right slot). */
+   688→function Panel({
+   689→  title,
+   690→  caption,
+   691→  right,
+   692→  className,
+   693→  children,
+   694→}: {
+   695→  title: string;
+   696→  caption?: string;
+   697→  right?: ReactNode;
+   698→  className?: string;
+   699→  children: ReactNode;
+   700→}) {
+   701→  return (
+   702→    <section
+   703→      className={cn("rounded-2xl border border-up-border bg-card p-5 shadow-sm md:p-6", className)}
+   704→    >
+   705→      <div className="flex items-start justify-between gap-3">
+   706→        <div className="min-w-0">
+   707→          <h2 className="text-base font-bold tracking-tight text-foreground">{title}</h2>
+   708→          {caption ? <p className="mt-0.5 text-xs text-muted-foreground">{caption}</p> : null}
+   709→        </div>
+   710→        {right}
+   711→      </div>
+   712→      {children}
+   713→    </section>
+   714→  );
+   715→}
+   716→
+   717→/** Compact status card — sidebar footer on ≥ lg, top of Overview below lg. */
+   718→function SystemMiniCard({
+   719→  storage,
+   720→  className,
+   721→}: {
+   722→  storage?: AdminOverviewDTO["storage"];
+   723→  className?: string;
+   724→}) {
+   725→  return (
+   726→    <div className={cn("rounded-xl border border-up-border bg-surface-muted/50 p-3", className)}>
+   727→      <div className="flex items-center gap-2">
+   728→        <span aria-hidden className="relative flex size-2.5 shrink-0">
+   729→          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+   730→          <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+   731→        </span>
+   732→        <p className="text-xs font-semibold text-foreground">All systems operational</p>
+   733→      </div>
+   734→      <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-muted-foreground">
+   735→        SQLite{storage ? ` · ${storage.uploadedFiles} files stored` : ""}
+   736→      </p>
+   737→    </div>
+   738→  );
+   739→}
+   740→
+   741→// ============================================================
+   742→// Shared small pieces
+   743→// ============================================================
+   744→
+   745→function CoverThumb({
+   746→  src,
+   747→  accent,
+   748→  category,
+   749→  className,
+   750→}: {
+   751→  src?: string | null;
+   752→  accent?: string | null;
+   753→  category: string;
+   754→  className?: string;
+   755→}) {
+   756→  if (src) {
+   757→    return (
+   758→      <img
+   759→        src={src}
+   760→        alt=""
+   761→        loading="lazy"
+   762→        className={cn("shrink-0 rounded-lg object-cover", className)}
+   763→      />
+   764→    );
+   765→  }
+   766→  return (
+   767→    <span
+   768→      aria-hidden
+   769→      className={cn(
+   770→        "flex shrink-0 items-center justify-center rounded-lg bg-gradient-to-br",
+   771→        accentOf(accent).cover,
+   772→        className
+   773→      )}
+   774→    >
+   775→      <CategoryIcon category={category} className="size-4 text-primary-700" />
+   776→    </span>
+   777→  );
+   778→}
+   779→
+   780→function DeptChip({ code, accent }: { code: string; accent?: string | null }) {
+   781→  return (
+   782→    <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+   783→      <DeptDot accent={accent ?? "teal"} className="size-1.5" />
+   784→      {code}
+   785→    </span>
+   786→  );
+   787→}
+   788→
+   789→function RoleChip({ role }: { role: string }) {
+   790→  if (role === "STUDENT") {
+   791→    return (
+   792→      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+   793→        Student
+   794→      </span>
+   795→    );
+   796→  }
+   797→  return <StaffBadge role={role} />;
+   798→}
+   799→
+   800→/** rAF count-up that respects reduced motion — gives every number a live "landing" feel. */
+   801→function useCountUp(target: number, duration = 900): number {
+   802→  const reduceMotion = useReducedMotion();
+   803→  const [value, setValue] = useState(0);
+   804→  useEffect(() => {
+   805→    if (reduceMotion) return; // derived below — no animation needed
+   806→    let raf = 0;
+   807→    const start = performance.now();
+   808→    const tick = (now: number) => {
+   809→      const t = Math.min(1, (now - start) / duration);
+   810→      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+   811→      setValue(Math.round(target * eased));
+   812→      if (t < 1) raf = requestAnimationFrame(tick);
+   813→    };
+   814→    raf = requestAnimationFrame(tick);
+   815→    return () => cancelAnimationFrame(raf);
+   816→  }, [target, duration, reduceMotion]);
+   817→  return reduceMotion ? target : value;
+   818→}
+   819→
+   820→/** Large KPI tile for the primary metrics row — animated number + hover lift. */
+   821→function HeroStatCard({
+   822→  label,
+   823→  value,
+   824→  icon: Icon,
+   825→  sub,
+   826→  compactViews = false,
+   827→  delay = 0,
+   828→}: {
+   829→  label: string;
+   830→  value: number;
+   831→  icon: LucideIcon;
+   832→  sub?: string;
+   833→  /** render the counted value through formatViews (15.5k style) */
+   834→  compactViews?: boolean;
+   835→  delay?: number;
+   836→}) {
+   837→  const reduceMotion = useReducedMotion();
+   838→  const shown = useCountUp(value);
+   839→  return (
+   840→    <motion.div
+   841→      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+   842→      animate={{ opacity: 1, y: 0 }}
+   843→      transition={{ duration: 0.35, delay, ease: "easeOut" }}
+   844→      whileHover={reduceMotion ? undefined : { y: -3 }}
+   845→      className="group relative flex flex-col overflow-hidden rounded-2xl border border-up-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
+   846→    >
+   847→      <span
+   848→        aria-hidden
+   849→        className="pointer-events-none absolute -right-8 -top-8 size-24 rounded-full bg-primary-50 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+   850→      />
+   851→      <span className="relative flex size-10 items-center justify-center rounded-xl bg-primary-50 text-primary-700 transition-colors group-hover:bg-primary-100">
+   852→        <Icon className="size-5" aria-hidden />
+   853→      </span>
+   854→      <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight text-foreground">
+   855→        {compactViews ? formatViews(shown) : shown.toLocaleString()}
+   856→      </p>
+   857→      <p className="mt-0.5 text-sm font-semibold text-foreground">{label}</p>
+   858→      {sub ? <p className="mt-auto pt-2 text-xs text-muted-foreground">{sub}</p> : null}
+   859→    </motion.div>
+   860→  );
+   861→}
+   862→
+   863→/** Compact KPI chip for the secondary metrics strip. */
+   864→function MiniStat({
+   865→  label,
+   866→  value,
+   867→  icon: Icon,
+   868→  delay = 0,
+   869→}: {
+   870→  label: string;
+   871→  value: number;
+   872→  icon: LucideIcon;
+   873→  delay?: number;
+   874→}) {
+   875→  const reduceMotion = useReducedMotion();
+   876→  const shown = useCountUp(value, 700);
+   877→  return (
+   878→    <motion.div
+   879→      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+   880→      animate={{ opacity: 1, y: 0 }}
+   881→      transition={{ duration: 0.3, delay, ease: "easeOut" }}
+   882→      className="flex items-center gap-3 rounded-xl border border-up-border bg-card px-3.5 py-3 shadow-sm"
+   883→    >
+   884→      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-ink-700">
+   885→        <Icon className="size-4" aria-hidden />
+   886→      </span>
+   887→      <div className="min-w-0">
+   888→        <p className="text-lg font-bold tabular-nums leading-none text-foreground">
+   889→          {shown.toLocaleString()}
+   890→        </p>
+   891→        <p className="mt-1 truncate text-[11px] font-medium text-muted-foreground">{label}</p>
+   892→      </div>
+   893→    </motion.div>
+   894→  );
+   895→}
+   896→
+   897→/** "Needs attention" tile — the three review queues, each row jumps to the right place. */
+   898→function AttentionCard({
+   899→  overview,
+   900→  onAction,
+   901→  delay = 0,
+   902→}: {
+   903→  overview: AdminOverviewDTO;
+   904→  onAction: (target: TabKey, openNew?: boolean) => void;
+   905→  delay?: number;
+   906→}) {
+   907→  const reduceMotion = useReducedMotion();
+   908→  const shown = useCountUp(
+   909→    overview.pendingVerifications + overview.openReports + overview.pendingJoinRequests
+   910→  );
+   911→  const allClear = shown === 0;
+   912→  const queues: {
+   913→    label: string;
+   914→    count: number;
+   915→    dot: string;
+   916→    go: (() => void) | null;
+   917→    hint: string;
+   918→  }[] = [
+   919→    {
+   920→      label: "Pending verifications",
+   921→      count: overview.pendingVerifications,
+   922→      dot: "bg-warning",
+   923→      go: () => onAction("moderation"),
+   924→      hint: "Review in Moderation",
+   925→    },
+   926→    {
+   927→      label: "Open reports",
+   928→      count: overview.openReports,
+   929→      dot: "bg-danger",
+   930→      go: () => onAction("moderation"),
+   931→      hint: "Review in Moderation",
+   932→    },
+   933→    {
+   934→      label: "Pending join requests",
+   935→      count: overview.pendingJoinRequests,
+   936→      dot: "bg-primary-500",
+   937→      go: null,
+   938→      hint: "Reviewed on each project page by the team owner",
+   939→    },
+   940→  ];
+   941→  return (
+   942→    <motion.div
+   943→      initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+   944→      animate={{ opacity: 1, y: 0 }}
+   945→      transition={{ duration: 0.35, delay, ease: "easeOut" }}
+   946→      whileHover={reduceMotion ? undefined : { y: -3 }}
+   947→      className={cn(
+   948→        "relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-shadow hover:shadow-md",
+   949→        allClear ? "border-up-border bg-card" : "border-warning/40 bg-warning-soft/50"
+   950→      )}
+   951→    >
+   952→      <div className="flex items-start justify-between gap-3">
+   953→        <span
+   954→          className={cn(
+   955→            "flex size-10 items-center justify-center rounded-xl",
+   956→            allClear ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+   957→          )}
+   958→        >
+   959→          {allClear ? <BadgeCheck className="size-5" aria-hidden /> : <AlertTriangle className="size-5" aria-hidden />}
+   960→        </span>
+   961→        {allClear ? (
+   962→          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-bold text-success">
+   963→            All clear
+   964→          </span>
+   965→        ) : null}
+   966→      </div>
+   967→      <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight text-foreground">
+   968→        {shown.toLocaleString()}
+   969→      </p>
+   970→      <p className="mt-0.5 text-sm font-semibold text-foreground">
+   971→        {allClear ? "Nothing waiting on you" : "items waiting on you"}
+   972→      </p>
+   973→      <ul className="mt-3 space-y-1.5">
+   974→        {queues.map((q) => {
+   975→          const body = (
+   976→            <>
+   977→              <span className="flex min-w-0 items-center gap-2">
+   978→                <span aria-hidden className={cn("size-2 shrink-0 rounded-full", q.dot)} />
+   979→                <span className="truncate">{q.label}</span>
+   980→              </span>
+   981→              <span className="flex shrink-0 items-center gap-1 font-bold tabular-nums">
+   982→                {q.count}
+   983→                {q.go ? <ArrowUpRight className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden /> : null}
+   984→              </span>
+   985→            </>
+   986→          );
+   987→          return (
+   988→            <li key={q.label}>
+   989→              {q.go ? (
+   990→                <button
+   991→                  type="button"
+   992→                  onClick={q.go}
+   993→                  title={q.hint}
+   994→                  className="group flex w-full items-center justify-between gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white"
+   995→                >
+   996→                  {body}
+   997→                </button>
+   998→              ) : (
+   999→                <div
+  1000→                  title={q.hint}
+  1001→                  className="flex w-full cursor-help items-center justify-between gap-2 rounded-lg bg-white/50 px-2.5 py-1.5 text-xs font-medium text-foreground"
+  1002→                >
+  1003→                  {body}
+  1004→                </div>
+  1005→              )}
+  1006→            </li>
+  1007→          );
+  1008→        })}
+  1009→      </ul>
+  1010→    </motion.div>
+  1011→  );
+  1012→}
+  1013→
+  1014→/** Dark brand band greeting the operator — mirrors the landing hero's night surface. */
+  1015→function WelcomeBand({
+  1016→  overview,
+  1017→  userName,
+  1018→  onQueues,
+  1019→}: {
+  1020→  overview: AdminOverviewDTO;
+  1021→  userName: string;
+  1022→  onQueues: () => void;
+  1023→}) {
+  1024→  const reduceMotion = useReducedMotion();
+  1025→  const hour = new Date().getHours();
+  1026→  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  1027→  const today = format(new Date(), "EEEE, MMMM d");
+  1028→  const pending = overview.pendingVerifications + overview.openReports;
+  1029→
+  1030→  const chips: { label: string; count: number; dot: string }[] = [
+  1031→    { label: "verifications", count: overview.pendingVerifications, dot: "bg-warning" },
+  1032→    { label: "reports", count: overview.openReports, dot: "bg-danger" },
+  1033→  ].filter((c) => c.count > 0);
+  1034→
+  1035→  return (
+  1036→    <motion.section
+  1037→      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+  1038→      animate={{ opacity: 1, y: 0 }}
+  1039→      transition={{ duration: 0.4, ease: "easeOut" }}
+  1040→      aria-label="Console welcome"
+  1041→      className="relative overflow-hidden rounded-2xl bg-night p-6 text-white shadow-sm md:p-7"
+  1042→    >
+  1043→      <span
+  1044→        aria-hidden
+  1045→        className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-primary-500/25 blur-3xl"
+  1046→      />
+  1047→      <span
+  1048→        aria-hidden
+  1049→        className="pointer-events-none absolute -bottom-28 left-1/3 size-56 rounded-full bg-primary-600/15 blur-3xl"
+  1050→      />
+  1051→      <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+  1052→        <div className="min-w-0">
+  1053→          <p className="text-[11px] font-semibold uppercase tracking-widest text-white/60">
+  1054→            {today} · {UNIVERSITY.shortName} showcase
+  1055→          </p>
+  1056→          <h2 className="mt-1.5 text-2xl font-bold tracking-tight md:text-[28px]">
+  1057→            {greeting}, {userName.split(" ")[0]}
+  1058→          </h2>
+  1059→          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-white/70">
+  1060→            {pending > 0
+  1061→              ? `${pending} ${pending === 1 ? "item needs" : "items need"} your review — the rest of the showcase is healthy and live.`
+  1062→              : "Everything is reviewed — the showcase is healthy and live."}
+  1063→          </p>
+  1064→        </div>
+  1065→        {chips.length > 0 ? (
+  1066→          <button
+  1067→            type="button"
+  1068→            onClick={onQueues}
+  1069→            className="flex flex-wrap items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+  1070→          >
+  1071→            {chips.map((c) => (
+  1072→              <span key={c.label} className="inline-flex items-center gap-1.5">
+  1073→                <span aria-hidden className={cn("size-2 rounded-full", c.dot)} />
+  1074→                {c.count} {c.label}
+  1075→              </span>
+  1076→            ))}
+  1077→            <ArrowUpRight className="size-3.5" aria-hidden />
+  1078→          </button>
+  1079→        ) : null}
+  1080→      </div>
+  1081→    </motion.section>
+  1082→  );
+  1083→}
+  1084→
+  1085→// ============================================================
+  1086→// Overview tab — mission control
+  1087→// ============================================================
+  1088→
+  1089→function OverviewTab({
+  1090→  overview,
+  1091→  error,
+  1092→  onRetry,
+  1093→  navigate,
+  1094→  onQuickAction,
+  1095→}: {
+  1096→  overview: AdminOverviewDTO | null;
+  1097→  error: boolean;
+  1098→  onRetry: () => void;
+  1099→  navigate: Navigate;
+  1100→  onQuickAction: (target: TabKey, openNew?: boolean) => void;
+  1101→}) {
+  1102→  const { user } = useAppStore();
+  1103→  const reduceMotion = useReducedMotion();
+  1104→
+  1105→  if (error && !overview) {
+  1106→    return (
+  1107→      <EmptyState
+  1108→        icon={AlertTriangle}
+  1109→        title="Couldn't load the overview"
+  1110→        hint="The admin overview API did not respond. Check the session and try again."
+  1111→        action={
+  1112→          <Button onClick={onRetry} variant="outline" className="rounded-xl font-semibold">
+  1113→            Try again
+  1114→          </Button>
+  1115→        }
+  1116→      />
+  1117→    );
+  1118→  }
+  1119→
+  1120→  if (!overview) {
+  1121→    return (
+  1122→      <div className="space-y-4">
+  1123→        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+  1124→          {Array.from({ length: 10 }).map((_, i) => (
+  1125→            <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+  1126→          ))}
+  1127→        </div>
+  1128→        <div className="grid gap-4 xl:grid-cols-5">
+  1129→          <Skeleton className="h-80 w-full rounded-2xl xl:col-span-3" />
+  1130→          <Skeleton className="h-80 w-full rounded-2xl xl:col-span-2" />
+  1131→        </div>
+  1132→        <div className="grid gap-4 md:grid-cols-2">
+  1133→          <Skeleton className="h-52 w-full rounded-2xl" />
+  1134→          <Skeleton className="h-52 w-full rounded-2xl" />
+  1135→        </div>
+  1136→      </div>
+  1137→    );
+  1138→  }
+  1139→
+  1140→  const maxCategory = Math.max(1, ...overview.byCategory.map((c) => c.count));
+  1141→
+  1142→  return (
+  1143→    <div className="space-y-4">
+  1144→      {/* ---------- welcome band ---------- */}
+  1145→      <WelcomeBand
+  1146→        overview={overview}
+  1147→        userName={user?.displayName ?? "Admin"}
+  1148→        onQueues={() => onQuickAction("moderation")}
+  1149→      />
+  1150→
+  1151→      {/* ---------- primary KPIs ---------- */}
+  1152→      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  1153→        <HeroStatCard
+  1154→          label="Total users"
+  1155→          value={overview.users}
+  1156→          icon={Users}
+  1157→          sub={`${overview.students} students · ${overview.faculty} faculty & staff`}
+  1158→          delay={0.05}
+  1159→        />
+  1160→        <HeroStatCard
+  1161→          label="Projects"
+  1162→          value={overview.projects}
+  1163→          icon={FolderKanban}
+  1164→          sub={`${overview.published} published · ${overview.drafts} drafts`}
+  1165→          delay={0.1}
+  1166→        />
+  1167→        <HeroStatCard
+  1168→          label="Total views"
+  1169→          value={overview.totalViews}
+  1170→          icon={Eye}
+  1171→          sub={`${overview.comments} comments · ${overview.posts} posts`}
+  1172→          compactViews
+  1173→          delay={0.15}
+  1174→        />
+  1175→        <AttentionCard overview={overview} onAction={onQuickAction} delay={0.2} />
+  1176→      </div>
+  1177→
+  1178→      {/* ---------- secondary metric strip ---------- */}
+  1179→      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+  1180→        <MiniStat label="Featured" value={overview.featured} icon={Star} delay={0.22} />
+  1181→        <MiniStat label="Verified" value={overview.verified} icon={BadgeCheck} delay={0.24} />
+  1182→        <MiniStat label="Departments" value={overview.departments} icon={Building2} delay={0.26} />
+  1183→        <MiniStat label="Events" value={overview.events} icon={CalendarDays} delay={0.28} />
+  1184→        <MiniStat label="Students" value={overview.students} icon={GraduationCap} delay={0.3} />
+  1185→        <MiniStat label="Posts" value={overview.posts} icon={MessageSquare} delay={0.32} />
+  1186→        <MiniStat label="Comments" value={overview.comments} icon={MessageCircle} delay={0.34} />
+  1187→        <MiniStat label="Resources" value={overview.resources} icon={Paperclip} delay={0.36} />
+  1188→      </div>
+  1189→
+  1190→      {/* ---------- activity feed + signups chart ---------- */}
+  1191→      <div className="grid gap-4 xl:grid-cols-5">
+  1192→        <ActivityCard items={overview.activity} navigate={navigate} className="xl:col-span-3" />
+  1193→        <SignupsCard data={overview.signupsByMonth} className="xl:col-span-2" />
+  1194→      </div>
+  1195→
+  1196→      {/* ---------- system + quick actions ---------- */}
+  1197→      <div className="grid gap-4 md:grid-cols-2">
+  1198→        <SystemCard storage={overview.storage} />
+  1199→        <QuickActionsCard overview={overview} onAction={onQuickAction} />
+  1200→      </div>
+  1201→
+  1202→      {/* ---------- categories + departments ---------- */}
+  1203→      <div className="grid gap-4 lg:grid-cols-2">
+  1204→        <Panel title="Projects by category" caption="Published projects only">
+  1205→          {overview.byCategory.length === 0 ? (
+  1206→            <p className="mt-6 text-sm text-muted-foreground">No published projects yet.</p>
+  1207→          ) : (
+  1208→            <ul className="mt-5 space-y-3.5">
+  1209→              {overview.byCategory.map((c, i) => {
+  1210→                const pct = Math.round((c.count / maxCategory) * 100);
+  1211→                return (
+  1212→                  <li key={c.category}>
+  1213→                    <div className="flex items-center justify-between gap-3 text-sm">
+  1214→                      <span className="font-medium text-foreground">{c.category}</span>
+  1215→                      <span className="font-semibold tabular-nums text-muted-foreground">
+  1216→                        {c.count}
+  1217→                      </span>
+  1218→                    </div>
+  1219→                    <div className="mt-1.5 h-2 rounded-full bg-surface-muted">
+  1220→                      {reduceMotion ? (
+  1221→                        <div
+  1222→                          className="h-full rounded-full bg-primary"
+  1223→                          style={{ width: `${pct}%` }}
+  1224→                        />
+  1225→                      ) : (
+  1226→                        <motion.div
+  1227→                          initial={{ width: 0 }}
+  1228→                          animate={{ width: `${pct}%` }}
+  1229→                          transition={{ duration: 0.6, delay: i * 0.05, ease: "easeOut" }}
+  1230→                          className="h-full rounded-full bg-gradient-to-r from-primary-600 to-primary-400"
+  1231→                        />
+  1232→                      )}
+  1233→                    </div>
+  1234→                  </li>
+  1235→                );
+  1236→              })}
+  1237→            </ul>
+  1238→          )}
+  1239→        </Panel>
+  1240→
+  1241→        <Panel title="By department" caption="Published projects per department">
+  1242→          {overview.byDepartment.length === 0 ? (
+  1243→            <p className="mt-6 text-sm text-muted-foreground">No departments yet.</p>
+  1244→          ) : (
+  1245→            <div className="mt-5 flex flex-wrap gap-2">
+  1246→              {overview.byDepartment.map((d) => (
+  1247→                <span
+  1248→                  key={d.code}
+  1249→                  className="inline-flex items-center gap-2 rounded-full border border-up-border bg-surface-muted/60 px-3 py-1.5 text-xs font-medium text-foreground"
+  1250→                >
+  1251→                  <DeptDot accent={d.accent} />
+  1252→                  {d.name}
+  1253→                  <span className="font-bold tabular-nums text-muted-foreground">{d.count}</span>
+  1254→                </span>
+  1255→              ))}
+  1256→            </div>
+  1257→          )}
+  1258→        </Panel>
+  1259→      </div>
+  1260→
+  1261→      {/* ---------- latest projects + newest members ---------- */}
+  1262→      <div className="grid gap-4 lg:grid-cols-2">
+  1263→        <Panel title="Latest projects">
+  1264→          <ul className="mt-2 divide-y divide-up-border">
+  1265→            {overview.recentProjects.map((p) => (
+  1266→              <li key={p.id} className="py-3 first:pt-2 last:pb-0">
+  1267→                <button
+  1268→                  type="button"
+  1269→                  onClick={() => navigate({ name: "project", slug: p.slug })}
+  1270→                  className="group flex w-full items-center gap-3 text-left"
+  1271→                >
+  1272→                  <CoverThumb
+  1273→                    src={p.coverImage}
+  1274→                    accent={p.department.accent}
+  1275→                    category={p.category}
+  1276→                    className="size-10"
+  1277→                  />
+  1278→                  <span className="min-w-0 flex-1">
+  1279→                    <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary-700">
+  1280→                      {p.title}
+  1281→                    </span>
+  1282→                    <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+  1283→                      <DeptDot accent={p.department.accent} className="size-1.5" />
+  1284→                      {p.department.code}
+  1285→                      <span aria-hidden>·</span>
+  1286→                      <Eye className="size-3" aria-hidden />
+  1287→                      {formatViews(p.views)}
+  1288→                      <span aria-hidden>·</span>
+  1289→                      {timeAgo(p.createdAt)}
+  1290→                    </span>
+  1291→                  </span>
+  1292→                </button>
+  1293→              </li>
+  1294→            ))}
+  1295→          </ul>
+  1296→        </Panel>
+  1297→
+  1298→        <Panel title="Newest members">
+  1299→          <ul className="mt-2 divide-y divide-up-border">
+  1300→            {overview.recentUsers.map((u) => (
+  1301→              <li key={u.id} className="flex items-center gap-3 py-3">
+  1302→                <UserAvatar name={u.displayName} avatarUrl={u.avatarUrl} className="size-9" />
+  1303→                <div className="min-w-0 flex-1">
+  1304→                  <p className="truncate text-sm font-semibold text-foreground">{u.displayName}</p>
+  1305→                  <p className="truncate text-xs text-muted-foreground">
+  1306→                    @{u.username} · joined {format(new Date(u.createdAt), "MMM d, yyyy")}
+  1307→                  </p>
+  1308→                </div>
+  1309→                <RoleChip role={u.role} />
+  1310→              </li>
+  1311→            ))}
+  1312→          </ul>
+  1313→        </Panel>
+  1314→      </div>
+  1315→    </div>
+  1316→  );
+  1317→}
+  1318→
+  1319→// ---------- overview cards ----------
+  1320→
+  1321→function ActivityCard({
+  1322→  items,
+  1323→  navigate,
+  1324→  className,
+  1325→}: {
+  1326→  items: AdminActivityItem[];
+  1327→  navigate: Navigate;
+  1328→  className?: string;
+  1329→}) {
+  1330→  return (
+  1331→    <Panel
+  1332→      title="Activity"
+  1333→      caption="Latest actions across the platform"
+  1334→      className={className}
+  1335→      right={
+  1336→        <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+  1337→          {items.length}
+  1338→        </span>
+  1339→      }
+  1340→    >
+  1341→      {items.length === 0 ? (
+  1342→        <p className="mt-6 text-sm text-muted-foreground">
+  1343→          Nothing has happened yet — activity lands here as members work.
+  1344→        </p>
+  1345→      ) : (
+  1346→        <ul className="nice-scroll mt-4 max-h-[24rem] space-y-0.5 overflow-y-auto pr-1">
+  1347→          {items.map((item, i) => (
+  1348→            <ActivityRow
+  1349→              key={item.id}
+  1350→              item={item}
+  1351→              last={i === items.length - 1}
+  1352→              navigate={navigate}
+  1353→            />
+  1354→          ))}
+  1355→        </ul>
+  1356→      )}
+  1357→    </Panel>
+  1358→  );
+  1359→}
+  1360→
+  1361→function ActivityRow({
+  1362→  item,
+  1363→  last,
+  1364→  navigate,
+  1365→}: {
+  1366→  item: AdminActivityItem;
+  1367→  last: boolean;
+  1368→  navigate: Navigate;
+  1369→}) {
+  1370→  const Icon = ACTIVITY_ICONS[item.kind];
+  1371→  const view = item.href ? activityToView(item.href) : null;
+  1372→  const rowClass = "relative flex items-center gap-3 rounded-xl p-2";
+  1373→  const body = (
+  1374→    <>
+  1375→      <span
+  1376→        aria-hidden
+  1377→        className={cn(
+  1378→          "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg",
+  1379→          item.kind === "REPORT"
+  1380→            ? "bg-danger-soft text-danger"
+  1381→            : "bg-primary-50 text-primary-700"
+  1382→        )}
+  1383→      >
+  1384→        <Icon className="size-4" aria-hidden />
+  1385→      </span>
+  1386→      <span className="min-w-0 flex-1">
+  1387→        <span className="block truncate text-sm font-medium text-foreground">{item.text}</span>
+  1388→        {item.detail ? (
+  1389→          <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
+  1390→        ) : null}
+  1391→      </span>
+  1392→      <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+  1393→        {timeAgo(item.createdAt)}
+  1394→      </span>
+  1395→    </>
+  1396→  );
+  1397→  return (
+  1398→    <li className="relative">
+  1399→      {!last ? (
+  1400→        <span
+  1401→          aria-hidden
+  1402→          className="absolute bottom-0 left-[23px] top-10 w-px bg-up-border"
+  1403→        />
+  1404→      ) : null}
+  1405→      {view ? (
+  1406→        <button
+  1407→          type="button"
+  1408→          onClick={() => navigate(view)}
+  1409→          className={cn(rowClass, "w-full text-left transition-colors hover:bg-surface-muted")}
+  1410→        >
+  1411→          {body}
+  1412→        </button>
+  1413→      ) : (
+  1414→        <div className={rowClass}>{body}</div>
+  1415→      )}
+  1416→    </li>
+  1417→  );
+  1418→}
+  1419→
+  1420→function SignupsCard({
+  1421→  data,
+  1422→  className,
+  1423→}: {
+  1424→  data: { month: string; count: number }[];
+  1425→  className?: string;
+  1426→}) {
+  1427→  const reduceMotion = useReducedMotion();
+  1428→  const max = Math.max(1, ...data.map((m) => m.count));
+  1429→  const total = data.reduce((sum, m) => sum + m.count, 0);
+  1430→  const last = data[data.length - 1]?.count ?? 0;
+  1431→  const prev = data[data.length - 2]?.count ?? 0;
+  1432→  const delta = last - prev;
+  1433→  return (
+  1434→    <Panel
+  1435→      title="Signups"
+  1436→      caption={`New members per month · ${total} total`}
+  1437→      className={className}
+  1438→      right={
+  1439→        <span
+  1440→          className={cn(
+  1441→            "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold",
+  1442→            delta > 0 ? "bg-success-soft text-success" : "bg-surface-muted text-muted-foreground"
+  1443→          )}
+  1444→        >
+  1445→          {delta > 0 ? (
+  1446→            <TrendingUp className="size-3" aria-hidden />
+  1447→          ) : delta < 0 ? (
+  1448→            <TrendingDown className="size-3" aria-hidden />
+  1449→          ) : (
+  1450→            <Minus className="size-3" aria-hidden />
+  1451→          )}
+  1452→          {delta > 0 ? `+${delta}` : delta} this month
+  1453→        </span>
+  1454→      }
+  1455→    >
+  1456→      {data.length === 0 ? (
+  1457→        <p className="mt-6 text-sm text-muted-foreground">No signup data yet.</p>
+  1458→      ) : (
+  1459→        <div className="mt-5 flex h-36 items-stretch gap-1.5 sm:gap-2.5">
+  1460→          {data.map((m, i) => {
+  1461→            const pct = Math.round((m.count / max) * 100);
+  1462→            return (
+  1463→              <div key={m.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+  1464→                <div
+  1465→                  className="flex w-full flex-1 items-end rounded-lg bg-surface-muted"
+  1466→                  title={`${monthLabel(m.month)}: ${m.count} ${m.count === 1 ? "signup" : "signups"}`}
+  1467→                >
+  1468→                  {reduceMotion ? (
+  1469→                    <div
+  1470→                      className="min-h-[2px] w-full rounded-t-lg bg-gradient-to-t from-primary-600 to-primary-400"
+  1471→                      style={{ height: `${pct}%` }}
+  1472→                    />
+  1473→                  ) : (
+  1474→                    <motion.div
+  1475→                      initial={{ height: "0%" }}
+  1476→                      animate={{ height: `${pct}%` }}
+  1477→                      transition={{ duration: 0.5, delay: i * 0.04, ease: "easeOut" }}
+  1478→                      className="min-h-[2px] w-full rounded-t-lg bg-gradient-to-t from-primary-600 to-primary-400 transition-[filter] hover:brightness-110"
+  1479→                    />
+  1480→                  )}
+  1481→                </div>
+  1482→                <span className="text-[10px] font-medium text-muted-foreground">
+  1483→                  {monthLabel(m.month)}
+  1484→                </span>
+  1485→              </div>
+  1486→            );
+  1487→          })}
+  1488→        </div>
+  1489→      )}
+  1490→    </Panel>
+  1491→  );
+  1492→}
+  1493→
+  1494→function SystemCard({
+  1495→  storage,
+  1496→  className,
+  1497→}: {
+  1498→  storage: AdminOverviewDTO["storage"];
+  1499→  className?: string;
+  1500→}) {
+  1501→  const rows: { label: string; value: string; ok?: boolean }[] = [
+  1502→    { label: "Database (SQLite)", value: "Operational", ok: true },
+  1503→    {
+  1504→      label: "Storage",
+  1505→      value: `${storage.uploadedFiles} uploaded files · ${storage.galleryImages} gallery images`,
+  1506→    },
+  1507→    {
+  1508→      label: "Resources",
+  1509→      value: `${storage.uploadedResources} uploaded · ${storage.linkedResources} linked`,
+  1510→    },
+  1511→  ];
+  1512→  return (
+  1513→    <Panel title="System" caption="Live platform status" className={className}>
+  1514→      <ul className="mt-3 divide-y divide-up-border">
+  1515→        {rows.map((row) => (
+  1516→          <li
+  1517→            key={row.label}
+  1518→            className="flex items-center justify-between gap-3 py-2.5 first:pt-2 last:pb-0"
+  1519→          >
+  1520→            <span className="flex shrink-0 items-center gap-2 text-sm font-medium text-foreground">
+  1521→              <span aria-hidden className="size-2 rounded-full bg-success" />
+  1522→              {row.label}
+  1523→            </span>
+  1524→            <span
+  1525→              className={cn(
+  1526→                "min-w-0 truncate text-right text-xs",
+  1527→                row.ok ? "font-semibold text-success" : "font-medium text-muted-foreground"
+  1528→              )}
+  1529→            >
+  1530→              {row.value}
+  1531→            </span>
+  1532→          </li>
+  1533→        ))}
+  1534→      </ul>
+  1535→    </Panel>
+  1536→  );
+  1537→}
+  1538→
+  1539→function QuickActionsCard({
+  1540→  overview,
+  1541→  onAction,
+  1542→  className,
+  1543→}: {
+  1544→  overview: AdminOverviewDTO;
+  1545→  onAction: (target: TabKey, openNew?: boolean) => void;
+  1546→  className?: string;
+  1547→}) {
+  1548→  const actions: {
+  1549→    label: string;
+  1550→    hint: string;
+  1551→    icon: LucideIcon;
+  1552→    go: () => void;
+  1553→    count?: number;
+  1554→    danger?: boolean;
+  1555→  }[] = [
+  1556→    {
+  1557→      label: "Review verifications",
+  1558→      hint: "Faculty-verified badge queue",
+  1559→      icon: ShieldCheck,
+  1560→      go: () => onAction("moderation"),
+  1561→      count: overview.pendingVerifications,
+  1562→    },
+  1563→    {
+  1564→      label: "Moderate reports",
+  1565→      hint: "Open community reports",
+  1566→      icon: Flag,
+  1567→      go: () => onAction("moderation"),
+  1568→      count: overview.openReports,
+  1569→      danger: true,
+  1570→    },
+  1571→    {
+  1572→      label: "Add member",
+  1573→      hint: "Create a student or faculty account",
+  1574→      icon: UserPlus,
+  1575→      go: () => onAction("users", true),
+  1576→    },
+  1577→    {
+  1578→      label: "Schedule event",
+  1579→      hint: "Publish a campus event",
+  1580→      icon: CalendarPlus,
+  1581→      go: () => onAction("events", true),
+  1582→    },
+  1583→    {
+  1584→      label: "Add department",
+  1585→      hint: "Extend the catalogue",
+  1586→      icon: Building2,
+  1587→      go: () => onAction("departments", true),
+  1588→    },
+  1589→  ];
+  1590→  return (
+  1591→    <Panel title="Quick actions" caption="Jump into the most common tasks" className={className}>
+  1592→      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+  1593→        {actions.map((action) => {
+  1594→          const Icon = action.icon;
+  1595→          return (
+  1596→            <button
+  1597→              key={action.label}
+  1598→              type="button"
+  1599→              onClick={action.go}
+  1600→              className="group flex items-center gap-3 rounded-xl border border-up-border bg-surface-muted/50 p-3 text-left transition-colors hover:border-up-border-strong hover:bg-primary-50/70"
+  1601→            >
+  1602→              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-card text-primary-700 shadow-sm ring-1 ring-up-border">
+  1603→                <Icon className="size-4" aria-hidden />
+  1604→              </span>
+  1605→              <span className="min-w-0 flex-1">
+  1606→                <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary-700">
+  1607→                  {action.label}
+  1608→                </span>
+  1609→                <span className="block truncate text-xs text-muted-foreground">{action.hint}</span>
+  1610→              </span>
+  1611→              {action.count ? (
+  1612→                <span
+  1613→                  className={cn(
+  1614→                    "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+  1615→                    action.danger ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning"
+  1616→                  )}
+  1617→                >
+  1618→                  {action.count}
+  1619→                </span>
+  1620→              ) : null}
+  1621→            </button>
+  1622→          );
+  1623→        })}
+  1624→      </div>
+  1625→    </Panel>
+  1626→  );
+  1627→}
+  1628→
+  1629→// ============================================================
+  1630→// Projects tab — search / filter / feature / publish / delete
+  1631→// ============================================================
+  1632→
+  1633→function ProjectsTab({
+  1634→  navigate,
+  1635→  onChanged,
+  1636→  refreshTick,
+  1637→  onLoaded,
+  1638→}: {
+  1639→  navigate: Navigate;
+  1640→  onChanged: () => void;
+  1641→  refreshTick: number;
+  1642→  onLoaded: (ok: boolean) => void;
+  1643→}) {
+  1644→  const [query, setQuery] = useState("");
+  1645→  const debouncedQuery = useDebounced(query, 300);
+  1646→  const [status, setStatus] = useState("ALL");
+  1647→  const [dept, setDept] = useState("ALL");
+  1648→  const [rows, setRows] = useState<AdminProjectRow[] | null>(null); // null = loading
+  1649→  const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+  1650→  const [busyId, setBusyId] = useState<string | null>(null);
+  1651→
+  1652→  useEffect(() => {
+  1653→    let cancelled = false;
+  1654→    fetchAdminDepartments()
+  1655→      .then((d) => {
+  1656→        if (!cancelled) setDepartments(d);
+  1657→      })
+  1658→      .catch(() => {});
+  1659→    return () => {
+  1660→      cancelled = true;
+  1661→    };
+  1662→  }, []);
+  1663→
+  1664→  useEffect(() => {
+  1665→    let cancelled = false;
+  1666→    fetchAdminProjects({
+  1667→      query: debouncedQuery || undefined,
+  1668→      status: status === "ALL" ? undefined : status,
+  1669→      dept: dept === "ALL" ? undefined : dept,
+  1670→    })
+  1671→      .then((data) => {
+  1672→        if (cancelled) return;
+  1673→        setRows(data);
+  1674→        onLoaded(true);
+  1675→      })
+  1676→      .catch((e) => {
+  1677→        if (cancelled) return;
+  1678→        setRows([]);
+  1679→        onLoaded(false);
+  1680→        toast.error(e instanceof Error ? e.message : "Could not load projects");
+  1681→      });
+  1682→    return () => {
+  1683→      cancelled = true;
+  1684→    };
+  1685→  }, [debouncedQuery, status, dept, refreshTick, onLoaded]);
+  1686→
+  1687→  const patchRow = (id: string, patch: Partial<AdminProjectRow>) => {
+  1688→    setRows((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, ...patch } : r)) : prev));
+  1689→  };
+  1690→
+  1691→  const setFeatured = async (row: AdminProjectRow, featured: boolean) => {
+  1692→    if (busyId) return;
+  1693→    setBusyId(row.id);
+  1694→    patchRow(row.id, { featured }); // optimistic
+  1695→    try {
+  1696→      await updateAdminProject({ id: row.id, featured });
+  1697→      toast.success(
+  1698→        featured ? `“${row.title}” is now featured` : `“${row.title}” removed from featured`
+  1699→      );
+  1700→      onChanged();
+  1701→    } catch (e) {
+  1702→      patchRow(row.id, { featured: !featured }); // revert
+  1703→      toast.error(e instanceof Error ? e.message : "Could not update the project");
+  1704→    } finally {
+  1705→      setBusyId(null);
+  1706→    }
+  1707→  };
+  1708→
+  1709→  const togglePublish = async (row: AdminProjectRow) => {
+  1710→    if (busyId) return;
+  1711→    const next = row.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+  1712→    setBusyId(row.id);
+  1713→    patchRow(row.id, { status: next }); // optimistic
+  1714→    try {
+  1715→      await updateAdminProject({ id: row.id, status: next });
+  1716→      toast.success(
+  1717→        next === "PUBLISHED" ? `“${row.title}” is live` : `“${row.title}” moved to drafts`
+  1718→      );
+  1719→      onChanged();
+  1720→    } catch (e) {
+  1721→      patchRow(row.id, { status: row.status }); // revert
+  1722→      toast.error(e instanceof Error ? e.message : "Could not update the project");
+  1723→    } finally {
+  1724→      setBusyId(null);
+  1725→    }
+  1726→  };
+  1727→
+  1728→  const removeProject = async (row: AdminProjectRow) => {
+  1729→    if (busyId) return;
+  1730→    setBusyId(row.id);
+  1731→    try {
+  1732→      await deleteAdminProject(row.id);
+  1733→      setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev));
+  1734→      toast.success(`Deleted “${row.title}”`);
+  1735→      onChanged();
+  1736→    } catch (e) {
+  1737→      toast.error(e instanceof Error ? e.message : "Could not delete the project");
+  1738→    } finally {
+  1739→      setBusyId(null);
+  1740→    }
+  1741→  };
+  1742→
+  1743→  return (
+  1744→    <div>
+  1745→      {/* toolbar */}
+  1746→      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+  1747→        <div className="relative flex-1 md:max-w-xs">
+  1748→          <Search
+  1749→            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+  1750→            aria-hidden
+  1751→          />
+  1752→          <Input
+  1753→            value={query}
+  1754→            onChange={(e) => {
+  1755→              setQuery(e.target.value);
+  1756→              setRows(null);
+  1757→            }}
+  1758→            placeholder="Search title or summary…"
+  1759→            aria-label="Search projects"
+  1760→            className="pl-9"
+  1761→          />
+  1762→        </div>
+  1763→        <div className="flex gap-2">
+  1764→          <Select
+  1765→            value={status}
+  1766→            onValueChange={(v) => {
+  1767→              setStatus(v);
+  1768→              setRows(null);
+  1769→            }}
+  1770→          >
+  1771→            <SelectTrigger className="w-[136px]" aria-label="Filter by status">
+  1772→              <SelectValue />
+  1773→            </SelectTrigger>
+  1774→            <SelectContent>
+  1775→              <SelectItem value="ALL">All statuses</SelectItem>
+  1776→              <SelectItem value="DRAFT">Drafts</SelectItem>
+  1777→              <SelectItem value="PUBLISHED">Published</SelectItem>
+  1778→            </SelectContent>
+  1779→          </Select>
+  1780→          <Select
+  1781→            value={dept}
+  1782→            onValueChange={(v) => {
+  1783→              setDept(v);
+  1784→              setRows(null);
+  1785→            }}
+  1786→          >
+  1787→            <SelectTrigger className="w-[168px]" aria-label="Filter by department">
+  1788→              <SelectValue />
+  1789→            </SelectTrigger>
+  1790→            <SelectContent>
+  1791→              <SelectItem value="ALL">All departments</SelectItem>
+  1792→              {departments.map((d) => (
+  1793→                <SelectItem key={d.id} value={d.code}>
+  1794→                  {d.code} · {d.name}
+  1795→                </SelectItem>
+  1796→              ))}
+  1797→            </SelectContent>
+  1798→          </Select>
+  1799→        </div>
+  1800→        {rows ? (
+  1801→          <p className="text-xs font-medium text-muted-foreground md:ml-auto">
+  1802→            {rows.length} {rows.length === 1 ? "project" : "projects"} · newest first
+  1803→          </p>
+  1804→        ) : null}
+  1805→      </div>
+  1806→
+  1807→      {/* rows */}
+  1808→      {rows === null ? (
+  1809→        <div className="mt-4 space-y-2">
+  1810→          {Array.from({ length: 6 }).map((_, i) => (
+  1811→            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+  1812→          ))}
+  1813→        </div>
+  1814→      ) : rows.length === 0 ? (
+  1815→        <div className="mt-4">
+  1816→          <EmptyState
+  1817→            icon={FolderKanban}
+  1818→            title="No projects match"
+  1819→            hint="Try a different search, status, or department filter."
+  1820→          />
+  1821→        </div>
+  1822→      ) : (
+  1823→        <ul className="nice-scroll mt-4 max-h-[70vh] space-y-2 overflow-y-auto pr-1">
+  1824→          {rows.map((row) => (
+  1825→            <li
+  1826→              key={row.id}
+  1827→              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-up-border bg-card p-3 shadow-sm"
+  1828→            >
+  1829→              <CoverThumb
+  1830→                src={row.coverImage}
+  1831→                accent={row.department?.accent}
+  1832→                category={row.category}
+  1833→                className="size-12"
+  1834→              />
+  1835→              <div className="min-w-0 flex-1 basis-48">
+  1836→                <div className="flex items-center gap-1.5">
+  1837→                  <button
+  1838→                    type="button"
+  1839→                    onClick={() => navigate({ name: "project", slug: row.slug })}
+  1840→                    className="truncate text-sm font-semibold text-foreground hover:text-primary-700"
+  1841→                  >
+  1842→                    {row.title}
+  1843→                  </button>
+  1844→                  {row.featured ? (
+  1845→                    <Star className="size-3.5 shrink-0 fill-warning text-warning" aria-label="Featured" />
+  1846→                  ) : null}
+  1847→                </div>
+  1848→                <p className="mt-0.5 truncate text-xs text-muted-foreground">/{row.slug}</p>
+  1849→                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+  1850→                  {row.department ? (
+  1851→                    <DeptChip code={row.department.code} accent={row.department.accent} />
+  1852→                  ) : null}
+  1853→                  <StatusBadge status={row.status} />
+  1854→                  {!row.hasSourceLink ? (
+  1855→                    <span
+  1856→                      title="No source link — this project has no demo or repository URL"
+  1857→                      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning"
+  1858→                    >
+  1859→                      <AlertTriangle className="size-3" aria-hidden />
+  1860→                      No source link
+  1861→                    </span>
+  1862→                  ) : null}
+  1863→                </div>
+  1864→              </div>
+  1865→
+  1866→              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+  1867→                <span className="inline-flex items-center gap-1" title="Views">
+  1868→                  <Eye className="size-3.5" aria-hidden />
+  1869→                  {formatViews(row.views)}
+  1870→                </span>
+  1871→                <span className="inline-flex items-center gap-1" title="Comments">
+  1872→                  <MessageCircle className="size-3.5" aria-hidden />
+  1873→                  {row.commentCount}
+  1874→                </span>
+  1875→              </div>
+  1876→
+  1877→              <div className="flex flex-wrap items-center gap-2 md:justify-end">
+  1878→                <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+  1879→                  <Switch
+  1880→                    checked={row.featured}
+  1881→                    disabled={busyId === row.id}
+  1882→                    onCheckedChange={(v) => setFeatured(row, v)}
+  1883→                    aria-label={`Feature ${row.title}`}
+  1884→                  />
+  1885→                  Featured
+  1886→                </label>
+  1887→                <Button
+  1888→                  variant="ghost"
+  1889→                  size="sm"
+  1890→                  className="h-8 rounded-lg px-2.5 text-xs font-semibold"
+  1891→                  disabled={busyId === row.id}
+  1892→                  onClick={() => togglePublish(row)}
+  1893→                >
+  1894→                  {row.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+  1895→                </Button>
+  1896→                <Button
+  1897→                  variant="ghost"
+  1898→                  size="sm"
+  1899→                  className="h-8 rounded-lg px-2.5 text-xs font-semibold"
+  1900→                  onClick={() => navigate({ name: "project", slug: row.slug })}
+  1901→                >
+  1902→                  Open
+  1903→                </Button>
+  1904→                <AlertDialog>
+  1905→                  <AlertDialogTrigger asChild>
+  1906→                    <Button
+  1907→                      variant="ghost"
+  1908→                      size="sm"
+  1909→                      className="h-8 rounded-lg px-2.5 text-xs font-semibold text-danger hover:text-danger"
+  1910→                      disabled={busyId === row.id}
+  1911→                    >
+  1912→                      <Trash2 className="size-3.5" aria-hidden />
+  1913→                      Delete
+  1914→                    </Button>
+  1915→                  </AlertDialogTrigger>
+  1916→                  <AlertDialogContent>
+  1917→                    <AlertDialogHeader>
+  1918→                      <AlertDialogTitle>Delete “{row.title}”?</AlertDialogTitle>
+  1919→                      <AlertDialogDescription>
+  1920→                        This permanently removes the project with its members, comments,
+  1921→                        resources and timeline. This cannot be undone.
+  1922→                      </AlertDialogDescription>
+  1923→                    </AlertDialogHeader>
+  1924→                    <AlertDialogFooter>
+  1925→                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1926→                      <AlertDialogAction
+  1927→                        onClick={() => removeProject(row)}
+  1928→                        className="bg-danger text-white hover:bg-danger/90"
+  1929→                      >
+  1930→                        Delete project
+  1931→                      </AlertDialogAction>
+  1932→                    </AlertDialogFooter>
+  1933→                  </AlertDialogContent>
+  1934→                </AlertDialog>
+  1935→              </div>
+  1936→            </li>
+  1937→          ))}
+  1938→        </ul>
+  1939→      )}
+  1940→    </div>
+  1941→  );
+  1942→}
+  1943→
+  1944→// ============================================================
+  1945→// Users tab — search / filter / roles / create / delete
+  1946→// ============================================================
+  1947→
+  1948→/** Same rule the API enforces — 3–30 lowercase letters, numbers, dots or underscores. */
+  1949→const USERNAME_RE = /^[a-z0-9](?:[a-z0-9._]{1,28})[a-z0-9]$/;
+  1950→
+  1951→function RoleSelect({
+  1952→  value,
+  1953→  disabled,
+  1954→  onChange,
+  1955→  label,
+  1956→}: {
+  1957→  value: string;
+  1958→  disabled?: boolean;
+  1959→  onChange: (v: string) => void;
+  1960→  label: string;
+  1961→}) {
+  1962→  return (
+  1963→    <Select value={value} onValueChange={onChange} disabled={disabled}>
+  1964→      <SelectTrigger className="h-8 w-[118px] text-xs" aria-label={label}>
+  1965→        <SelectValue />
+  1966→      </SelectTrigger>
+  1967→      <SelectContent>
+  1968→        <SelectItem value="STUDENT">Student</SelectItem>
+  1969→        <SelectItem value="FACULTY">Faculty</SelectItem>
+  1970→        <SelectItem value="ADMIN">Admin</SelectItem>
+  1971→      </SelectContent>
+  1972→    </Select>
+  1973→  );
+  1974→}
+  1975→
+  1976→function UsersTab({
+  1977→  onChanged,
+  1978→  refreshTick,
+  1979→  onLoaded,
+  1980→  autoOpenNew = false,
+  1981→}: {
+  1982→  onChanged: () => void;
+  1983→  refreshTick: number;
+  1984→  onLoaded: (ok: boolean) => void;
+  1985→  autoOpenNew?: boolean;
+  1986→}) {
+  1987→  const { user } = useAppStore();
+  1988→  const [query, setQuery] = useState("");
+  1989→  const debouncedQuery = useDebounced(query, 300);
+  1990→  const [role, setRole] = useState("ALL");
+  1991→  const [rows, setRows] = useState<AdminUserRow[] | null>(null); // null = loading
+  1992→  const [dialogOpen, setDialogOpen] = useState(autoOpenNew);
+  1993→  const [deleting, setDeleting] = useState<AdminUserRow | null>(null);
+  1994→  const [deleteBusy, setDeleteBusy] = useState(false);
+  1995→
+  1996→  useEffect(() => {
+  1997→    let cancelled = false;
+  1998→    fetchAdminUsers({
+  1999→      query: debouncedQuery || undefined,
+  2000→      role: role === "ALL" ? undefined : role,
+
+[showing lines 1-2000 of 3295; use offset=2001 with limit to continue reading]

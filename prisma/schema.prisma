@@ -8,44 +8,52 @@ datasource db {
 }
 
 // ============================================================
-// UniProjects — FULL platform for a SINGLE university.
+// UniProjects - FULL platform for a SINGLE university.
 // The university itself is app-level config (src/lib/config.ts).
 // ============================================================
 
 // ---------- Identity & Auth ----------
+// Role hierarchy (highest → lowest): ADMIN | MODERATOR | PROFESSOR | STUDENT.
+// VISITOR = unauthenticated (no User row).
 
 model User {
-  id                 String   @id @default(cuid())
-  username           String   @unique
-  displayName        String
-  email              String   @unique
-  passwordHash       String
-  emailVerified      Boolean  @default(false) // set true after the 6-digit email code flow
-  emailVerifiedAt    DateTime?
-  role               String   @default("STUDENT") // STUDENT | FACULTY | ADMIN
-  bio                String?
-  avatarUrl          String?
-  program            String? // major / program
-  skills             String? // comma separated
-  website            String?
-  github             String?
-  lookingForTeammates Boolean @default(false)
-  departmentId       String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  username            String    @unique
+  displayName         String
+  email               String    @unique
+  passwordHash        String
+  emailVerified       Boolean   @default(false) // true for accounts provisioned by admin approval
+  emailVerifiedAt     DateTime?
+  role                String    @default("STUDENT") // ADMIN | MODERATOR | PROFESSOR | STUDENT
+  studentId           String?   @unique // university student number - also the login userID for students
+  classId             String? // e.g. "CD2-2025-KIM" - students sharing a classId form one section
+  capstone            String? // "I" | "II" | "III"
+  cohortYear          Int? // capstone course year (e.g. 2025)
+  professorName       String? // professor responsible for the student's section
+  isTeamLeader        Boolean   @default(false) // only team leaders may submit projects
+  bio                 String?
+  avatarUrl           String?
+  program             String? // major / program
+  skills              String? // comma separated
+  website             String?
+  github              String?
+  universityProfileUrl String? // PROFESSOR only - link to the faculty member's official university profile page
+  lookingForTeammates Boolean   @default(false)
+  departmentId        String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  department       Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  department       Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   sessions         Session[]
-  ownedProjects    Project[]        @relation("ProjectOwner")
+  ownedProjects    Project[]       @relation("ProjectOwner")
   memberships      ProjectMember[]
-  posts            Post[]
   comments         Comment[]
   likes            Like[]
   bookmarks        Bookmark[]
-  followsGiven     Follow[]         @relation("Follower")
+  followsGiven     Follow[]        @relation("Follower")
   joinRequests     JoinRequest[]
   notifications    Notification[]
-  reportsFiled     Report[]         @relation("Reporter")
+  reportsFiled     Report[]        @relation("Reporter")
   verificationsReq Verification[]
 }
 
@@ -58,71 +66,118 @@ model Session {
   createdAt DateTime @default(now())
 }
 
-// Standalone (no relation) — one row per requested 6-digit email code.
-// Flow: request-code -> verify-code (consumes code, mints a single-use token)
-//       -> /api/auth/register requires that token, then the row is deleted.
-model EmailVerification {
-  id             String    @id @default(cuid())
-  email          String
-  codeHash       String // sha256(email + code + pepper) — the plain code is never stored
-  expiresAt      DateTime
-  consumedAt     DateTime?
-  attempts       Int       @default(0)
-  token          String?   @unique
-  tokenExpiresAt DateTime?
-  createdAt      DateTime  @default(now())
+// Students cannot self-register. They submit an AccountRequest; an admin
+// approves it, the backend provisions credentials and emails them to the
+// derived university address (<studentId>@ks.ac.kr).
+model AccountRequest {
+  id            String    @id @default(cuid())
+  studentId     String    @unique
+  name          String
+  capstone      String // "I" | "II" | "III"
+  year          Int // capstone course year
+  professor     String
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  decisionNote  String?
+  classId       String? // finalized at approval time
+  decidedAt     DateTime?
+  decidedBy     String?
+  createdUserId String? // User provisioned by the approval
+  createdAt     DateTime  @default(now())
+}
+
+// Simple DB-backed key/value store driving admin-configurable behaviour
+// (search bar toggle, hero copy, account-request intake, …).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  pinned    Boolean  @default(false)
+  authorId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Outbox for transactional email. In this sandbox there is no SMTP host,
+// so messages are persisted here (status CONSOLE) and mirrored to the server
+// log; src/lib/mailer.ts upgrades to real delivery when SMTP env vars exist.
+model EmailLog {
+  id        String   @id @default(cuid())
+  to        String
+  subject   String
+  body      String
+  kind      String   @default("SYSTEM") // CREDENTIALS | SYSTEM
+  status    String   @default("CONSOLE") // SENT | CONSOLE
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetRequest {
+  id        String   @id @default(cuid())
+  email     String // the university address the requester typed
+  userId    String? // set when the email matched a registered account
+  status    String   @default("SENT") // SENT = temp password emailed | NOT_FOUND = no such account
+  createdAt DateTime @default(now())
 
   @@index([email])
+  @@index([createdAt])
 }
 
 model Department {
-  id        String    @id @default(cuid())
-  name      String
-  code      String    @unique
-  tagline   String?
-  accent    String    @default("emerald")
-  sortOrder Int       @default(0)
-  projects  Project[]
-  users     User[]
+  id            String    @id @default(cuid())
+  name          String
+  code          String    @unique
+  tagline       String?
+  website       String? // official department homepage (kscms.ks.ac.kr/…) - editable in the admin panel
+  capstoneLabel String    @default("Capstone Design") // what this faculty calls its capstone course (default: Global IT's "Capstone Design")
+  accent        String    @default("emerald")
+  sortOrder     Int       @default(0)
+  projects      Project[]
+  users         User[]
 }
 
 // ---------- Projects ----------
 
 model Project {
-  id                 String   @id @default(cuid())
-  slug               String   @unique
-  title              String
-  summary            String
-  description        String
-  coverImage         String? // path under /public (e.g. /covers/terrabot.webp)
-  category           String // AI & ML | Web & App | IoT & Hardware | Data & Analytics | Design & Media | Security
-  year               Int
-  semester           String   @default("Spring")
-  program            String?
-  supervisor         String?
-  departmentId       String
-  department         Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  ownerId            String?
-  owner              User?    @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  status             String   @default("PUBLISHED") // DRAFT | PUBLISHED
-  allowJoinRequests  Boolean  @default(true)
-  lookingForTeammates Boolean @default(false)
-  verified           Boolean  @default(false)
-  tags               String   @default("")
-  demoUrl            String?
-  repoUrl            String?
-  featured           Boolean  @default(false)
-  views              Int      @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String     @id @default(cuid())
+  slug                String     @unique
+  title               String
+  summary             String
+  description         String
+  coverImage          String? // path under /public (e.g. /covers/terrabot.webp)
+  category            String // AI & ML | Web & App | IoT & Hardware | Data & Analytics | Design & Media | Security
+  year                Int
+  semester            String     @default("Spring")
+  program             String?
+  supervisor          String?
+  departmentId        String
+  department          Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  ownerId             String?
+  owner               User?      @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  classId             String? // denormalised from the owner's classId at submission time
+  status              String     @default("PUBLISHED") // DRAFT | PUBLISHED
+  allowJoinRequests   Boolean    @default(true)
+  lookingForTeammates Boolean    @default(false)
+  verified            Boolean    @default(false)
+  tags                String     @default("")
+  demoUrl             String?
+  repoUrl             String?
+  featured            Boolean    @default(false)
+  views               Int        @default(0)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
-  members      ProjectMember[]
-  technologies ProjectTechnology[]
-  resources    ProjectResource[]
-  images       ProjectImage[]
-  timeline     ProjectTimeline[]
-  comments     Comment[]
-  joinRequests JoinRequest[]
+  members       ProjectMember[]
+  technologies  ProjectTechnology[]
+  resources     ProjectResource[]
+  images        ProjectImage[]
+  timeline      ProjectTimeline[]
+  comments      Comment[]
+  joinRequests  JoinRequest[]
   verifications Verification[]
 }
 
@@ -188,25 +243,14 @@ model ProjectTimeline {
 
 // ---------- Community ----------
 
-model Post {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  body      String
-  createdAt DateTime  @default(now())
-  comments  Comment[]
-}
-
 model Comment {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   body      String
   projectId String?
-  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  postId    String?
-  post      Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Like {
@@ -266,32 +310,23 @@ model Verification {
 }
 
 model Report {
-  id          String   @id @default(cuid())
-  reporterId  String
-  reporter    User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  targetType  String // PROJECT | POST | USER
-  targetId    String
-  reason      String
-  status      String   @default("OPEN") // OPEN | RESOLVED
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  reporterId String
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType String // PROJECT | POST | USER
+  targetId   String
+  reason     String
+  status     String   @default("OPEN") // OPEN | RESOLVED
+  createdAt  DateTime @default(now())
 }
 
 model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String // JOIN_REQUEST | JOIN_APPROVED | JOIN_REJECTED | VERIFICATION | COMMENT | FOLLOW | LIKE | SYSTEM
+  type      String // JOIN_REQUEST | JOIN_APPROVED | JOIN_REJECTED | VERIFICATION | COMMENT | FOLLOW | LIKE | CREDENTIALS | SYSTEM
   body      String
   link      String?
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
-}
-
-model Event {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  location    String?
-  date        DateTime
-  createdAt   DateTime @default(now())
 }

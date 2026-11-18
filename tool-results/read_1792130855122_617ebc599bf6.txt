@@ -1,0 +1,722 @@
+  2832→                        >
+  2833→                          <Trash2 className="size-3.5" aria-hidden />
+  2834→                        </Button>
+  2835→                      </span>
+  2836→                    </TooltipTrigger>
+  2837→                    <TooltipContent>You cannot delete your own account</TooltipContent>
+  2838→                  </Tooltip>
+  2839→                </>
+  2840→              ) : (
+  2841→                <>
+  2842→                  <RoleSelect
+  2843→                    value={row.role}
+  2844→                    onChange={(v) => changeRole(row, v)}
+  2845→                    label={`Role for ${row.displayName}`}
+  2846→                  />
+  2847→                  <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+  2848→                    <Switch
+  2849→                      checked={row.isTeamLeader}
+  2850→                      onCheckedChange={(v) => toggleLeader(row, v)}
+  2851→                      aria-label={`Team leader for ${row.displayName}`}
+  2852→                    />
+  2853→                    Leader
+  2854→                  </label>
+  2855→                  <Button
+  2856→                    variant="ghost"
+  2857→                    size="icon"
+  2858→                    className="size-8 rounded-lg text-muted-foreground hover:text-primary-700"
+  2859→                    onClick={() => setEditingClass(row)}
+  2860→                    aria-label={`Edit section for ${row.displayName}`}
+  2861→                    title="Edit section (classID)"
+  2862→                  >
+  2863→                    <Pencil className="size-3.5" aria-hidden />
+  2864→                  </Button>
+  2865→                  <Button
+  2866→                    variant="ghost"
+  2867→                    size="icon"
+  2868→                    className="size-8 rounded-lg text-danger hover:text-danger"
+  2869→                    onClick={() => setDeleting(row)}
+  2870→                    aria-label={`Delete ${row.displayName}`}
+  2871→                  >
+  2872→                    <Trash2 className="size-3.5" aria-hidden />
+  2873→                  </Button>
+  2874→                </>
+  2875→              )}
+  2876→            </li>
+  2877→          ))}
+  2878→          </ul>
+  2879→          <Pagination
+  2880→            page={safePage}
+  2881→            totalPages={totalPages}
+  2882→            total={total}
+  2883→            perPage={USERS_PER_PAGE}
+  2884→            unit="members"
+  2885→            onPage={setPage}
+  2886→          />
+  2887→        </>
+  2888→      )}
+  2889→
+  2890→      {!readOnly ? (
+  2891→        <UserFormDialog
+  2892→          open={dialogOpen}
+  2893→          onOpenChange={setDialogOpen}
+  2894→          onCreated={(created) => {
+  2895→            setRows((prev) => (prev ? [created, ...prev] : prev));
+  2896→            onChanged();
+  2897→          }}
+  2898→        />
+  2899→      ) : null}
+  2900→
+  2901→      {/* section quick-edit — moves the member into another classID (or clears it) */}
+  2902→      <ClassEditDialog
+  2903→        key={editingClass?.id ?? "closed"}
+  2904→        row={editingClass}
+  2905→        onOpenChange={(v) => !v && setEditingClass(null)}
+  2906→        onSave={saveClass}
+  2907→      />
+  2908→
+  2909→      {/* professor university-profile link — managed from the console or by the professor */}
+  2910→      <Dialog
+  2911→        open={editingFacultyLink !== null}
+  2912→        onOpenChange={(v) => !v && setEditingFacultyLink(null)}
+  2913→      >
+  2914→        <DialogContent className="sm:max-w-md">
+  2915→          <DialogHeader>
+  2916→            <DialogTitle>University profile link</DialogTitle>
+  2917→            <DialogDescription>
+  2918→              Paste the faculty member's official profile page on the university website. Students
+  2919→              see it as a redirect button on {editingFacultyLink?.displayName}'s profile.
+  2920→            </DialogDescription>
+  2921→          </DialogHeader>
+  2922→          <form
+  2923→            onSubmit={(e) => {
+  2924→              e.preventDefault();
+  2925→              saveFacultyLink();
+  2926→            }}
+  2927→            className="space-y-4"
+  2928→          >
+  2929→            <div className="space-y-1.5">
+  2930→              <Label htmlFor="faculty-link-url">Profile URL</Label>
+  2931→              <Input
+  2932→                id="faculty-link-url"
+  2933→                type="url"
+  2934→                value={facultyLinkInput}
+  2935→                onChange={(e) => setFacultyLinkInput(e.target.value)}
+  2936→                maxLength={300}
+  2937→                placeholder="https://kscms.ks.ac.kr/gc/CMS/ProfessorMgr/…"
+  2938→              />
+  2939→            </div>
+  2940→            <DialogFooter className="gap-2">
+  2941→              <Button
+  2942→                type="button"
+  2943→                variant="outline"
+  2944→                onClick={() => setEditingFacultyLink(null)}
+  2945→                className="rounded-xl"
+  2946→              >
+  2947→                Cancel
+  2948→              </Button>
+  2949→              <Button type="submit" disabled={facultyLinkBusy} className="rounded-xl font-semibold">
+  2950→                {facultyLinkBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  2951→                Save link
+  2952→              </Button>
+  2953→            </DialogFooter>
+  2954→          </form>
+  2955→        </DialogContent>
+  2956→      </Dialog>
+  2957→
+  2958→      {/* delete confirmation — 409s (last admin) surface the server message via toast */}
+  2959→      <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
+  2960→        <AlertDialogContent>
+  2961→          <AlertDialogHeader>
+  2962→            <AlertDialogTitle>Remove {deleting?.displayName}?</AlertDialogTitle>
+  2963→            <AlertDialogDescription>
+  2964→              {deleting
+  2965→                ? `@${deleting.username} will be permanently removed along with their posts, comments and likes. Projects they own stay online without an owner. This cannot be undone.`
+  2966→                : ""}
+  2967→            </AlertDialogDescription>
+  2968→          </AlertDialogHeader>
+  2969→          <AlertDialogFooter>
+  2970→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+  2971→            <AlertDialogAction
+  2972→              onClick={removeUser}
+  2973→              className="bg-danger text-white hover:bg-danger/90"
+  2974→            >
+  2975→              {deleteBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  2976→              Remove member
+  2977→            </AlertDialogAction>
+  2978→          </AlertDialogFooter>
+  2979→        </AlertDialogContent>
+  2980→      </AlertDialog>
+  2981→    </div>
+  2982→  );
+  2983→}
+  2984→
+  2985→/** Tiny dialog for the per-row section (classID) quick-edit. */
+  2986→function ClassEditDialog({
+  2987→  row,
+  2988→  onOpenChange,
+  2989→  onSave,
+  2990→}: {
+  2991→  row: AdminUserRow | null;
+  2992→  onOpenChange: (v: boolean) => void;
+  2993→  onSave: (row: AdminUserRow, classId: string) => void;
+  2994→}) {
+  2995→  // keyed by the row in the parent, so state re-seeds per member without an effect
+  2996→  const [classId, setClassId] = useState(row?.classId ?? "");
+  2997→
+  2998→  return (
+  2999→    <Dialog open={row !== null} onOpenChange={onOpenChange}>
+  3000→      <DialogContent className="sm:max-w-sm">
+  3001→        <DialogHeader>
+  3002→          <DialogTitle>Edit section</DialogTitle>
+  3003→          <DialogDescription>
+  3004→            {row
+  3005→              ? `Move @${row.username} into a classID (e.g. CD2-2025-KIM). Students share a section with their professor and teammates.`
+  3006→              : ""}
+  3007→          </DialogDescription>
+  3008→        </DialogHeader>
+  3009→        <div className="space-y-1.5">
+  3010→          <Label htmlFor="class-edit-input">ClassID</Label>
+  3011→          <Input
+  3012→            id="class-edit-input"
+  3013→            value={classId}
+  3014→            onChange={(e) => setClassId(e.target.value.toUpperCase())}
+  3015→            placeholder="CD2-2025-KIM"
+  3016→            maxLength={40}
+  3017→            className="uppercase"
+  3018→          />
+  3019→          <p className="text-xs text-muted-foreground">
+  3020→            Leave empty to remove the member from any section.
+  3021→          </p>
+  3022→        </div>
+  3023→        <DialogFooter className="gap-2">
+  3024→          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+  3025→            Cancel
+  3026→          </Button>
+  3027→          <Button
+  3028→            className="rounded-xl font-semibold"
+  3029→            onClick={() => row && onSave(row, classId.trim())}
+  3030→          >
+  3031→            Save section
+  3032→          </Button>
+  3033→        </DialogFooter>
+  3034→      </DialogContent>
+  3035→    </Dialog>
+  3036→  );
+  3037→}
+  3038→
+  3039→/** "jiwoo han" → "jiwoo.han" — used to auto-suggest usernames in the new-member dialog. */
+  3040→function slugifyUsername(name: string): string {
+  3041→  return name
+  3042→    .toLowerCase()
+  3043→    .normalize("NFD")
+  3044→    .replace(/[\u0300-\u036f]/g, "")
+  3045→    .replace(/[^a-z0-9]+/g, ".")
+  3046→    .replace(/^\.+|\.+$/g, "")
+  3047→    .slice(0, 30);
+  3048→}
+  3049→
+  3050→/** Memorable 12-char password guaranteed to mix upper, lower and digits. */
+  3051→function generatePassword(): string {
+  3052→  const lower = "abcdefghijkmnpqrstuvwxyz";
+  3053→  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  3054→  const digits = "23456789";
+  3055→  const all = lower + upper + digits;
+  3056→  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+  3057→  const out = [pick(upper), pick(lower), pick(digits)];
+  3058→  for (let i = 0; i < 9; i++) out.push(pick(all));
+  3059→  for (let i = out.length - 1; i > 0; i--) {
+  3060→    const j = Math.floor(Math.random() * (i + 1));
+  3061→    [out[i], out[j]] = [out[j], out[i]];
+  3062→  }
+  3063→  return out.join("");
+  3064→}
+  3065→
+  3066→function UserFormDialog({
+  3067→  open,
+  3068→  onOpenChange,
+  3069→  onCreated,
+  3070→}: {
+  3071→  open: boolean;
+  3072→  onOpenChange: (v: boolean) => void;
+  3073→  onCreated: (row: AdminUserRow) => void;
+  3074→}) {
+  3075→  const [displayName, setDisplayName] = useState("");
+  3076→  const [studentId, setStudentId] = useState("");
+  3077→  const [username, setUsername] = useState("");
+  3078→  const [usernameTouched, setUsernameTouched] = useState(false);
+  3079→  const [email, setEmail] = useState("");
+  3080→  const [emailTouched, setEmailTouched] = useState(false);
+  3081→  const [program, setProgram] = useState("");
+  3082→  const [dept, setDept] = useState("NONE");
+  3083→  const [classId, setClassId] = useState("");
+  3084→  const [capstone, setCapstone] = useState("NONE");
+  3085→  const [cohortYear, setCohortYear] = useState("");
+  3086→  const [professorName, setProfessorName] = useState("");
+  3087→  const [teamRole, setTeamRole] = useState<"LEADER" | "MEMBER">("MEMBER");
+  3088→  const [role, setRole] = useState("STUDENT");
+  3089→  const [password, setPassword] = useState("");
+  3090→  const [showPw, setShowPw] = useState(true);
+  3091→  const [busy, setBusy] = useState(false);
+  3092→  const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+  3093→
+  3094→  // What the chosen faculty calls its capstone course — Global IT's
+  3095→  // "Capstone Design" is the default for every department.
+  3096→  const capstoneTerm = departments.find((d) => d.code === dept)?.capstoneLabel ?? "Capstone Design";
+  3097→
+  3098→  // reset every time the dialog opens
+  3099→  useEffect(() => {
+  3100→    if (!open) return;
+  3101→    setDisplayName("");
+  3102→    setStudentId("");
+  3103→    setUsername("");
+  3104→    setUsernameTouched(false);
+  3105→    setEmail("");
+  3106→    setEmailTouched(false);
+  3107→    setProgram("");
+  3108→    setDept("NONE");
+  3109→    setClassId("");
+  3110→    setCapstone("NONE");
+  3111→    setCohortYear("");
+  3112→    setProfessorName("");
+  3113→    setTeamRole("MEMBER");
+  3114→    setRole("STUDENT");
+  3115→    setPassword(generatePassword());
+  3116→    setShowPw(true);
+  3117→  }, [open]);
+  3118→
+  3119→  useEffect(() => {
+  3120→    if (!open) return;
+  3121→    let cancelled = false;
+  3122→    fetchAdminDepartments()
+  3123→      .then((d) => {
+  3124→        if (!cancelled) setDepartments(d);
+  3125→      })
+  3126→      .catch(() => {});
+  3127→    return () => {
+  3128→      cancelled = true;
+  3129→    };
+  3130→  }, [open]);
+  3131→
+  3132→  const isStudent = role === "STUDENT";
+  3133→
+  3134→  // auto-suggest a username from the display name until the admin edits it manually
+  3135→  useEffect(() => {
+  3136→    if (!usernameTouched) setUsername(slugifyUsername(displayName));
+  3137→  }, [displayName, usernameTouched]);
+  3138→
+  3139→  // default the university address until the admin types an explicit email:
+  3140→  // students key off their student number (a<id>@ks.ac.kr), staff off the username
+  3141→  useEffect(() => {
+  3142→    if (emailTouched) return;
+  3143→    if (isStudent && studentId) {
+  3144→      setEmail(`a${studentId}@ks.ac.kr`);
+  3145→      return;
+  3146→    }
+  3147→    setEmail(username ? `${username}@ks.ac.kr` : "");
+  3148→  }, [username, studentId, isStudent, emailTouched]);
+  3149→
+  3150→  const studentIdOk = studentId === "" || /^\d{6,10}$/.test(studentId);
+  3151→  // staff always need an explicit username — there is no student number fallback
+  3152→  const usernameOk = isStudent
+  3153→    ? username === "" || USERNAME_RE.test(username)
+  3154→    : USERNAME_RE.test(username);
+  3155→  const emailOk = email === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  3156→  const pwOk = password.length >= 8;
+  3157→  // students sign in with their student number and receive a<id>@ks.ac.kr —
+  3158→  // without a student ID both a username and an email are required;
+  3159→  // staff sign in with a username backed by a university email address
+  3160→  const identityOk = isStudent
+  3161→    ? studentId !== "" || (username !== "" && email !== "")
+  3162→    : username !== "" && email !== "";
+  3163→  const canSubmit =
+  3164→    displayName.trim().length >= 2 &&
+  3165→    pwOk &&
+  3166→    studentIdOk &&
+  3167→    usernameOk &&
+  3168→    emailOk &&
+  3169→    identityOk &&
+  3170→    !busy;
+  3171→
+  3172→  const submit = async (e: FormEvent<HTMLFormElement>) => {
+  3173→    e.preventDefault();
+  3174→    if (!canSubmit) return;
+  3175→    setBusy(true);
+  3176→    try {
+  3177→      // when the student number drives identity, let the server derive
+  3178→      // a<studentId>@ks.ac.kr with the student number as the login userID
+  3179→      const studentIdDrivesIdentity =
+  3180→        isStudent && studentId !== "" && !usernameTouched && !emailTouched;
+  3181→      const created = await createAdminUser({
+  3182→        username: studentIdDrivesIdentity ? undefined : username || undefined,
+  3183→        displayName: displayName.trim(),
+  3184→        email: studentIdDrivesIdentity ? undefined : email.trim() || undefined,
+  3185→        password,
+  3186→        role,
+  3187→        dept: dept === "NONE" ? undefined : dept,
+  3188→        program: program.trim() || undefined,
+  3189→        // section fields are student-only (requirement 6) — staff never inherit them
+  3190→        studentId: isStudent ? studentId || undefined : undefined,
+  3191→        classId: isStudent ? classId.trim() || undefined : undefined,
+  3192→        capstone: isStudent && capstone !== "NONE" ? capstone : undefined,
+  3193→        cohortYear: isStudent && cohortYear ? Number(cohortYear) : undefined,
+  3194→        professorName: isStudent ? professorName.trim() || undefined : undefined,
+  3195→        isTeamLeader: isStudent ? teamRole === "LEADER" : false,
+  3196→      });
+  3197→      toast.success(
+  3198→        isStudent
+  3199→          ? `@${created.username} joined the showcase`
+  3200→          : `@${created.username} provisioned — credentials emailed`
+  3201→      );
+  3202→      onOpenChange(false);
+  3203→      onCreated(created);
+  3204→    } catch (err) {
+  3205→      // 409s ("already taken") and validation errors surface the server message
+  3206→      toast.error(err instanceof Error ? err.message : "Could not create the member");
+  3207→    } finally {
+  3208→      setBusy(false);
+  3209→    }
+  3210→  };
+  3211→
+  3212→  return (
+  3213→    <Dialog open={open} onOpenChange={onOpenChange}>
+  3214→      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+  3215→        <DialogHeader>
+  3216→          <DialogTitle className="flex items-center gap-2">
+  3217→            <span className="flex size-8 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+  3218→              <UserPlus className="size-4" aria-hidden />
+  3219→            </span>
+  3220→            New member
+  3221→          </DialogTitle>
+  3222→          <DialogDescription>
+  3223→            Provision an account on behalf of a student or staff member — credentials are copied to
+  3224→            the email outbox and the password is shown once.
+  3225→          </DialogDescription>
+  3226→        </DialogHeader>
+  3227→        <form onSubmit={submit} className="space-y-4">
+  3228→          <div className="grid gap-4 sm:grid-cols-2">
+  3229→            <div className="space-y-1.5">
+  3230→              <Label htmlFor="nu-name">Full name</Label>
+  3231→              <Input
+  3232→                id="nu-name"
+  3233→                value={displayName}
+  3234→                onChange={(e) => setDisplayName(e.target.value)}
+  3235→                placeholder="Jane Doe"
+  3236→                required
+  3237→                minLength={2}
+  3238→                maxLength={80}
+  3239→                autoComplete="off"
+  3240→              />
+  3241→            </div>
+  3242→            <div className="space-y-1.5">
+  3243→              <Label htmlFor="nu-role">Role</Label>
+  3244→              <Select value={role} onValueChange={setRole}>
+  3245→                <SelectTrigger id="nu-role" aria-label="Role" className="w-full">
+  3246→                  <SelectValue />
+  3247→                </SelectTrigger>
+  3248→                <SelectContent>
+  3249→                  <SelectItem value="STUDENT">Student</SelectItem>
+  3250→                  <SelectItem value="PROFESSOR">Professor</SelectItem>
+  3251→                  <SelectItem value="MODERATOR">Moderator</SelectItem>
+  3252→                  <SelectItem value="ADMIN">Admin</SelectItem>
+  3253→                </SelectContent>
+  3254→              </Select>
+  3255→              <p className="text-xs text-muted-foreground">
+  3256→                {role === "ADMIN"
+  3257→                  ? "Admins get this console — grant sparingly."
+  3258→                  : role === "MODERATOR"
+  3259→                    ? "Moderators help manage accounts and content."
+  3260→                    : role === "PROFESSOR"
+  3261→                      ? "Professors supervise sections and verify projects."
+  3262→                      : "Students browse, submit and team up."}
+  3263→              </p>
+  3264→            </div>
+  3265→          </div>
+  3266→
+  3267→          <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+  3268→            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+  3269→              Credentials
+  3270→            </p>
+  3271→            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+  3272→              {isStudent ? (
+  3273→                <div className="space-y-1.5">
+  3274→                  <Label htmlFor="nu-student-id">
+  3275→                    Student ID <span className="font-normal text-muted-foreground">(optional)</span>
+  3276→                  </Label>
+  3277→                  <Input
+  3278→                    id="nu-student-id"
+  3279→                    value={studentId}
+  3280→                    onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ""))}
+  3281→                    placeholder="2025307111"
+  3282→                    inputMode="numeric"
+  3283→                    maxLength={10}
+  3284→                    autoComplete="off"
+  3285→                    aria-invalid={!studentIdOk}
+  3286→                    className={cn(!studentIdOk && "border-danger")}
+  3287→                  />
+  3288→                  {studentId ? (
+  3289→                    <p className="text-xs text-muted-foreground">
+  3290→                      Leave username/email empty to auto-derive{" "}
+  3291→                      <span className="font-semibold text-foreground">a{studentId}@ks.ac.kr</span> —
+  3292→                      the student number becomes the userID.
+  3293→                    </p>
+  3294→                  ) : (
+  3295→                    <p className="text-xs text-muted-foreground">
+  3296→                      6–10 digits. Without it, username + email are required below.
+  3297→                    </p>
+  3298→                  )}
+  3299→                </div>
+  3300→              ) : null}
+  3301→              <div className="space-y-1.5">
+  3302→                <Label htmlFor="nu-username">
+  3303→                  Username{" "}
+  3304→                  <span className="font-normal text-muted-foreground">
+  3305→                    {isStudent ? (studentId ? "(optional)" : "(or student ID)") : "(required)"}
+  3306→                  </span>
+  3307→                </Label>
+  3308→                <Input
+  3309→                  id="nu-username"
+  3310→                  value={username}
+  3311→                  onChange={(e) => {
+  3312→                    setUsernameTouched(true);
+  3313→                    setUsername(e.target.value.toLowerCase().replace(/\s+/g, "."));
+  3314→                  }}
+  3315→                  placeholder={isStudent && studentId ? studentId : "jane.doe"}
+  3316→                  autoComplete="off"
+  3317→                  aria-invalid={!usernameOk}
+  3318→                  className={cn(!usernameOk && "border-danger")}
+  3319→                />
+  3320→                {!usernameOk ? (
+  3321→                  <p className="text-xs font-medium text-danger" aria-live="polite">
+  3322→                    {username
+  3323→                      ? "3–30 lowercase letters, numbers, dots or underscores"
+  3324→                      : "Required for staff accounts — 3–30 lowercase letters, numbers, dots or underscores"}
+  3325→                  </p>
+  3326→                ) : (
+  3327→                  <p className="text-xs text-muted-foreground">
+  3328→                    {isStudent ? "Members sign in with this name." : "Staff sign in with this username."}
+  3329→                  </p>
+  3330→                )}
+  3331→              </div>
+  3332→              <div className="space-y-1.5">
+  3333→                <Label htmlFor="nu-email">
+  3334→                  Email{" "}
+  3335→                  <span className="font-normal text-muted-foreground">
+  3336→                    {isStudent ? (studentId ? "(optional)" : "(or student ID)") : "(auto-filled)"}
+  3337→                  </span>
+  3338→                </Label>
+  3339→                <Input
+  3340→                  id="nu-email"
+  3341→                  type="email"
+  3342→                  value={email}
+  3343→                  onChange={(e) => {
+  3344→                    setEmailTouched(true);
+  3345→                    setEmail(e.target.value);
+  3346→                  }}
+  3347→                  placeholder={isStudent && studentId ? `a${studentId}@ks.ac.kr` : "jane.doe@ks.ac.kr"}
+  3348→                  autoComplete="off"
+  3349→                  aria-invalid={!!email && !emailOk}
+  3350→                  className={cn(!!email && !emailOk && "border-danger")}
+  3351→                />
+  3352→                {!!email && !emailOk ? (
+  3353→                  <p className="text-xs font-medium text-danger" aria-live="polite">
+  3354→                    Enter a valid email address
+  3355→                  </p>
+  3356→                ) : (
+  3357→                  <p className="text-xs text-muted-foreground">
+  3358→                    {isStudent
+  3359→                      ? "Must be unique across the campus."
+  3360→                      : "Defaults to the university address — edit it if the staff mailbox differs."}
+  3361→                  </p>
+  3362→                )}
+  3363→              </div>
+  3364→              <div className={cn("space-y-1.5", !isStudent && "sm:col-span-2")}>
+  3365→                <Label htmlFor="nu-password">Temporary password</Label>
+  3366→                <div className="flex gap-2">
+  3367→                  <Input
+  3368→                    id="nu-password"
+  3369→                    type={showPw ? "text" : "password"}
+  3370→                    value={password}
+  3371→                    onChange={(e) => setPassword(e.target.value)}
+  3372→                    required
+  3373→                    minLength={8}
+  3374→                    autoComplete="new-password"
+  3375→                    aria-invalid={password.length > 0 && !pwOk}
+  3376→                    className={cn("font-mono text-sm", password.length > 0 && !pwOk && "border-danger")}
+  3377→                  />
+  3378→                  <Button
+  3379→                    type="button"
+  3380→                    variant="outline"
+  3381→                    size="icon"
+  3382→                    className="size-9 shrink-0 rounded-xl"
+  3383→                    onClick={() => setShowPw((v) => !v)}
+  3384→                    aria-label={showPw ? "Hide password" : "Show password"}
+  3385→                  >
+  3386→                    {showPw ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+  3387→                  </Button>
+  3388→                  <Button
+  3389→                    type="button"
+  3390→                    variant="outline"
+  3391→                    size="icon"
+  3392→                    className="size-9 shrink-0 rounded-xl"
+  3393→                    onClick={() => setPassword(generatePassword())}
+  3394→                    aria-label="Generate a strong password"
+  3395→                    title="Generate a strong password"
+  3396→                  >
+  3397→                    <Dices className="size-4" aria-hidden />
+  3398→                  </Button>
+  3399→                </div>
+  3400→                <p className="text-xs text-muted-foreground">
+  3401→                  {pwOk ? "Good — copy it now; it is also sent to the email outbox." : "At least 8 characters."}
+  3402→                </p>
+  3403→              </div>
+  3404→            </div>
+  3405→          </div>
+  3406→
+  3407→          {isStudent ? (
+  3408→            <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+  3409→              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+  3410→                Section (requirement 6)
+  3411→              </p>
+  3412→            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+  3413→              <div className="space-y-1.5">
+  3414→                <Label htmlFor="nu-class">ClassID</Label>
+  3415→                <Input
+  3416→                  id="nu-class"
+  3417→                  value={classId}
+  3418→                  onChange={(e) => setClassId(e.target.value.toUpperCase())}
+  3419→                  placeholder="CD2-2025-KIM"
+  3420→                  maxLength={40}
+  3421→                  className="uppercase"
+  3422→                  autoComplete="off"
+  3423→                />
+  3424→              </div>
+  3425→              <div className="space-y-1.5">
+  3426→                <Label htmlFor="nu-team-role">Team role</Label>
+  3427→                <Select
+  3428→                  value={teamRole}
+  3429→                  onValueChange={(v) => setTeamRole(v as "LEADER" | "MEMBER")}
+  3430→                >
+  3431→                  <SelectTrigger id="nu-team-role" aria-label="Team role" className="w-full">
+  3432→                    <SelectValue />
+  3433→                  </SelectTrigger>
+  3434→                  <SelectContent>
+  3435→                    <SelectItem value="MEMBER">Member</SelectItem>
+  3436→                    <SelectItem value="LEADER">Team Leader</SelectItem>
+  3437→                  </SelectContent>
+  3438→                </Select>
+  3439→                <p className="text-xs text-muted-foreground">
+  3440→                  {teamRole === "LEADER"
+  3441→                    ? "Team leaders submit the capstone project."
+  3442→                    : "Members join projects their leader submits."}
+  3443→                </p>
+  3444→              </div>
+  3445→            </div>
+  3446→            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+  3447→              <div className="space-y-1.5">
+  3448→                <Label htmlFor="nu-capstone">{capstoneTerm}</Label>
+  3449→                <Select value={capstone} onValueChange={setCapstone}>
+  3450→                  <SelectTrigger id="nu-capstone" aria-label={capstoneTerm} className="w-full">
+  3451→                    <SelectValue />
+  3452→                  </SelectTrigger>
+  3453→                  <SelectContent>
+  3454→                    <SelectItem value="NONE">Not set</SelectItem>
+  3455→                    <SelectItem value="I">{capstoneTerm} I</SelectItem>
+  3456→                    <SelectItem value="II">{capstoneTerm} II</SelectItem>
+  3457→                    <SelectItem value="III">{capstoneTerm} III</SelectItem>
+  3458→                  </SelectContent>
+  3459→                </Select>
+  3460→              </div>
+  3461→              <div className="space-y-1.5">
+  3462→                <Label htmlFor="nu-year">Cohort year</Label>
+  3463→                <Input
+  3464→                  id="nu-year"
+  3465→                  value={cohortYear}
+  3466→                  onChange={(e) => setCohortYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+  3467→                  placeholder="2025"
+  3468→                  inputMode="numeric"
+  3469→                  autoComplete="off"
+  3470→                />
+  3471→              </div>
+  3472→              <div className="space-y-1.5">
+  3473→                <Label htmlFor="nu-professor">Professor</Label>
+  3474→                <Input
+  3475→                  id="nu-professor"
+  3476→                  value={professorName}
+  3477→                  onChange={(e) => setProfessorName(e.target.value)}
+  3478→                  placeholder="Dana Kim"
+  3479→                  maxLength={80}
+  3480→                  autoComplete="off"
+  3481→                />
+  3482→              </div>
+  3483→            </div>
+  3484→            </div>
+  3485→          ) : null}
+  3486→
+  3487→          <div className="grid gap-4 sm:grid-cols-2">
+  3488→            <div className="space-y-1.5">
+  3489→              <Label htmlFor="nu-dept">Department</Label>
+  3490→              <Select value={dept} onValueChange={setDept}>
+  3491→                <SelectTrigger id="nu-dept" aria-label="Department" className="w-full">
+  3492→                  <SelectValue />
+  3493→                </SelectTrigger>
+  3494→                <SelectContent>
+  3495→                  <SelectItem value="NONE">No department</SelectItem>
+  3496→                  {departments.map((d) => (
+  3497→                    <SelectItem key={d.id} value={d.code}>
+  3498→                      {d.code} · {d.name}
+  3499→                    </SelectItem>
+  3500→                  ))}
+  3501→                </SelectContent>
+  3502→              </Select>
+  3503→            </div>
+  3504→            <div className="space-y-1.5">
+  3505→              <Label htmlFor="nu-program">
+  3506→                Program <span className="font-normal text-muted-foreground">(optional)</span>
+  3507→              </Label>
+  3508→              <Input
+  3509→                id="nu-program"
+  3510→                value={program}
+  3511→                onChange={(e) => setProgram(e.target.value)}
+  3512→                placeholder="B.S. Computer Science"
+  3513→                maxLength={80}
+  3514→                autoComplete="off"
+  3515→              />
+  3516→            </div>
+  3517→          </div>
+  3518→
+  3519→          {!identityOk ? (
+  3520→            <p className="text-xs font-medium text-warning" aria-live="polite">
+  3521→              {isStudent
+  3522→                ? "Provide a student ID, or both a username and an email — one of them must identify the account."
+  3523→                : "Staff accounts need a username and a university email address."}
+  3524→            </p>
+  3525→          ) : null}
+  3526→
+  3527→          <DialogFooter className="gap-2">
+  3528→            <Button
+  3529→              type="button"
+  3530→              variant="outline"
+  3531→              onClick={() => onOpenChange(false)}
+  3532→              className="rounded-xl"
+  3533→            >
+  3534→              Cancel
+  3535→            </Button>
+  3536→            <Button type="submit" disabled={!canSubmit} className="rounded-xl font-semibold">
+  3537→              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  3538→              Create member
+  3539→            </Button>
+  3540→          </DialogFooter>
+  3541→        </form>
+  3542→      </DialogContent>
+  3543→    </Dialog>
+  3544→  );
+  3545→}
+  3546→
+  3547→// ============================================================
+  3548→// Departments tab — grid + create / edit / delete
+  3549→// ============================================================
+  3550→
+  3551→function DepartmentsTab({
+
+[showing lines 2832-3551 of 5252; use offset=3552 with limit to continue reading]

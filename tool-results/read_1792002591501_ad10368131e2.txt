@@ -1,0 +1,752 @@
+     1→"use client";
+     2→
+     3→// ============================================================
+     4→// Dashboard — the signed-in home base, one experience per role.
+     5→//   STUDENT    identity + team/submit state + security nudge
+     6→//   PROFESSOR  verification queue + open reports (own sections)
+     7→//   MODERATOR  same queues + admin-panel shortcut (limited tabs)
+     8→//   ADMIN      overview stats + quick actions into the console
+     9→// Guests get a friendly sign-in prompt. Staff queues live in
+    10→// ../staff-queues and are shared with the admin Moderation tab.
+    11→// ============================================================
+    12→
+    13→import { useEffect, useState, type ReactNode } from "react";
+    14→import { motion, useReducedMotion } from "framer-motion";
+    15→import {
+    16→  BadgeCheck,
+    17→  Eye,
+    18→  Flag,
+    19→  FolderKanban,
+    20→  GraduationCap,
+    21→  Handshake,
+    22→  KeyRound,
+    23→  ListChecks,
+    24→  Mail,
+    25→  Megaphone,
+    26→  MessageCircle,
+    27→  Paperclip,
+    28→  Settings2,
+    29→  ShieldCheck,
+    30→  SquarePlus,
+    31→  UserPlus,
+    32→  Users,
+    33→  UsersRound,
+    34→} from "lucide-react";
+    35→import { Button } from "@/components/ui/button";
+    36→import { Skeleton } from "@/components/ui/skeleton";
+    37→import { cn } from "@/lib/utils";
+    38→import {
+    39→  fetchAdminOverview,
+    40→  fetchJoinRequests,
+    41→  fetchProjects,
+    42→  type Navigate,
+    43→} from "../api-client";
+    44→import { canSubmit, useAppStore } from "../store";
+    45→import { ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
+    46→import { EmptyState, RoleBadge, StatusBadge, UserAvatar, formatViews, timeAgo, VerifiedBadge } from "../ui-bits";
+    47→import type { AdminActivityItem, AdminOverviewDTO, ProjectListItem, SafeUserDTO } from "@/lib/types";
+    48→
+    49→const ACTIVITY_ICONS: Record<AdminActivityItem["kind"], typeof FolderKanban> = {
+    50→  PROJECT: FolderKanban,
+    51→  USER: UserPlus,
+    52→  COMMENT: MessageCircle,
+    53→  REPORT: Flag,
+    54→  JOIN: Handshake,
+    55→  ACCOUNT_REQUEST: UserPlus,
+    56→  RESOURCE: Paperclip,
+    57→};
+    58→
+    59→// ---------- tiny reveal helper (reduced-motion aware) ----------
+    60→
+    61→function FadeIn({ children, delay = 0, className }: { children: ReactNode; delay?: number; className?: string }) {
+    62→  const reduce = useReducedMotion();
+    63→  return (
+    64→    <motion.div
+    65→      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 14 }}
+    66→      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+    67→      transition={{ duration: 0.4, delay, ease: "easeOut" }}
+    68→      className={className}
+    69→    >
+    70→      {children}
+    71→    </motion.div>
+    72→  );
+    73→}
+    74→
+    75→function labelForCapstone(capstone: string | null): string | null {
+    76→  if (!capstone) return null;
+    77→  if (capstone === "I" || capstone === "II" || capstone === "III") return `Capstone ${capstone}`;
+    78→  return capstone;
+    79→}
+    80→
+    81→// ---------- shared chrome ----------
+    82→
+    83→function PageHeader({ user, right }: { user: SafeUserDTO; right?: ReactNode }) {
+    84→  const firstName = user.displayName.split(" ")[0];
+    85→  return (
+    86→    <header className="flex flex-wrap items-start justify-between gap-4">
+    87→      <div>
+    88→        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-600">Dashboard</p>
+    89→        <h1 className="mt-1 flex flex-wrap items-center gap-2.5 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+    90→          Welcome back, {firstName}
+    91→          <RoleBadge role={user.role} />
+    92→        </h1>
+    93→        <p className="mt-1 text-sm text-muted-foreground">
+    94→          {user.department ? `${user.department.name} · ` : ""}@{user.username}
+    95→        </p>
+    96→      </div>
+    97→      {right}
+    98→    </header>
+    99→  );
+   100→}
+   101→
+   102→/** Avatar + role-specific account facts, shared by every role's layout. */
+   103→function IdentityCard({ user }: { user: SafeUserDTO }) {
+   104→  const capstone = labelForCapstone(user.capstone);
+   105→  return (
+   106→    <section
+   107→      aria-label="Account overview"
+   108→      className="rounded-2xl border border-up-border bg-card p-5 shadow-card"
+   109→    >
+   110→      <div className="flex items-center gap-3">
+   111→        <UserAvatar name={user.displayName} avatarUrl={user.avatarUrl} className="size-12 text-sm" ring={false} />
+   112→        <div className="min-w-0">
+   113→          <p className="truncate text-base font-bold tracking-tight text-foreground">{user.displayName}</p>
+   114→          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+   115→            @{user.username}
+   116→            {user.role === "STUDENT" ? (
+   117→              user.isTeamLeader ? (
+   118→                <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
+   119→                  Team Leader
+   120→                </span>
+   121→              ) : (
+   122→                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+   123→                  Member
+   124→                </span>
+   125→              )
+   126→            ) : null}
+   127→          </p>
+   128→        </div>
+   129→      </div>
+   130→      <ul className="mt-4 space-y-2.5 border-t border-up-border pt-4 text-sm">
+   131→        {user.studentId ? (
+   132→          <li className="flex items-center justify-between gap-3">
+   133→            <span className="shrink-0 text-muted-foreground">Student ID</span>
+   134→            <span className="font-medium tabular-nums text-foreground">{user.studentId}</span>
+   135→          </li>
+   136→        ) : null}
+   137→        {user.classId ? (
+   138→          <li className="flex items-center justify-between gap-3">
+   139→            <span className="shrink-0 text-muted-foreground">Section</span>
+   140→            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+   141→              <Users className="size-3.5 text-primary-700" aria-hidden />
+   142→              {user.classId}
+   143→            </span>
+   144→          </li>
+   145→        ) : null}
+   146→        {capstone || user.cohortYear ? (
+   147→          <li className="flex items-center justify-between gap-3">
+   148→            <span className="shrink-0 text-muted-foreground">Course</span>
+   149→            <span className="font-medium text-foreground">
+   150→              {[capstone, user.cohortYear ? `${user.cohortYear} cohort` : null].filter(Boolean).join(" · ")}
+   151→            </span>
+   152→          </li>
+   153→        ) : null}
+   154→        {user.professorName ? (
+   155→          <li className="flex items-center justify-between gap-3">
+   156→            <span className="shrink-0 text-muted-foreground">Professor</span>
+   157→            <span className="min-w-0 truncate font-medium text-foreground">{user.professorName}</span>
+   158→          </li>
+   159→        ) : null}
+   160→        {user.department ? (
+   161→          <li className="flex items-center justify-between gap-3">
+   162→            <span className="shrink-0 text-muted-foreground">Department</span>
+   163→            <span className="min-w-0 truncate font-medium text-foreground">{user.department.name}</span>
+   164→          </li>
+   165→        ) : null}
+   166→      </ul>
+   167→    </section>
+   168→  );
+   169→}
+   170→
+   171→/** Subtle, always-on reminder that the coordinator generated the password. */
+   172→function SecurityRow({ navigate }: { navigate: Navigate }) {
+   173→  return (
+   174→    <button
+   175→      type="button"
+   176→      onClick={() => navigate({ name: "settings" })}
+   177→      className="group flex w-full items-start gap-3 rounded-2xl border border-dashed border-up-border bg-card/60 p-4 text-left outline-none transition-colors hover:border-up-border-strong hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+   178→    >
+   179→      <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-muted-foreground transition-colors group-hover:text-primary-700">
+   180→        <KeyRound className="size-4" aria-hidden />
+   181→      </span>
+   182→      <span className="min-w-0 flex-1">
+   183→        <span className="block text-xs font-semibold uppercase tracking-widest text-muted-foreground">Security</span>
+   184→        <span className="mt-0.5 block text-sm leading-snug text-foreground">
+   185→          Your password was generated by the coordinator — change it in{" "}
+   186→          <span className="font-semibold text-primary-700 group-hover:underline">Account settings</span>.
+   187→        </span>
+   188→      </span>
+   189→    </button>
+   190→  );
+   191→}
+   192→
+   193→function CardSkeletonBlock({ className }: { className?: string }) {
+   194→  return (
+   195→    <div className={cn("rounded-2xl border border-up-border bg-card p-5", className)}>
+   196→      <Skeleton className="h-4 w-28" />
+   197→      <Skeleton className="mt-3 h-12 w-full rounded-xl" />
+   198→      <Skeleton className="mt-2 h-12 w-3/4 rounded-xl" />
+   199→    </div>
+   200→  );
+   201→}
+   202→
+   203→// ============================================================
+   204→// STUDENT
+   205→// ============================================================
+   206→
+   207→function StudentDashboard({ user, navigate }: { user: SafeUserDTO; navigate: Navigate }) {
+   208→  const isLeader = user.isTeamLeader;
+   209→  const [project, setProject] = useState<ProjectListItem | null | undefined>(undefined);
+   210→  // pending join-request counts per project slug — null means "not known yet"
+   211→  const [joinsBySlug, setJoinsBySlug] = useState<Record<string, number>>({});
+   212→
+   213→  // my most relevant project (owned + memberships), newest first
+   214→  useEffect(() => {
+   215→    let cancelled = false;
+   216→    fetchProjects({ status: "MINE", limit: 1 })
+   217→      .then((rows) => {
+   218→        if (!cancelled) setProject(rows[0] ?? null);
+   219→      })
+   220→      .catch(() => {
+   221→        if (!cancelled) setProject(null);
+   222→      });
+   223→    return () => {
+   224→      cancelled = true;
+   225→    };
+   226→  }, []);
+   227→
+   228→  // team leaders also watch incoming join requests for their project
+   229→  const slug = project?.slug;
+   230→  useEffect(() => {
+   231→    if (!isLeader || !slug) return;
+   232→    let cancelled = false;
+   233→    fetchJoinRequests(slug)
+   234→      .then((rows) => {
+   235→        if (!cancelled)
+   236→          setJoinsBySlug((prev) => ({
+   237→            ...prev,
+   238→            [slug]: rows.filter((r) => r.status === "PENDING").length,
+   239→          }));
+   240→      })
+   241→      .catch(() => {
+   242→        if (!cancelled) setJoinsBySlug((prev) => ({ ...prev, [slug]: 0 }));
+   243→      });
+   244→    return () => {
+   245→      cancelled = true;
+   246→    };
+   247→  }, [isLeader, slug]);
+   248→
+   249→  const pendingJoins = slug ? (joinsBySlug[slug] ?? null) : null;
+   250→
+   251→  return (
+   252→    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+   253→      <FadeIn className="min-w-0 space-y-4" delay={0.05}>
+   254→        {/* ---------- my team ---------- */}
+   255→        <section aria-label="My team" className="rounded-2xl border border-up-border bg-card p-5 shadow-card">
+   256→          <h2 className="text-sm font-bold tracking-tight text-foreground">My team</h2>
+   257→          <p className="mt-0.5 text-xs text-muted-foreground">Your capstone project and its status</p>
+   258→
+   259→          {project === undefined ? (
+   260→            <div className="mt-4 space-y-2">
+   261→              <Skeleton className="h-16 w-full rounded-xl" />
+   262→              <Skeleton className="h-9 w-2/3 rounded-xl" />
+   263→            </div>
+   264→          ) : project === null ? (
+   265→            isLeader ? (
+   266→              <div className="mt-4 rounded-2xl border border-dashed border-up-border-strong bg-surface-muted/40 p-6 text-center">
+   267→                <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-primary-50 text-primary-700">
+   268→                  <SquarePlus className="size-5" aria-hidden />
+   269→                </span>
+   270→                <p className="mt-3 font-semibold text-foreground">No project yet</p>
+   271→                <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+   272→                  You lead your team — submit your capstone project when it is ready for the showcase.
+   273→                </p>
+   274→                <Button
+   275→                  onClick={() => navigate({ name: "create" })}
+   276→                  className="mt-4 gap-2 rounded-xl px-5 font-semibold"
+   277→                >
+   278→                  <SquarePlus className="size-4" aria-hidden />
+   279→                  Submit your project
+   280→                </Button>
+   281→              </div>
+   282→            ) : (
+   283→              <div className="mt-4 rounded-2xl border border-dashed border-up-border-strong bg-surface-muted/40 p-6 text-center">
+   284→                <span className="mx-auto flex size-11 items-center justify-center rounded-2xl bg-surface-muted text-muted-foreground">
+   285→                  <UsersRound className="size-5" aria-hidden />
+   286→                </span>
+   287→                <p className="mt-3 font-semibold text-foreground">Waiting on your team leader</p>
+   288→                <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+   289→                  Your team leader submits the project — ask them to publish it so your team shows up in
+   290→                  the showcase.
+   291→                </p>
+   292→              </div>
+   293→            )
+   294→          ) : (
+   295→            <div className="mt-4">
+   296→              <article className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-up-border bg-surface-muted/30 p-3">
+   297→                {project.coverImage ? (
+   298→                  <img
+   299→                    src={project.coverImage}
+   300→                    alt=""
+   301→                    loading="lazy"
+   302→                    className="size-14 shrink-0 rounded-lg object-cover"
+   303→                  />
+   304→                ) : (
+   305→                  <span
+   306→                    aria-hidden
+   307→                    className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700"
+   308→                  >
+   309→                    <FolderKanban className="size-5" />
+   310→                  </span>
+   311→                )}
+   312→                <div className="min-w-0 flex-1 basis-48">
+   313→                  <button
+   314→                    type="button"
+   315→                    onClick={() => navigate({ name: "project", slug: project.slug })}
+   316→                    className="truncate text-sm font-semibold text-foreground transition-colors hover:text-primary-700"
+   317→                  >
+   318→                    {project.title}
+   319→                  </button>
+   320→                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+   321→                    <StatusBadge status={project.status} />
+   322→                    {project.verified ? <VerifiedBadge withLabel /> : null}
+   323→                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+   324→                      <Eye className="size-3" aria-hidden />
+   325→                      {formatViews(project.views)}
+   326→                    </span>
+   327→                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+   328→                      <Users className="size-3" aria-hidden />
+   329→                      {project.members.length} member{project.members.length === 1 ? "" : "s"}
+   330→                    </span>
+   331→                  </div>
+   332→                  {project.supervisor ? (
+   333→                    <p className="mt-1 text-[11px] text-muted-foreground">Supervisor · {project.supervisor}</p>
+   334→                  ) : null}
+   335→                </div>
+   336→                <div className="flex shrink-0 items-center gap-2">
+   337→                  {isLeader ? (
+   338→                    <Button
+   339→                      variant="outline"
+   340→                      size="sm"
+   341→                      className="h-9 rounded-xl px-3 text-xs font-semibold"
+   342→                      onClick={() => navigate({ name: "create", editSlug: project.slug })}
+   343→                    >
+   344→                      Edit project
+   345→                    </Button>
+   346→                  ) : null}
+   347→                  <Button
+   348→                    size="sm"
+   349→                    className="h-9 rounded-xl px-3 text-xs font-semibold"
+   350→                    onClick={() => navigate({ name: "project", slug: project.slug })}
+   351→                  >
+   352→                    View page
+   353→                  </Button>
+   354→                </div>
+   355→              </article>
+   356→
+   357→              {isLeader && pendingJoins !== null && pendingJoins > 0 ? (
+   358→                <button
+   359→                  type="button"
+   360→                  onClick={() => navigate({ name: "project", slug: project.slug })}
+   361→                  className="mt-2 flex w-full items-center gap-2 rounded-xl bg-primary-50 px-3 py-2 text-left text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+   362→                >
+   363→                  <UserPlus className="size-4 shrink-0" aria-hidden />
+   364→                  {pendingJoins} pending join request{pendingJoins === 1 ? "" : "s"} — review on the project
+   365→                  page
+   366→                </button>
+   367→              ) : null}
+   368→            </div>
+   369→          )}
+   370→        </section>
+   371→      </FadeIn>
+   372→
+   373→      <FadeIn className="min-w-0 space-y-4" delay={0.1}>
+   374→        <IdentityCard user={user} />
+   375→        <SecurityRow navigate={navigate} />
+   376→      </FadeIn>
+   377→    </div>
+   378→  );
+   379→}
+   380→
+   381→// ============================================================
+   382→// PROFESSOR
+   383→// ============================================================
+   384→
+   385→function ProfessorDashboard({ user, navigate }: { user: SafeUserDTO; navigate: Navigate }) {
+   386→  return (
+   387→    <div className="space-y-4">
+   388→      <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+   389→        <FadeIn delay={0.05}>
+   390→          <IdentityCard user={user} />
+   391→        </FadeIn>
+   392→        <FadeIn className="min-w-0 space-y-4" delay={0.1}>
+   393→          <VerificationQueueCard />
+   394→          <section
+   395→            aria-label="Teaching shortcuts"
+   396→            className="flex flex-wrap items-center gap-3 rounded-2xl border border-up-border bg-card p-4 shadow-card"
+   397→          >
+   398→            <Button
+   399→              variant="outline"
+   400→              className="gap-2 rounded-xl font-semibold"
+   401→              onClick={() => navigate({ name: "projects" })}
+   402→            >
+   403→              <FolderKanban className="size-4" aria-hidden />
+   404→              Browse projects
+   405→            </Button>
+   406→            <p className="min-w-0 flex-1 text-xs leading-relaxed text-muted-foreground">
+   407→              You can edit and verify the projects you supervise — verification requests from your
+   408→              sections land in the queue above.
+   409→            </p>
+   410→          </section>
+   411→        </FadeIn>
+   412→      </div>
+   413→    </div>
+   414→  );
+   415→}
+   416→
+   417→// ============================================================
+   418→// MODERATOR
+   419→// ============================================================
+   420→
+   421→function ModeratorDashboard({ user, navigate }: { user: SafeUserDTO; navigate: Navigate }) {
+   422→  return (
+   423→    <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
+   424→      <FadeIn className="min-w-0 space-y-4" delay={0.05}>
+   425→        <IdentityCard user={user} />
+   426→        <section aria-label="Shortcuts" className="rounded-2xl border border-up-border bg-card p-4 shadow-card">
+   427→          <h2 className="text-sm font-bold tracking-tight text-foreground">Shortcuts</h2>
+   428→          <div className="mt-3 grid gap-2">
+   429→            <QuickLink
+   430→              icon={ShieldCheck}
+   431→              label="Open admin panel"
+   432→              hint="Users, projects and moderation"
+   433→              onClick={() => navigate({ name: "admin" })}
+   434→            />
+   435→            <QuickLink
+   436→              icon={FolderKanban}
+   437→              label="Browse projects"
+   438→              hint="The public showcase"
+   439→              onClick={() => navigate({ name: "projects" })}
+   440→            />
+   441→          </div>
+   442→        </section>
+   443→      </FadeIn>
+   444→      <FadeIn className="min-w-0 space-y-4" delay={0.1}>
+   445→        <VerificationQueueCard />
+   446→        <ReportsQueueCard />
+   447→      </FadeIn>
+   448→    </div>
+   449→  );
+   450→}
+   451→
+   452→// ============================================================
+   453→// ADMIN
+   454→// ============================================================
+   455→
+   456→const ADMIN_ACTION_ICONS = {
+   457→  approvals: ListChecks,
+   458→  users: UsersRound,
+   459→  settings: Settings2,
+   460→  announcements: Megaphone,
+   461→} as const;
+   462→
+   463→function AdminDashboard({ user, navigate }: { user: SafeUserDTO; navigate: Navigate }) {
+   464→  const [overview, setOverview] = useState<AdminOverviewDTO | null>(null);
+   465→  const [failed, setFailed] = useState(false);
+   466→
+   467→  useEffect(() => {
+   468→    let cancelled = false;
+   469→    fetchAdminOverview()
+   470→      .then((data) => {
+   471→        if (!cancelled) setOverview(data);
+   472→      })
+   473→      .catch(() => {
+   474→        if (!cancelled) setFailed(true);
+   475→      });
+   476→    return () => {
+   477→      cancelled = true;
+   478→    };
+   479→  }, []);
+   480→
+   481→  const goAdmin = (tab?: string) => navigate({ name: "admin", tab });
+   482→
+   483→  const tiles = overview
+   484→    ? [
+   485→        {
+   486→          label: "Pending approvals",
+   487→          value: overview.pendingAccountRequests,
+   488→          icon: ListChecks,
+   489→          go: () => goAdmin("approvals"),
+   490→          tone: overview.pendingAccountRequests > 0 ? "bg-warning-soft text-warning" : "bg-success-soft text-success",
+   491→        },
+   492→        {
+   493→          label: "To verify",
+   494→          value: overview.pendingVerifications,
+   495→          icon: BadgeCheck,
+   496→          go: () => goAdmin("moderation"),
+   497→          tone: overview.pendingVerifications > 0 ? "bg-warning-soft text-warning" : "bg-success-soft text-success",
+   498→        },
+   499→        {
+   500→          label: "Open reports",
+   501→          value: overview.openReports,
+   502→          icon: ShieldCheck,
+   503→          go: () => goAdmin("moderation"),
+   504→          tone: overview.openReports > 0 ? "bg-danger-soft text-danger" : "bg-success-soft text-success",
+   505→        },
+   506→        {
+   507→          label: "Students",
+   508→          value: overview.students,
+   509→          icon: GraduationCap,
+   510→          go: () => goAdmin("users"),
+   511→          tone: "bg-primary-50 text-primary-700",
+   512→        },
+   513→        {
+   514→          label: "Projects",
+   515→          value: overview.projects,
+   516→          icon: FolderKanban,
+   517→          go: () => goAdmin("projects"),
+   518→          tone: "bg-primary-50 text-primary-700",
+   519→        },
+   520→      ]
+   521→    : [];
+   522→
+   523→  const quickActions: { key: keyof typeof ADMIN_ACTION_ICONS; label: string; hint: string; tab: string }[] = [
+   524→    { key: "approvals", label: "Review account requests", hint: "Approve or reject student intake", tab: "approvals" },
+   525→    { key: "users", label: "Manage users", hint: "Roles, sections and team leaders", tab: "users" },
+   526→    { key: "settings", label: "Site settings", hint: "Search, signups and hero copy", tab: "settings" },
+   527→    { key: "announcements", label: "Announcements", hint: "Post campus-wide news", tab: "announcements" },
+   528→  ];
+   529→
+   530→  return (
+   531→    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+   532→      <FadeIn className="min-w-0 space-y-4" delay={0.05}>
+   533→        {/* stats row */}
+   534→        {failed ? (
+   535→          <EmptyState
+   536→            icon={ShieldCheck}
+   537→            title="Couldn't load the overview"
+   538→            hint="The admin overview API did not respond — try the admin console directly."
+   539→            action={
+   540→              <Button onClick={() => goAdmin()} className="rounded-xl font-semibold">
+   541→                Open admin panel
+   542→              </Button>
+   543→            }
+   544→          />
+   545→        ) : (
+   546→          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+   547→            {tiles.map((t) => {
+   548→              const Icon = t.icon;
+   549→              return (
+   550→                <button
+   551→                  key={t.label}
+   552→                  type="button"
+   553→                  onClick={t.go}
+   554→                  className="group rounded-2xl border border-up-border bg-card p-4 text-left shadow-card outline-none transition-colors hover:border-up-border-strong focus-visible:ring-2 focus-visible:ring-ring"
+   555→                >
+   556→                  <span className={cn("flex size-9 items-center justify-center rounded-xl", t.tone)}>
+   557→                    <Icon className="size-4" aria-hidden />
+   558→                  </span>
+   559→                  <p className="mt-2.5 text-2xl font-bold tabular-nums tracking-tight text-foreground">
+   560→                    {overview ? t.value.toLocaleString() : <Skeleton className="h-7 w-12" />}
+   561→                  </p>
+   562→                  <p className="mt-0.5 text-xs font-semibold text-foreground">{t.label}</p>
+   563→                </button>
+   564→              );
+   565→            })}
+   566→          </div>
+   567→        )}
+   568→
+   569→        {/* quick actions */}
+   570→        <section aria-label="Quick actions" className="rounded-2xl border border-up-border bg-card p-5 shadow-card">
+   571→          <h2 className="text-sm font-bold tracking-tight text-foreground">Quick actions</h2>
+   572→          <p className="mt-0.5 text-xs text-muted-foreground">The most common console tasks, one click away</p>
+   573→          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+   574→            {quickActions.map((a) => {
+   575→              const Icon = ADMIN_ACTION_ICONS[a.key];
+   576→              return (
+   577→                <button
+   578→                  key={a.key}
+   579→                  type="button"
+   580→                  onClick={() => goAdmin(a.tab)}
+   581→                  className="group flex items-center gap-2.5 rounded-xl border border-up-border bg-surface-muted/50 p-2.5 text-left transition-colors hover:border-up-border-strong hover:bg-primary-50/70"
+   582→                >
+   583→                  <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-card text-primary-700 shadow-sm ring-1 ring-up-border">
+   584→                    <Icon className="size-4" aria-hidden />
+   585→                  </span>
+   586→                  <span className="min-w-0 flex-1">
+   587→                    <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary-700">
+   588→                      {a.label}
+   589→                    </span>
+   590→                    <span className="block truncate text-xs text-muted-foreground">{a.hint}</span>
+   591→                  </span>
+   592→                </button>
+   593→              );
+   594→            })}
+   595→          </div>
+   596→        </section>
+   597→
+   598→        {/* recent activity */}
+   599→        <section aria-label="Recent activity" className="rounded-2xl border border-up-border bg-card p-5 shadow-card">
+   600→          <div className="flex items-center justify-between gap-3">
+   601→            <h2 className="text-sm font-bold tracking-tight text-foreground">Recent activity</h2>
+   602→            <button
+   603→              type="button"
+   604→              onClick={() => goAdmin()}
+   605→              className="text-xs font-bold text-primary-700 transition-colors hover:text-primary-600"
+   606→            >
+   607→              Open admin panel
+   608→            </button>
+   609→          </div>
+   610→          {overview === null ? (
+   611→            <div className="mt-3 space-y-2">
+   612→              {Array.from({ length: 3 }).map((_, i) => (
+   613→                <Skeleton key={i} className="h-10 w-full rounded-xl" />
+   614→              ))}
+   615→            </div>
+   616→          ) : overview.activity.length === 0 ? (
+   617→            <p className="mt-3 text-sm text-muted-foreground">
+   618→              Nothing has happened yet — activity lands here as members work.
+   619→            </p>
+   620→          ) : (
+   621→            <ul className="mt-2 divide-y divide-up-border">
+   622→              {overview.activity.slice(0, 5).map((item) => (
+   623→                <li key={item.id} className="flex items-center gap-3 py-2">
+   624→                  {(() => {
+   625→                    const Icon = ACTIVITY_ICONS[item.kind] ?? FolderKanban;
+   626→                    return (
+   627→                      <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+   628→                        <Icon className="size-4" aria-hidden />
+   629→                      </span>
+   630→                    );
+   631→                  })()}
+   632→                  <span className="min-w-0 flex-1">
+   633→                    <span className="block truncate text-sm font-medium text-foreground">{item.text}</span>
+   634→                    {item.detail ? (
+   635→                      <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
+   636→                    ) : null}
+   637→                  </span>
+   638→                  <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+   639→                    {timeAgo(item.createdAt)}
+   640→                  </span>
+   641→                </li>
+   642→              ))}
+   643→            </ul>
+   644→          )}
+   645→        </section>
+   646→      </FadeIn>
+   647→
+   648→      <FadeIn className="min-w-0 space-y-4" delay={0.1}>
+   649→        <IdentityCard user={user} />
+   650→        <section aria-label="Console shortcut" className="rounded-2xl border border-up-border bg-night p-5 text-white shadow-card">
+   651→          <span className="flex size-9 items-center justify-center rounded-xl bg-white/10">
+   652→            <ShieldCheck className="size-4.5" aria-hidden />
+   653→          </span>
+   654→          <p className="mt-3 text-sm font-bold">Full console access</p>
+   655→          <p className="mt-1 text-xs leading-relaxed text-white/60">
+   656→            Approvals, users, projects, announcements, moderation, emails and site settings.
+   657→          </p>
+   658→          <Button
+   659→            onClick={() => goAdmin()}
+   660→            variant="outline"
+   661→            className="mt-4 w-full rounded-xl border-white/15 bg-white/10 font-semibold text-white hover:bg-white/20 hover:text-white"
+   662→          >
+   663→            Open admin panel
+   664→          </Button>
+   665→        </section>
+   666→      </FadeIn>
+   667→    </div>
+   668→  );
+   669→}
+   670→
+   671→// ---------- shared quick-link row ----------
+   672→
+   673→function QuickLink({
+   674→  icon: Icon,
+   675→  label,
+   676→  hint,
+   677→  onClick,
+   678→}: {
+   679→  icon: typeof FolderKanban;
+   680→  label: string;
+   681→  hint: string;
+   682→  onClick: () => void;
+   683→}) {
+   684→  return (
+   685→    <button
+   686→      type="button"
+   687→      onClick={onClick}
+   688→      className="group flex items-center gap-2.5 rounded-xl border border-up-border bg-surface-muted/50 p-2.5 text-left outline-none transition-colors hover:border-up-border-strong hover:bg-primary-50/70 focus-visible:ring-2 focus-visible:ring-ring"
+   689→    >
+   690→      <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-card text-primary-700 shadow-sm ring-1 ring-up-border">
+   691→        <Icon className="size-4" aria-hidden />
+   692→      </span>
+   693→      <span className="min-w-0 flex-1">
+   694→        <span className="block truncate text-sm font-semibold text-foreground group-hover:text-primary-700">
+   695→          {label}
+   696→        </span>
+   697→        <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+   698→      </span>
+   699→    </button>
+   700→  );
+   701→}
+   702→
+   703→// ============================================================
+   704→// View
+   705→// ============================================================
+   706→
+   707→export function DashboardView({ navigate }: { navigate: Navigate }) {
+   708→  const user = useAppStore((s) => s.user);
+   709→  const openAuth = useAppStore((s) => s.openAuth);
+   710→  const authLoaded = useAppStore((s) => s.authLoaded);
+   711→
+   712→  // guest gate (the header only surfaces this view when signed in, but ⌘K/links could too)
+   713→  if (authLoaded && !user) {
+   714→    return (
+   715→      <div className="mx-auto flex w-full max-w-md flex-col items-center px-5 py-20 text-center">
+   716→        <span className="flex size-12 items-center justify-center rounded-2xl bg-primary-50 text-primary-700">
+   717→          <Mail className="size-5" aria-hidden />
+   718→        </span>
+   719→        <p className="mt-4 text-lg font-semibold text-foreground">Sign in to see your dashboard</p>
+   720→        <p className="mt-1 text-sm text-muted-foreground">
+   721→          Your projects, team status and account details live here. Students can request an account
+   722→          from the coordinator.
+   723→        </p>
+   724→        <Button onClick={() => openAuth("login")} className="mt-6 rounded-xl font-semibold">
+   725→          Sign in
+   726→        </Button>
+   727→      </div>
+   728→    );
+   729→  }
+   730→
+   731→  if (!user) return null;
+   732→
+   733→  const submitCta = canSubmit(user) ? (
+   734→    <Button onClick={() => navigate({ name: "create" })} className="h-10 gap-2 rounded-xl px-5 font-semibold">
+   735→      <SquarePlus className="size-4" aria-hidden />
+   736→      Submit a project
+   737→    </Button>
+   738→  ) : null;
+   739→
+   740→  return (
+   741→    <div className="mx-auto w-full max-w-6xl px-5 py-10 pb-20 md:px-8 md:py-14">
+   742→      <PageHeader user={user} right={submitCta} />
+   743→      <div className="mt-8">
+   744→        {user.role === "STUDENT" ? <StudentDashboard user={user} navigate={navigate} /> : null}
+   745→        {user.role === "PROFESSOR" ? <ProfessorDashboard user={user} navigate={navigate} /> : null}
+   746→        {user.role === "MODERATOR" ? <ModeratorDashboard user={user} navigate={navigate} /> : null}
+   747→        {user.role === "ADMIN" ? <AdminDashboard user={user} navigate={navigate} /> : null}
+   748→      </div>
+   749→    </div>
+   750→  );
+   751→}
+   752→

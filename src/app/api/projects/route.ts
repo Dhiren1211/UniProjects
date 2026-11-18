@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff, toSafeUser } from "@/lib/auth";
+import { canSubmitProject } from "@/lib/rbac";
 import { CATEGORIES, SEMESTERS } from "@/lib/config";
 import type { ProjectListItem } from "@/lib/types";
 
@@ -11,7 +12,9 @@ export const dynamic = "force-dynamic";
 // ---------- shapes ----------
 
 const projectInclude = {
-  department: { select: { id: true, name: true, code: true, tagline: true, accent: true } },
+  department: {
+    select: { id: true, name: true, code: true, tagline: true, website: true, capstoneLabel: true, accent: true },
+  },
   members: {
     select: {
       id: true,
@@ -46,6 +49,7 @@ export function toListItem(p: ProjectRow, likeCount = 0): ProjectListItem {
     year: p.year,
     semester: p.semester,
     supervisor: p.supervisor,
+    classId: p.classId,
     tags: p.tags ? p.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
     demoUrl: p.demoUrl,
     repoUrl: p.repoUrl,
@@ -193,7 +197,7 @@ const createSchema = z.object({
   coverImage: z
     .string()
     .trim()
-    .min(1, "Add a cover image — every project needs one")
+    .min(1, "Add a cover image - every project needs one")
     .max(300)
     .refine(isImageTarget, "Cover must be an uploaded file, an in-app image path, or an https link"),
   galleryImages: z
@@ -218,6 +222,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Sign in to create a project" }, { status: 401 });
     }
 
+    // Requirement: only the team leader may submit a project. Other
+    // students (members) get 403 - and the UI hides the button for them.
+    if (!canSubmitProject(viewer)) {
+      return NextResponse.json(
+        {
+          error:
+            viewer.role === "STUDENT"
+              ? "Only team leaders can submit a project. Ask your team leader to publish it."
+              : "Your role does not allow submitting projects",
+        },
+        { status: 403 }
+      );
+    }
+
     const parsed = createSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json(
@@ -232,7 +250,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown department" }, { status: 400 });
     }
 
-    // resolve teammate usernames (exclude self — the owner is implicit)
+    // resolve teammate usernames (exclude self - the owner is implicit)
     const usernames = d.members.map((m) => m.username.toLowerCase()).filter((u) => u !== viewer.username);
     const users = usernames.length
       ? await db.user.findMany({ where: { username: { in: usernames } } })
@@ -258,6 +276,7 @@ export async function POST(req: NextRequest) {
         supervisor: d.supervisor || null,
         departmentId: department.id,
         ownerId: viewer.id,
+        classId: viewer.classId ?? null,
         status: d.publish ? "PUBLISHED" : "DRAFT",
         allowJoinRequests: d.allowJoinRequests,
         lookingForTeammates: d.lookingForTeammates,

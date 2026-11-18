@@ -1,0 +1,182 @@
+   820→Task: Utilize space in the wizard's Technologies step; show technologies used on project cards and the project detail page (they were collected but never displayed).
+   821→
+   822→Work Log:
+   823→- Discovery: backend already served technologies everywhere (list route + detail route map ProjectTechnology → TechnologyDTO; ProjectListItem/ProjectDetail types already carry `technologies: TechnologyDTO[]`) — the frontend simply never rendered them. No API/type changes needed.
+   824→- create.tsx Step 5 restructured: root → `grid gap-8 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-start`. Left: all chip groups (incl. "Other tools") in a `sm:grid-cols-2` two-column grid. New right rail (sticky lg:top-24, rounded-2xl surface-muted card): "Your stack" live count, selected tools as removable teal pills (X button per pill → toggleTech), "Missing a tool?" custom-input + full-width Add tool button (moved out of the Other tools block). Skeleton branch flattened to a conditional.
+   825→- Fixed lint error from first attempt: useMemo after early-return gate violated rules-of-hooks → replaced with a plain `.filter()` (cheap at this scale).
+   826→- project-card.tsx: new "Tech used" row after the summary — up to 3 `rounded-md bg-surface-muted` 11px chips + `+N` overflow pill; hidden when a project has no technologies.
+   827→- detail.tsx About section: "Built with" block between description and tags — uppercase tracking-widest h2 + one `rounded-full border bg-white` chip per technology (all shown, not truncated).
+   828→- Dev-log quirk from Task 15 did not recur (real content edits trigger Tailwind recompile; only mtime-only `touch` is ignored).
+   829→- Verification (agent-browser, jiwoo.han, 1440×900): cards on All projects show chips (asdafadfas: Next.js/FastAPI/PyTorch/+3; TerraBot: Python/OpenCV/Raspberry Pi/+1; etc.); TerraBot detail h2 list includes "Built with" with all 4 chips (note: text-transform uppercase means innerText matching must be case-insensitive — first wait --text "Built with" false-timed-out on casing, not a real bug); wizard walked steps 1→5 (semester required — "Choose a semester" caught mid-flow): step 5 measured groups x=471 w=498 in 2×237px cols + rail x=1001 w=230; React/PostgreSQL/Figma toggles → rail "3 selected" + 3 pills + aria-pressed sync; rail "Remove Figma" → pills [PostgreSQL, React] + chip unpressed; custom input + Add tool present; mobile 390×844: groups 1-col 300px, rail stacks below full-width; zero page errors, console clean; tsc + eslint clean.
+   830→
+   831→Stage Summary:
+   832→- The Technologies step now uses its width (two-column chip groups + a sticky "Your stack" rail with removable selection pills and the custom-tool input), and technologies are finally visible to everyone: compact chips with +N overflow on every project card (home featured included) and a full "Built with" chip row on the project detail page — all powered by the previously-unused `technologies` data the API was already returning.
+   833→
+   834→---
+   835→Task ID: 18
+   836→Agent: Z.ai Code (main)
+   837→Task: Fit whole images inside fixed-aspect windows (no crop/stretch) with click-to-view lightbox; show real profile avatars everywhere instead of initials.
+   838→
+   839→Work Log:
+   840→- Discovery: all 61 users already have avatarUrl (/avatars/av*.webp, 20 files) and UserAvatar already renders real photos with initials fallback — the gap was call sites using initials-only MemberAvatar despite avatarUrl being present in MemberDTO/SafeUserDTO (APIs always returned it).
+   841→- New shared Lightbox in ui-bits.tsx (framer-motion fade, role=dialog aria-modal, max-h-[88vh] max-w-full object-contain on bg-night/90 backdrop-blur — image always whole, natural ratio, never cropped/stretched): ESC/backdrop close, body scroll lock/restore, optional onPrev/onNext with wraparound + ArrowLeft/ArrowRight keys, z-[90] above dialogs.
+   842→- detail.tsx banner (cover): object-cover → object-contain (accent gradient now shows as letterbox backdrop); full-banner click target (z-10, cursor-zoom-in) opens cover lightbox; badge spans raised z-20. DetailView got coverLbOpen state + Lightbox render next to dialogs.
+   843→- detail.tsx ProjectGallery: slides object-cover → object-contain; each slide wrapped in a "View photo N full size" button → lightboxIndex state with prev/next cycling across the gallery; tiny thumbnails intentionally keep object-cover.
+   844→- Project cards / admin thumbnails keep object-cover deliberately (small grid thumbnails crop by convention; full image is one click away on detail).
+   845→- Avatars: home.tsx 4× MemberAvatar → UserAvatar with avatarUrl (search results, hero floating chip, trust avatars, featured member stacks) + import swap; create.tsx UserSearchAdd rows → UserAvatar(u.avatarUrl), DraftMember type extended with avatarUrl, pick handler stores it, draft + edit-mode member rows → UserAvatar; search-dialog/profile already conditional (untouched).
+   846→- Verification (agent-browser, jiwoo.han): landing 42 real <img src=/avatars/…> elements, 0 initials spans; TerraBot detail banner contain + click → lightbox "Cover of TerraBot" rendered at 1200×686 = EXACT natural size (ratio match true); ESC closes + body overflow restored; gallery photo 1 → "Project photo 1 of 2" with prev/next; Next → g2.webp; ArrowLeft → g1.webp; backdrop click closes; mobile 390×844 lightbox image fits viewport (358×205); wizard walk (hit 60-char description minimum — validation silent-fail expected) → step 4 picker row + picked draft row both show real avatar imgs; exited without saving → All projects footer:1; zero page errors, console clean; tsc + eslint clean.
+   847→
+   848→Stage Summary:
+   849→- Every large image surface (detail cover banner + gallery slides) now letterboxes the whole picture inside the site's fixed-aspect window — no cropping, no stretching — and one click opens a keyboard-navigable lightbox showing the image at full natural size. All avatar call sites now prefer the user's real photo (61/61 users have one), with initials remaining only as a graceful fallback for users who never upload one.
+   850→
+   851→---
+   852→Task ID: 19
+   853→Agent: Z.ai Code (main)
+   854→Task: Enlarge the landing-page hero collage image containers and show the complete cover image (no cropping).
+   855→
+   856→Work Log:
+   857→- home.tsx CollageCard (used by the desktop FloatingCollage ×3 AND the mobile snap-scroll strip ×5): card w-60 → w-72 (240→288px); image window h-20 (80px) → aspect-video (~264×148, ~2.4× the area); img object-cover → object-contain so the whole cover shows (accent gradient letterboxes the sliver that isn't 16:9); no-cover fallback icon block unchanged.
+   858→- FloatingCollage recomposed for the bigger cards: container h-[430px] max-w-[540px] → h-[500px] max-w-[560px]; card slots respread (top-4 / top-24 / bottom-2, middle card offset calc(50%-9rem) for the new width); skeletons h-44 w-60 → h-60 w-72 (both desktop placeholders and the mobile strip placeholders); mobile strip skeleton likewise.
+   859→- Hero grid rebalanced to feed the wider collage: lg:grid-cols-[1.05fr_0.95fr] → lg:grid-cols-[1fr_1.15fr] (measured 484px text / 556px visual at 1440).
+   860→- Stale-CSS quirk struck again: new arbitrary class lg:grid-cols-[1fr_1.15fr] was in the DOM but computed style stayed single-column (1088px one track) after a real edit — appending a newline + reload regenerated the rule (cols 483.7px 556.3px). Confirmed: content-hash Tailwind dev chunk can drop brand-new arbitrary-value utilities until the next real recompile.
+   861→- Verification (agent-browser, 1440×900): 3 desktop collage cards measured 288px cards with aspect-video boxes, object-fit contain, covers natural 1200×686 (1.749) render whole; screenshot confirms MenuLens/DelayRadar/GripAssist covers fully visible with layered float intact and chips well-placed; mobile 390×844 strip: 5 cards 288px, img box 262×147 contain; zero page errors; tsc + eslint clean.
+   862→
+   863→Stage Summary:
+   864→- Hero collage cards are now large-format: 288px glass cards with 16:9 image windows showing the complete, uncropped cover (contain + gradient letterbox) on both the desktop floating collage and the mobile swipe strip, with the hero grid rebalanced (text 484px / collage 556px) so the bigger cards sit beside the headline exactly as before — just twice the imagery.
+   865→
+   866→---
+   867→Task ID: 20
+   868→Agent: Z.ai Code (main)
+   869→Task: Make the landing-page event cards show full details (they previously truncated title/description/location and omitted the time).
+   870→
+   871→Work Log:
+   872→- Discovery: Event model + /api/events already carry full description/location/datetime; the EventCard was the bottleneck — `line-clamp-1` title, `line-clamp-2` description, `truncate` location, month/day tile only (no time of day), and the section hard-capped at `events.slice(0, 3)`.
+   873→- EventCard redesigned (home.tsx): full title (no clamp); new full datetime line `CalendarDays` icon + "EEEE, MMM d, yyyy · h:mm a" in primary-700; full description (no clamp); location un-truncated and wrapping with `items-start` + `mt-auto` so it pins to the card bottom; date tile enlarged h-14→h-16 with day 2xl; new relative-countdown chip (`formatDistanceToNowStrict` addSuffix — "in 1 month") top-right in the title row; `h-full` article for equal heights.
+   874→- Events section: renders ALL events now (slice cap removed), skeleton h-36→h-52, Reveal wrappers get `className="h-full"` so equal-height works through the motion.div.
+   875→- Datetime line first shipped as separate flex items (weekday span / · / time span) which wrapped raggedly at 390px ("2026 ·" dangling, "5:00/AM" split) — restructured to icon + one natural-wrapping span; mobile card 1 now single line.
+   876→- Formatting stays browser-local `format()` per codebase convention (no tz pinning anywhere) — Seoul browsers show the seeded KST times (2:00/4:00/1:00 PM); the UTC test browser renders them as 5:00/7:00/4:00 AM, which is expected localization, not a bug.
+   877→- Verification (agent-browser): desktop 1440×900 — 3 equal-height cards (352×278), full titles/descriptions/locations, countdown chips ("in 1 month" ×2, "in 2 months"), zero line-clamp/truncate classes in cards, NEXT UP badge intact; mobile 390×844 — 1-col 350px stack, datetime one clean line; zero page errors, console clean; tsc + eslint clean.
+   878→
+   879→Stage Summary:
+   880→- The "What's coming up" cards are now full-detail event posters: complete title, weekday date + time of day, unabridged description, un-truncated location, and an at-a-glance countdown chip — with every event listed (not just three) in an equal-height responsive grid on desktop and a clean single column on mobile.
+   881→
+   882→---
+   883→Task ID: 21
+   884→Agent: Z.ai Code (main)
+   885→Task: Underline indicators in the navigation bar for hover and active states.
+   886→
+   887→Work Log:
+   888→- header.tsx desktop nav reworked: the sliding teal pill (bg-primary-50, layoutId nav-active-pill) and the gray hover pill are replaced by underline bars. Active item owns `motion.span layoutId="nav-active-underline"` (same spring as before) — a 2px rounded-full solid `bg-primary` bar at `inset-x-3.5 bottom-0` (exactly the icon+label width) that morphs/slides between buttons on view change. Non-active items get a `bg-primary/40` bar with `origin-center scale-x-0 → group-hover:scale-x-100` (`transition-transform duration-200 ease-out` — TW4's transition-transform covers the `scale` property) so the underline draws in symmetrically on hover. Text color behavior unchanged (active primary-700, hover foreground). Focus ring + aria-current kept.
+   889→- Mobile drawer intentionally untouched — vertical list keeps its pill active row (verified: Overview row bg rgb(233,247,250)).
+   890→- Headless-verification wrinkle: hover styles never applied in agent-browser despite the rule compiling and the selector matching (`bar.matches('.group-hover\\:scale-x-100:is(:where(.group):hover *)')` = true while btn matches(':hover') = true). Root cause: Tailwind v4 emits hover variants inside `@media (hover: hover)` and this headless browser reports hover:none / no pointer (matchMedia proof) — same reason the old gray hover pill never showed in headless tests. Real desktop browsers are unaffected. Verified visually by temporarily injecting the identical rule without the media gate, hovering Community, screenshotting, then removing the injection.
+   891→- Verification (agent-browser): initial load — Overview active bar 2px×88px solid rgb(0,151,178), others scale "0 1" (width 0); clicking Projects slides the bar (Projects active 77px, Overview none); hover sim screenshot shows solid bar under Projects + lighter bar under Community + none under Overview/Students; transitionProperty includes scale (animates); mobile 390×844 drawer intact; zero page errors, console clean; tsc + eslint clean.
+   892→
+   893→Stage Summary:
+   894→- The top navigation now signals state with underlines: the active view carries a solid teal bar that slides between items, and hovering any other item draws a lighter teal bar in from center — replacing the previous pill backgrounds. Keyboard focus ring, aria-current, reduced-motion spring guard, and the mobile drawer's pill rows are all preserved.
+   895→
+   896→---
+   897→Task ID: 22
+   898→Agent: Z.ai Code (main)
+   899→Task: Department cards — remove the hover bottom border and do "something simple but crazy" instead.
+   900→
+   901→Work Log:
+   902→- Removed the 3px accent bar (absolute inset-x-0 bottom-0 h-[3px] scale-x-0 → group-hover:scale-x-100) from the landing-page department cards.
+   903→- Replaced it with an accent color flood: an absolutely positioned circle of the department's solid accent (`accent.dot`, size-64, parked at -bottom-20 -left-14) that scales 0 → 3 on hover (origin-center, duration-300 ease-out, clipped by the card's overflow-hidden) — the department color swallows the card while hovered. All content moved into a `relative z-10` wrapper; on hover title → white, tagline → white/85, count → white/80, arrow → white + visible, initials chip scales 1.1 and keeps its pastel gradient; card lift upgraded shadow-sm → shadow-lg.
+   904→- Geometry bug caught by screenshot: first attempt used origin-bottom-left + scale-[2.6] and left a white sliver at the card's bottom-left corner — with origin-bottom-left the circle's center recedes diagonally at the same rate the radius grows (d/r → √2), so that corner can never be covered at large scales. Fixed with origin-center (center stays anchored near the bottom-left) + scale-[3] (r=384px covers every corner up to ~310px card height).
+   905→- Headless hover limitation (same as Task 21): Tailwind v4 gates group-hover behind @media(hover:hover) which this browser reports false — verified visually by injecting a media-gate-free replica scoped to the section, then removing it.
+   906→- Verification (agent-browser): idle — flood scale 0 (invisible), 0 bottom bars, 6 cards; hover CS — full teal flood, white text, chip/arrow intact, no sliver; hover DM — full orange flood, CS reverted cleanly; click Business Administration → All projects view with "Business Administration" filter chip; mobile 390×844 — 1-col 350px stack, floods present, no bars; zero page errors, console clean; tsc + eslint clean.
+   907→
+   908→Stage Summary:
+   909→- Department cards dropped the hover bottom border and gained a simple-but-crazy signature interaction: hovering a card floods it edge-to-edge in the department's own color (a circle sweeping out from the bottom-left), flipping every line of text to white until the pointer leaves — then it drains back to the plain white card. Idle layout, click-through navigation, and mobile stacking are unchanged.
+   910→
+   911→---
+   912→Task ID: 23
+   913→Agent: Z.ai Code (main)
+   914→Task: Fix the giant "Kyungsung" footer wordmark (user screenshot showed it oversized and cut off at the right edge).
+   915→
+   916→Work Log:
+   917→- Diagnosis: wordmark was a block <p> with text-center + clamp(3rem,10.5vw,8.5rem). Reproduced healthy at the user's apparent viewport (1613px: 136px font, glyphs 793px, centered) — but text-align:center structurally cannot center a line wider than its container: any wide-font/zoom/DPR variance spills the overflow RIGHT-ONLY, exactly the awkward one-sided cut in the screenshot.
+   918→- Fix (footer.tsx): p → flex justify-center + whitespace-nowrap; flexbox overflow splits BOTH sides equally, so even a worst-case oversized render bleeds symmetrically like an intentional design instead of breaking one-sided. Font clamp max 8.5rem → 8rem (128px) for extra fit headroom on wider brand fonts; gradient visibility bumped from-white/[0.10]→[0.12], to-white/[0.015]→[0.02] so it reads as a deliberate ghost word rather than a smudge. aria-hidden/select-none/overflow-hidden wrapper untouched.
+   919→- Verification (agent-browser): 1613px — glyphs 747px, leftGap=rightGap=171, flex+nowrap applied; forced-overflow test (inline 300px font, glyph run 1750px in a 1088px container) → leftOverhang=rightOverhang=331, symmetric=true (old code would have dumped all 662px on the right); screenshots: normal state fully visible + centered, forced state reads as a symmetric designed bleed; mobile 390×844 — 48px font, gaps 35/35, single line; zero page errors, console clean; tsc + eslint clean.
+   920→
+   921→Stage Summary:
+   922→- The footer's giant wordmark can no longer produce the broken one-sided cut from the user's screenshot: it is flex-centered (overflow, if it ever happens, bleeds symmetrically off both edges), locked to one line, sized with more headroom, and slightly more visible — the "designed moment" stays designed at every viewport, font, and zoom.
+   923→
+   924→---
+   925→Task ID: 24
+   926→Agent: Z.ai Code (main)
+   927→Task: Footer wordmark follow-up — user said "it is looking like Kyungsung, I want it must be clearly visible" (the Task-23 fix kept the giant "Kyungsung" wordmark as a near-invisible ghost: white at 12%→2% opacity on the #062530 night canvas).
+   928→
+   929→Work Log:
+   930→- Root cause confirmed: `bg-gradient-to-b from-white/[0.12] to-white/[0.02] bg-clip-text text-transparent` over `--up-night: #062530` yields glyph pixels ≈ rgb(36,51,57) vs bg rgb(6,37,48) — contrast so low the 128px wordmark read as a smudge.
+   931→- Replaced the ghost gradient with a spotlight beam: `from-white via-teal-100 to-teal-300` (bright white at the top of the glyphs fading into brand teal at the bottom) — every stop is a bright color, so all glyphs are clearly readable while staying in the footer's teal accent language.
+   932→- Added a soft spotlight halo behind the letters: absolutely positioned `inset-x-10 -inset-y-6 rounded-full bg-teal-400/15 blur-3xl` span in a new `relative` wrapper, with the gradient `<p>` as a `relative` sibling so it paints above the halo (first attempt put the halo inside the `<p>` at -z-10 — rejected: no rest-state ancestor stacking context, so negative z-index would sink it behind the footer's bg-night background and hide it; DOM-order positioned siblings avoid the problem entirely).
+   933→- Kept everything from Task 23 intact: flex justify-center + whitespace-nowrap (symmetric overflow behavior), clamp(3rem,10.5vw,8rem) sizing, overflow-hidden wrapper, aria-hidden/select-none/pointer-events-none, FadeIn reveal.
+   934→- Verification (agent-browser): computed gradient = linear-gradient(white → teal-100 → teal-300) applied, font 128px; desktop 1440×900 screenshot — wordmark bold and clearly readable with subtle teal halo, left/right gaps 176/176 (symmetric); 1613×900 — text centered inside container, no overflow (glyph run ~747px vs 1088px container, same geometry as Task 23); mobile 390×844 — single line, clearly visible, no cut-offs; halo computed bg teal @ 0.15 opacity, blur 64px, z auto (paints below the text as intended); zero page errors, console clean (HMR noise only); tsc + eslint clean; dev.log all 200s.
+   935→
+   936→Stage Summary:
+   937→- The giant "Kyungsung" footer wordmark is no longer a ghost — it now reads as a bright designed moment: a white-to-teal spotlight gradient that stays clearly visible at every viewport (1440/1613/390 verified) plus a faint teal halo that ties it into the footer's aurora accents. Centering/overflow hardening and accessibility attributes from Task 23 are unchanged.
+   938→
+   939→---
+   940→Task ID: 25
+   941→Agent: Z.ai Code (main)
+   942→Task: Remove the giant "Kyungsung" wordmark from the footer entirely (user decision after the Task-23/24 visibility iterations).
+   943→
+   944→Work Log:
+   945→- Deleted the entire wordmark block from footer.tsx: the aria-hidden overflow-hidden wrapper, the FadeIn reveal, the spotlight halo span (bg-teal-400/15 blur-3xl), the gradient "Kyungsung" <p> (bg-clip-text from-white via-teal-100 to-teal-300), and its explanatory comment.
+   946→- Rebalanced the closing rhythm: bottom bar top margin mt-6 → mt-12 md:mt-16 so the border-t divider keeps comfortable breathing room below the brand/link columns now that the wordmark no longer separates them.
+   947→- Everything else untouched: sticky footer (mt-auto), night canvas + aurora backdrop, hairline, brand column, three link columns, safe-area bottom padding, back-to-top.
+   948→- Verification (agent-browser): DOM probe confirms no "Kyungsung" wordmark <p> remains in the footer; desktop 1440×900 screenshot — footer ends brand + link columns → divider → bottom bar, spacing balanced; mobile 390×844 — same clean ending, safe-area padding intact; zero page errors; tsc + eslint clean; dev.log all 200s.
+   949→
+   950→Stage Summary:
+   951→- The footer's giant wordmark is gone for good. The closing chapter is now the compact three-column link grid flowing into a well-spaced bottom bar (©, motto, back-to-top) — no oversized text, no overflow edge cases to worry about at any viewport.
+   952→
+   953→---
+   954→Task ID: 26
+   955→Agent: Z.ai Code (main)
+   956→Task: Email verification for registration — Verify button → 6-digit code → account only created after verification; education emails only.
+   957→
+   958→Work Log:
+   959→- Schema: User += emailVerified Boolean @default(false), emailVerifiedAt DateTime?; new standalone EmailVerification model (email, codeHash sha256(email+code+pepper), expiresAt, consumedAt, attempts, single-use token + tokenExpiresAt, @@index([email])). db:push OK.
+   960→- New shared validator src/lib/edu-email.ts: isEducationEmail() accepts *.edu, *.edu.xx, *.ac.xx(.yy) chains + allowlist (ks.ac.kr, kyungsung.ac.kr); EDU_EMAIL_HINT copy. Used by client (live field feedback) AND server (request-code + register double-enforce).
+   961→- New src/lib/mailer.ts: sendVerificationEmail() writes a formatted email block to the server console (visible in dev.log) since no SMTP provider exists in the sandbox, and returns devCode outside production so the UI can show a demo shortcut; hashCode() stores only the sha256 of the code.
+   962→- API: POST /api/auth/email/request-code (edu-only, 60s cooldown against pending rows only, invalidates earlier codes, 10-min expiry, returns devCode in non-production) and POST /api/auth/email/verify-code (max 5 attempts with remaining-count errors, expiry check, consumes code, mints 24-byte single-use token valid 20 min, bound to the exact email).
+   963→- POST /api/auth/register now requires verifyToken (zod min 16) and re-checks education email; it validates the token against a consumed EmailVerification row bound to that email, creates the user with emailVerified: true + emailVerifiedAt, then deletes the row (single use).
+   964→- api-client.ts: register() gains verifyToken; new requestEmailCode() + verifyEmailCode().
+   965→- auth-modal.tsx register tab rebuilt as a 2-step flow inside ONE form (step-1 fields kept mounted with `hidden` so values survive back-navigation): step 1 = username/name/email (live ✓ education-email / ✗ red hint + aria-invalid)/password/confirm + "Verify email →" button; step 2 = "We sent a 6-digit code to …" banner, 6-box OtpInput (auto-advance, backspace-to-previous, arrow keys, paste support, aria labels), amber "Demo mode" box showing the code with a Fill shortcut (only when devCode present), "Verify & create account" (disabled until 6 digits), "Wrong email? Go back", "Resend code" with 60s countdown; flow state resets when the modal closes. Login tab untouched (seed accounts stay able to sign in).
+   966→- Seed: faculty + student creates now set emailVerified: true; one-off update marked all 61 existing users verified.
+   967→- Ops hiccup: first live attempt 500'd because the long-running dev server still held the pre-schema Prisma Client (db.emailVerification undefined) — restarted `bun run dev`, resolved.
+   968→- Verification (agent-browser): step-1 screenshot with gmail → red border + "Only education emails…" hint + server 400 on submit; edu email → toast "Verification code sent", server console shows the formatted email (code 110019), step 2 rendered; wrong code 000000 → "That code isn't right — 4 attempts left."; Fill → "Verify & create account" → toast "Welcome to UniProjects, Jane! Email verified ✓", header shows JD avatar; DB check: user emailVerified=true, 0 leftover verification rows; API edge tests — duplicate email 400 ("account already exists"), immediate resend 429 (60s cooldown), register without token 400, seed login 200; mobile 390×844 full flow to step 2 fits and works; zero page errors; tsc + eslint clean; test user + verification rows cleaned afterwards.
+   969→
+   970→Stage Summary:
+   971→- Registration is now gated by real email verification: an education-only email (checked live and enforced server-side) receives a hashed 6-digit code (10-min expiry, 5-attempt cap, 60s resend cooldown), and the account is created only after the code is confirmed — via a single-use token bound to that email. Users land in the app with emailVerified=true; delivery currently logs to the server console and exposes a demo-code shortcut in the UI until a real mail provider is wired in. Sign-in for existing accounts is unchanged.
+   972→
+   973→---
+   974→Task ID: 27
+   975→Agent: Z.ai Code (main)
+   976→Task: Write the project README.md.
+   977→
+   978→Work Log:
+   979→- Gathered facts: package.json scripts (dev/lint/db:push…), src/lib/config.ts branding (Kyungsung palette, categories, accents), API route tree, seed entry point (bun prisma/seed.ts — no prisma.seed config), .env (DATABASE_URL=file:.../db/custom.db), views/lib structure, demo accounts from the auth modal.
+   980→- Wrote /home/z/my-project/README.md: project intro + rebranding note, full feature breakdown (public / community / verification & moderation / auth incl. the Task-26 email-verification flow and the mail-provider swap note), tech-stack table with architecture notes (single-route hash SPA, typed api-client contract, design tokens), getting-started steps (install → env → db:push → seed → dev), demo accounts table, annotated project-structure tree, API-at-a-glance table, scripts table, design-language section.
+   981→
+   982→Stage Summary:
+   983→- The repo now has a complete, accurate README.md covering features, stack, setup, demo credentials, the verified-registration flow, API surface, and design system — everything sourced from the actual codebase, not guesses.
+   984→
+   985→---
+   986→Task ID: 28
+   987→Agent: Z.ai Code (main)
+   988→Task: "How can user add these tags?" — the user showed a screenshot of tag pills (#accessibility #computer-vision #on-device, i.e. the menulens detail page) and asked how a user can add them. Investigation: the schema, APIs, search/filters, and detail-page pills were all already tag-aware, but the wizard form hardcoded `tags: []` with no input — so users had NO way to add tags. Implemented the missing TagField.
+   989→
+   990→Work Log:
+   991→- Recon: prisma Project.tags (comma-separated string) + POST/PATCH zod schemas (array, max 8, ≤30 chars, lowercased server-side) + detail pills renderer + `q`/`tag` search support all existed; the only gap was the create/edit form (create.tsx sent `tags: []` and had no UI).
+   992→- FormState += `tags: string[]`; EMPTY_FORM += `[]`; edit-mode prefill now sets `tags: project.tags`; corePayload (create) and the edit-mode updateProject payload now send `tags: form.tags`; STEPS[0] hint → "Title, summary, description & tags".
+   993→- New module-level TagField in create.tsx (GitHub-topic-style): bordered flex-wrap box mirroring shadcn Input focus styling (focus-within ring); pills with × remove buttons (aria-label "Remove tag {t}"); input commits on Enter/comma AND blur (so a draft isn't lost when clicking Continue); Backspace on empty input removes the last tag; normalizeTag strips leading #'s, lowercases, collapses whitespace to dashes; guards for >30 chars, duplicate (case-insensitive), and >8 tags with inline aria-live notices; counter in the hint ("4/8 used"); 12 TAG_SUGGESTIONS rendered as 6 dashed quick-add chips (filtered by already-added, hidden at max); chips use onMouseDown+preventDefault so blur-commit can't race the click.
+   994→- Placement: step 1 (Basics) as a full-width field under the description.
+   995→- Verification (agent-browser, logged in as jisoo.park): typed "  Computer Vision " + Enter → pill `#computer-vision` (normalization ✓); clicked "+ accessibility" → pill; re-typed it → inline notice "#accessibility is already on the list." and draft cleared; Backspace removed last tag; × removed a tag; suggestion re-add ✓; step-1 screenshot — field, hint counter and suggestion row render cleanly.
+   996→- E2E persistence: created "Tag Flow Test Project" via session POST with tags [accessibility, computer-vision, on-device] → API echoed tags ✓; detail page renders exactly the pills from the user's screenshot; Edit project → step 1 prefilled all 3 tags ✓; added "+ ai" via suggestion, walked Continue to the final step, "Save changes" → PATCH 200 → detail shows 4 pills including #ai (UI-driven update path ✓); search `q=on-device` and filter `tag=computer-vision` both return the test project; mobile 390×844 — pills wrap over two lines, counter/suggestions intact; DELETE cleanup 200, no leftover rows; zero page errors, console clean; tsc + eslint clean; dev.log shows only pre-existing unrelated 404s (/covers/campus-re-frame.webp, /logo.svg).
+   997→
+   998→Stage Summary:
+   999→- Users can now author tags themselves: the submit wizard's Basics step has a GitHub-style tag box (type + Enter/comma, blur-commit, ×/Backspace to remove, up to 8 lowercased dashed tags, suggested quick-adds), values persist through both create and edit, and they surface as #pills on the project detail page and flow into search + tag filters. The menulens-style tag look from the user's screenshot is now reachable for every project.
+
+[showing lines 820-999 of 1000; use offset=1000 with limit to continue reading]

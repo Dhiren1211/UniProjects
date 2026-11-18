@@ -6,14 +6,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [projects, departments, students, featured, verified, posts, latest] =
+    const [projects, departments, students, featured, verified, latest] =
       await Promise.all([
         db.project.count({ where: { status: "PUBLISHED" } }),
         db.department.count(),
         db.projectMember.count(),
         db.project.count({ where: { featured: true, status: "PUBLISHED" } }),
         db.project.count({ where: { verified: true } }),
-        db.post.count(),
         db.project.findFirst({ orderBy: { year: "desc" }, select: { year: true } }),
       ]);
 
@@ -23,7 +22,6 @@ export async function GET() {
       students,
       featured,
       verified,
-      posts,
       latestYear: latest?.year ?? null,
     };
 

@@ -271,7 +271,7 @@ function normalizeTag(raw: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** GitHub-topic-style tag box — type + Enter to add, × / Backspace to remove. */
+/** GitHub-topic-style tag box - type + Enter to add, × / Backspace to remove. */
 function TagField({ value, onChange }: { value: string[]; onChange: (tags: string[]) => void }) {
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -302,7 +302,7 @@ function TagField({ value, onChange }: { value: string[]; onChange: (tags: strin
     <div>
       <div
         className={cn(
-          "flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-up-border bg-white px-3 py-2",
+          "flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-up-border bg-card px-3 py-2",
           "transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
         )}
       >
@@ -353,7 +353,7 @@ function TagField({ value, onChange }: { value: string[]; onChange: (tags: strin
         </p>
       ) : (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Press Enter to add — {value.length}/{MAX_TAGS} used. Tags are searchable and shown on the
+          Press Enter to add - {value.length}/{MAX_TAGS} used. Tags are searchable and shown on the
           project page.
         </p>
       )}
@@ -366,7 +366,7 @@ function TagField({ value, onChange }: { value: string[]; onChange: (tags: strin
               key={s}
               type="button"
               onMouseDown={(e) => {
-                e.preventDefault(); // keep input focus — avoids blur-commit racing the click
+                e.preventDefault(); // keep input focus - avoids blur-commit racing the click
                 commit(s);
               }}
               className="rounded-full border border-dashed border-up-border px-2.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700"
@@ -380,7 +380,7 @@ function TagField({ value, onChange }: { value: string[]; onChange: (tags: strin
   );
 }
 
-/** Vertical step rail (≥ lg) — lives on the side of the wizard, shows what each step covers. */
+/** Vertical step rail (≥ lg) - lives on the side of the wizard, shows what each step covers. */
 function StepRail({ current, onGo }: { current: number; onGo: (n: number) => void }) {
   return (
     <ol aria-label="Wizard steps" className="space-y-1">
@@ -414,9 +414,9 @@ function StepRail({ current, onGo }: { current: number; onGo: (n: number) => voi
                 aria-hidden
                 className={cn(
                   "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold tabular-nums transition-colors",
-                  done && "border-primary-500 bg-primary-500 text-white",
-                  isCurrent && "border-primary-500 bg-white text-primary-700 shadow-sm",
-                  !done && !isCurrent && "border-up-border-strong bg-white text-muted-foreground"
+                  done && "border-primary-500 bg-primary-500 text-primary-foreground",
+                  isCurrent && "border-primary-500 bg-card text-primary-700 shadow-sm",
+                  !done && !isCurrent && "border-up-border-strong bg-card text-muted-foreground"
                 )}
               >
                 {done ? <Check className="size-3.5" aria-hidden /> : s.n}
@@ -465,8 +465,8 @@ function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void
               aria-current={isCurrent ? "step" : undefined}
               className={cn(
                 "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-all duration-200 md:text-sm",
-                done && "cursor-pointer bg-primary-500 text-white hover:bg-primary-600",
-                isCurrent && "border-2 border-primary-500 bg-white text-primary-700",
+                done && "cursor-pointer bg-primary-500 text-primary-foreground hover:bg-primary-600",
+                isCurrent && "border-2 border-primary-500 bg-card text-primary-700",
                 !done && !isCurrent && "cursor-default bg-surface-muted text-muted-foreground"
               )}
             >
@@ -537,7 +537,7 @@ function UserSearchAdd({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search students by name or username…"
-          className="h-10 rounded-xl bg-white pl-9"
+          className="h-10 rounded-xl bg-card pl-9"
           autoComplete="off"
         />
       </div>
@@ -552,7 +552,7 @@ function UserSearchAdd({
           visible.map((u) => (
             <div
               key={u.id}
-              className="flex items-center gap-2.5 rounded-xl border border-up-border bg-white px-3 py-2"
+              className="flex items-center gap-2.5 rounded-xl border border-up-border bg-card px-3 py-2"
             >
               <UserAvatar name={u.displayName} avatarUrl={u.avatarUrl} ring={false} className="size-7" />
               <div className="min-w-0 flex-1">
@@ -605,7 +605,7 @@ function ResourceModeToggle({
         onClick={() => onChange("link")}
         className={cn(
           "rounded-[7px] px-2.5 py-1 text-xs font-semibold transition-colors duration-200",
-          value === "link" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          value === "link" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
         )}
       >
         Link
@@ -618,7 +618,7 @@ function ResourceModeToggle({
         onClick={() => onChange("upload")}
         className={cn(
           "rounded-[7px] px-2.5 py-1 text-xs font-semibold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40",
-          value === "upload" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+          value === "upload" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
         )}
       >
         Upload
@@ -703,8 +703,8 @@ function TechChip({ tech, on, onToggle }: { tech: TechnologyDTO; on: boolean; on
       className={cn(
         "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
         on
-          ? "border-primary-500 bg-primary-500 text-white shadow-sm"
-          : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+          ? "border-primary-500 bg-primary-500 text-primary-foreground shadow-sm"
+          : "border-up-border bg-card text-foreground hover:border-up-border-strong hover:shadow-sm"
       )}
     >
       {on ? <Check className="mr-1 inline size-3.5" aria-hidden /> : null}
@@ -773,7 +773,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
   const [mileErr, setMileErr] = useState<string | null>(null);
   const [mileBusy, setMileBusy] = useState(false);
 
-  // departments are static — load once
+  // departments are static - load once
   useEffect(() => {
     const ac = new AbortController();
     fetchDepartments(ac.signal)
@@ -817,7 +817,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
     return () => ac.abort();
   }, [editSlug, user?.id, editRetry]);
 
-  // technologies are only needed on step 5 — lazy load
+  // technologies are only needed on step 5 - lazy load
   useEffect(() => {
     if (step !== 5 || techs !== null) return;
     const ac = new AbortController();
@@ -937,7 +937,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
       if (d.length < 60) e.description = `Description must be at least 60 characters (${d.length}/60)`;
     }
     if (s === 2) {
-      if (!form.coverImage.trim()) e.coverImage = "Add a cover image — every project needs one.";
+      if (!form.coverImage.trim()) e.coverImage = "Add a cover image - every project needs one.";
     }
     if (s === 3) {
       if (!form.dept) e.dept = "Choose a department";
@@ -959,11 +959,11 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
   const draftRowError = (): string | null => {
     for (const r of draftResources) {
       if (r.mode === "upload") {
-        if (!r.url.startsWith("/uploads/")) return "Upload a file first — or switch the row back to Link.";
+        if (!r.url.startsWith("/uploads/")) return "Upload a file first - or switch the row back to Link.";
         continue;
       }
       if (!r.url.trim()) continue;
-      if (!URL_RE.test(r.url.trim())) return "A resource link is not a valid URL — use the full http(s):// address.";
+      if (!URL_RE.test(r.url.trim())) return "A resource link is not a valid URL - use the full http(s):// address.";
     }
     for (const t of draftTimeline) {
       if (!t.title.trim() && !t.date && !t.note.trim()) continue;
@@ -1133,7 +1133,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
   /** A freshly-picked cover always goes through the crop dialog before it uploads. */
   const onCoverFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      toast.error("Pick an image file — JPG, PNG, WebP or GIF.");
+      toast.error("Pick an image file - JPG, PNG, WebP or GIF.");
       return;
     }
     if (cropObjectUrl.current) URL.revokeObjectURL(cropObjectUrl.current);
@@ -1146,7 +1146,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
     setCropOpen(true);
   };
 
-  /** Re-crop an already-uploaded cover — only same-origin /uploads/ images are canvas-safe. */
+  /** Re-crop an already-uploaded cover - only same-origin /uploads/ images are canvas-safe. */
   const startCoverCrop = () => {
     if (!form.coverImage.startsWith("/uploads/")) return;
     setCropPoint({ x: 0, y: 0 });
@@ -1306,7 +1306,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
     setStepError(null);
     createProject(corePayload(false))
       .then((created) => {
-        toast.success("Draft saved — publish whenever you're ready");
+        toast.success("Draft saved - publish whenever you're ready");
         navigate({ name: "project", slug: created.slug });
       })
       .catch(onSubmitError)
@@ -1360,7 +1360,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
     createProject(corePayload(true))
       .then((created) => {
         const slug = created.slug;
-        // createProject has no resources/timeline fields — apply them best-effort
+        // createProject has no resources/timeline fields - apply them best-effort
         const jobs: Promise<unknown>[] = [
           ...draftResources
             .filter((r) => r.url.trim())
@@ -1405,11 +1405,11 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
           </h1>
         </div>
         <p className="text-sm text-muted-foreground" aria-live="polite">
-          Step {step} of {STEPS.length} — {stepLabel}
+          Step {step} of {STEPS.length} - {stepLabel}
         </p>
       </div>
 
-      {/* < lg: horizontal stepper — ≥ lg the vertical rail sits beside the form */}
+      {/* < lg: horizontal stepper - ≥ lg the vertical rail sits beside the form */}
       <div className="mt-6 lg:hidden">
         <Stepper current={step} onGo={(n) => setStep(n)} />
       </div>
@@ -1446,7 +1446,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 onChange={(e) => setField("title", e.target.value)}
                 placeholder="e.g. Smart compost tracker for campus cafeterias"
                 aria-invalid={Boolean(errors.title)}
-                className="h-10 rounded-xl bg-white"
+                className="h-10 rounded-xl bg-card"
               />
               <div className="flex items-start justify-between gap-3">
                 {errors.title ? (
@@ -1469,7 +1469,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 onChange={(e) => setField("summary", e.target.value)}
                 placeholder="What does it do, in one sentence?"
                 aria-invalid={Boolean(errors.summary)}
-                className="h-10 rounded-xl bg-white"
+                className="h-10 rounded-xl bg-card"
               />
               <div className="flex items-start justify-between gap-3">
                 {errors.summary ? (
@@ -1490,16 +1490,16 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 rows={8}
                 value={form.description}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder={"The problem, your approach, and what you built…\n\nUse plain text — leave a blank line between paragraphs."}
+                placeholder={"The problem, your approach, and what you built…\n\nUse plain text - leave a blank line between paragraphs."}
                 aria-invalid={Boolean(errors.description)}
-                className="rounded-xl bg-white"
+                className="rounded-xl bg-card"
               />
               <div className="flex items-start justify-between gap-3">
                 {errors.description ? (
                   fieldErr("description")
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Plain text — blank lines become paragraph breaks.
+                    Plain text - blank lines become paragraph breaks.
                   </p>
                 )}
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -1524,7 +1524,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 <div>
                   <p className="font-semibold text-foreground">Cover image</p>
                   <p className="text-xs text-muted-foreground">
-                    Shown on cards and the top of the project page — you pick the exact crop.
+                    Shown on cards and the top of the project page - you pick the exact crop.
                   </p>
                 </div>
                 <span className="text-xs font-medium text-muted-foreground">Required</span>
@@ -1551,7 +1551,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       className="absolute inset-0 size-full object-cover"
                     />
                     {coverPct !== null ? (
-                      <div className="absolute inset-x-0 bottom-0 bg-white/90 px-4 py-2.5 backdrop-blur">
+                      <div className="absolute inset-x-0 bottom-0 bg-background/85 px-4 py-2.5 backdrop-blur">
                         <div className="flex items-center justify-between gap-2 pb-1.5">
                           <p className="text-xs font-medium text-foreground">Uploading new cover…</p>
                           <span className="text-xs tabular-nums text-muted-foreground">{coverPct}%</span>
@@ -1623,7 +1623,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     if (file) onCoverFile(file);
                   }}
                   className={cn(
-                    "mt-3 flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-white transition-colors duration-200",
+                    "mt-3 flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed bg-card transition-colors duration-200",
                     coverDrag
                       ? "border-primary-500 bg-primary-50 text-primary-700"
                       : "border-up-border-strong text-muted-foreground hover:border-primary-400 hover:text-primary-700"
@@ -1648,7 +1648,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       <p className="text-sm font-medium text-foreground">
                         {coverDrag ? "Drop to upload" : "Click to upload or drag & drop"}
                       </p>
-                      <p className="text-xs">JPG, PNG, WebP or GIF — up to 6 MB</p>
+                      <p className="text-xs">JPG, PNG, WebP or GIF - up to 6 MB</p>
                       <p className="text-[11px] text-muted-foreground/80">
                         You'll crop it to fit before it uploads
                       </p>
@@ -1668,7 +1668,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       onChange={(e) => setCoverUrlInput(e.target.value)}
                       placeholder="https://…"
                       inputMode="url"
-                      className="h-9 min-w-0 flex-1 rounded-lg bg-white sm:max-w-sm"
+                      className="h-9 min-w-0 flex-1 rounded-lg bg-card sm:max-w-sm"
                     />
                     <Button variant="outline" size="sm" className="h-9 rounded-lg font-semibold" onClick={applyCoverUrl}>
                       Apply
@@ -1705,7 +1705,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 <div>
                   <p className="font-semibold text-foreground">Gallery</p>
                   <p className="text-xs text-muted-foreground">
-                    Optional project photos — shown as a swipeable slider on the project page.
+                    Optional project photos - shown as a swipeable slider on the project page.
                   </p>
                 </div>
                 <span className="text-xs tabular-nums text-muted-foreground">
@@ -1744,7 +1744,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                           aria-label={`Move image ${i + 1} left`}
                           disabled={i === 0}
                           onClick={() => moveGalleryImage(i, -1)}
-                          className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
+                          className="flex size-6 items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
                         >
                           <ChevronLeft className="size-3.5" aria-hidden />
                         </button>
@@ -1753,7 +1753,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                           aria-label={`Move image ${i + 1} right`}
                           disabled={i === form.galleryImages.length - 1}
                           onClick={() => moveGalleryImage(i, 1)}
-                          className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
+                          className="flex size-6 items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm transition-colors hover:text-primary-700 disabled:opacity-30"
                         >
                           <ChevronRight className="size-3.5" aria-hidden />
                         </button>
@@ -1762,7 +1762,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                         type="button"
                         aria-label={`Remove image ${i + 1}`}
                         onClick={() => removeGalleryImage(i)}
-                        className="flex size-6 items-center justify-center rounded-full bg-white/90 text-foreground shadow-sm transition-colors hover:text-danger"
+                        className="flex size-6 items-center justify-center rounded-full bg-background/85 text-foreground shadow-sm transition-colors hover:text-danger"
                       >
                         <Trash2 className="size-3.5" aria-hidden />
                       </button>
@@ -1773,7 +1773,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-up-border bg-surface-muted">
                     <Loader2 className="size-5 animate-spin text-primary-600" aria-hidden />
                     <p className="text-xs font-medium text-muted-foreground">Uploading {galleryPct}%</p>
-                    <div className="h-1 w-3/4 overflow-hidden rounded-full bg-white">
+                    <div className="h-1 w-3/4 overflow-hidden rounded-full bg-card">
                       <div
                         className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
                         style={{ width: `${galleryPct}%` }}
@@ -1787,7 +1787,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     aria-label="Add gallery photo"
                     disabled={galleryPct !== null}
                     onClick={() => galleryInputRef.current?.click()}
-                    className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-up-border-strong bg-white text-muted-foreground transition-colors duration-200 hover:border-primary-400 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-up-border-strong bg-card text-muted-foreground transition-colors duration-200 hover:border-primary-400 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Plus className="size-5" aria-hidden />
                     <span className="text-[11px] font-semibold">Add photo</span>
@@ -1795,7 +1795,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 ) : null}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Up to 8 photos — new ones join the end; use the corner arrows to rearrange.
+                Up to 8 photos - new ones join the end; use the corner arrows to rearrange.
               </p>
             </div>
           </div>
@@ -1814,7 +1814,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   id="f-dept"
                   aria-label="Department"
                   aria-invalid={Boolean(errors.dept)}
-                  className="h-10 w-full rounded-xl bg-white"
+                  className="h-10 w-full rounded-xl bg-card"
                 >
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
@@ -1839,7 +1839,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   id="f-category"
                   aria-label="Category"
                   aria-invalid={Boolean(errors.category)}
-                  className="h-10 w-full rounded-xl bg-white"
+                  className="h-10 w-full rounded-xl bg-card"
                 >
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -1864,7 +1864,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   id="f-year"
                   aria-label="Year"
                   aria-invalid={Boolean(errors.year)}
-                  className="h-10 w-full rounded-xl bg-white"
+                  className="h-10 w-full rounded-xl bg-card"
                 >
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
@@ -1889,7 +1889,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   id="f-semester"
                   aria-label="Semester"
                   aria-invalid={Boolean(errors.semester)}
-                  className="h-10 w-full rounded-xl bg-white"
+                  className="h-10 w-full rounded-xl bg-card"
                 >
                   <SelectValue placeholder="Select semester" />
                 </SelectTrigger>
@@ -1912,7 +1912,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 maxLength={80}
                 onChange={(e) => setField("program", e.target.value)}
                 placeholder="e.g. B.Sc. Computer Science"
-                className="h-10 rounded-xl bg-white"
+                className="h-10 rounded-xl bg-card"
               />
             </div>
 
@@ -1923,8 +1923,8 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                 value={form.supervisor}
                 maxLength={80}
                 onChange={(e) => setField("supervisor", e.target.value)}
-                placeholder="e.g. Prof. Dana Kim"
-                className="h-10 rounded-xl bg-white"
+                placeholder="e.g. Prof. Kim"
+                className="h-10 rounded-xl bg-card"
               />
             </div>
           </div>
@@ -1934,13 +1934,13 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
         {step === 4 ? (
           <div className="space-y-6">
             <div className="flex items-center gap-3 rounded-2xl border border-primary-100 bg-primary-50/60 px-4 py-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-primary-foreground">
                 <Crown className="size-4" aria-hidden />
               </span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">{user.displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  @{user.username} · You — project owner
+                  @{user.username} · You - project owner
                 </p>
               </div>
             </div>
@@ -1959,7 +1959,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   ? draftMembers.map((m) => (
                       <div
                         key={m.username}
-                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+                        className="flex items-center gap-3 rounded-xl border border-up-border bg-card px-3.5 py-2.5"
                       >
                         <UserAvatar name={m.name} avatarUrl={m.avatarUrl} ring={false} />
                         <div className="min-w-0 flex-1">
@@ -2005,7 +2005,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   ? editProject.members.map((m) => (
                       <div
                         key={m.id}
-                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+                        className="flex items-center gap-3 rounded-xl border border-up-border bg-card px-3.5 py-2.5"
                       >
                         <UserAvatar name={m.name} avatarUrl={m.avatarUrl} ring={false} />
                         <div className="min-w-0 flex-1">
@@ -2053,7 +2053,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
 
                 {(!editing && draftMembers.length === 0) || (editing && editProject && editProject.members.length <= 1) ? (
                   <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
-                    Flying solo for now — search below to add teammates.
+                    Flying solo for now - search below to add teammates.
                   </p>
                 ) : null}
               </div>
@@ -2084,7 +2084,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
             <div className="grid gap-3 sm:grid-cols-2">
               <label
                 htmlFor="sw-join"
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-card px-4 py-3.5 transition-colors hover:border-up-border-strong"
               >
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-foreground">Allow join requests</span>
@@ -2100,7 +2100,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
               </label>
               <label
                 htmlFor="sw-teammates"
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-card px-4 py-3.5 transition-colors hover:border-up-border-strong"
               >
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-foreground">Looking for teammates</span>
@@ -2128,11 +2128,11 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
             </div>
           ) : (
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-start">
-              {/* Chip groups — two columns on wide screens */}
+              {/* Chip groups - two columns on wide screens */}
               <div className="grid min-w-0 gap-x-6 gap-y-6 sm:grid-cols-2">
                 {techGroups.length === 0 && otherTechs.length === 0 ? (
                   <p className="text-sm text-muted-foreground sm:col-span-2">
-                    No preset technologies right now — add the tools your team used on the right.
+                    No preset technologies right now - add the tools your team used on the right.
                   </p>
                 ) : null}
                 {techGroups.map((g) => (
@@ -2184,7 +2184,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     {selectedTechs.map((t) => (
                       <span
                         key={t.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary-500 py-1 pl-2.5 pr-1.5 text-xs font-medium text-white"
+                        className="inline-flex items-center gap-1 rounded-full bg-primary-500 py-1 pl-2.5 pr-1.5 text-xs font-medium text-primary-foreground"
                       >
                         {t.name}
                         <button
@@ -2200,7 +2200,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   </div>
                 ) : (
                   <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                    Nothing yet — tap the tools on the left to build your stack.
+                    Nothing yet - tap the tools on the left to build your stack.
                   </p>
                 )}
 
@@ -2220,7 +2220,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       }
                     }}
                     placeholder="Tool name…"
-                    className="mt-2 h-9 w-full rounded-lg bg-white"
+                    className="mt-2 h-9 w-full rounded-lg bg-card"
                   />
                   <Button
                     size="sm"
@@ -2248,7 +2248,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   <p className="text-xs text-muted-foreground">
                     {editing
                       ? "Added and removed immediately."
-                      : "Demo, repo, docs, slides — up to 6 links or files."}
+                      : "Demo, repo, docs, slides - up to 6 links or files."}
                   </p>
                 </div>
                 {!editing ? (
@@ -2274,7 +2274,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
               {!editing ? (
                 <div className="mt-3 space-y-2.5">
                   {draftResources.map((r, i) => (
-                    <div key={r.key} className="space-y-2 rounded-xl border border-up-border bg-white p-3">
+                    <div key={r.key} className="space-y-2 rounded-xl border border-up-border bg-card p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Select
                           value={r.type}
@@ -2309,7 +2309,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                             setDraftResources((list) =>
                               list.map((x) => {
                                 if (x.key !== r.key) return x;
-                                // a /uploads/… path is not a valid link — drop it on switch
+                                // a /uploads/… path is not a valid link - drop it on switch
                                 if (m === "link" && x.url.startsWith("/uploads/")) {
                                   return { ...x, mode: m, url: "" };
                                 }
@@ -2332,7 +2332,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Input
                           aria-label={`Resource ${i + 1} label`}
-                          placeholder="Label — e.g. Figma prototype"
+                          placeholder="Label - e.g. Figma prototype"
                           value={r.label}
                           onChange={(e) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, label: e.target.value } : x)))}
                           className="h-9 rounded-lg"
@@ -2360,7 +2360,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   ))}
                   {draftResources.length === 0 ? (
                     <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
-                      No resources yet — add demo links, repositories, documents, slides or files.
+                      No resources yet - add demo links, repositories, documents, slides or files.
                     </p>
                   ) : null}
                 </div>
@@ -2370,7 +2370,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     {(editProject?.resources ?? []).map((r) => (
                       <li
                         key={r.id}
-                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+                        className="flex items-center gap-3 rounded-xl border border-up-border bg-card px-3.5 py-2.5"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium text-foreground">
@@ -2399,7 +2399,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     ))}
                     {(editProject?.resources ?? []).length === 0 ? (
                       <li className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
-                        No resources yet — add the first one below.
+                        No resources yet - add the first one below.
                       </li>
                     ) : null}
                   </ul>
@@ -2446,7 +2446,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                         placeholder="Label"
                         value={newRes.label}
                         onChange={(e) => setNewRes((s) => ({ ...s, label: e.target.value }))}
-                        className="h-9 rounded-lg bg-white"
+                        className="h-9 rounded-lg bg-card"
                       />
                       {newRes.mode === "link" ? (
                         <Input
@@ -2455,7 +2455,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                           inputMode="url"
                           value={newRes.url}
                           onChange={(e) => setNewRes((s) => ({ ...s, url: e.target.value }))}
-                          className="h-9 rounded-lg bg-white"
+                          className="h-9 rounded-lg bg-card"
                         />
                       ) : (
                         <ResourceUploadField
@@ -2492,7 +2492,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   <p className="text-xs text-muted-foreground">
                     {editing
                       ? "Key moments, shown as a timeline on the project page."
-                      : "Optional — up to 3 key moments (kickoff, demo day, …)."}
+                      : "Optional - up to 3 key moments (kickoff, demo day, …)."}
                   </p>
                 </div>
                 {!editing ? (
@@ -2516,11 +2516,11 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   {draftTimeline.map((t, i) => (
                     <div
                       key={t.key}
-                      className="grid gap-2 rounded-xl border border-up-border bg-white p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-center"
+                      className="grid gap-2 rounded-xl border border-up-border bg-card p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-center"
                     >
                       <Input
                         aria-label={`Milestone ${i + 1} title`}
-                        placeholder="Title — e.g. Kickoff"
+                        placeholder="Title - e.g. Kickoff"
                         value={t.title}
                         onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, title: e.target.value } : x)))}
                         className="h-9 rounded-lg"
@@ -2552,7 +2552,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                   ))}
                   {draftTimeline.length === 0 ? (
                     <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
-                      No milestones yet — optional, but they make the timeline pop.
+                      No milestones yet - optional, but they make the timeline pop.
                     </p>
                   ) : null}
                 </div>
@@ -2595,21 +2595,21 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                       placeholder="Title"
                       value={newMile.title}
                       onChange={(e) => setNewMile((s) => ({ ...s, title: e.target.value }))}
-                      className="h-9 rounded-lg bg-white"
+                      className="h-9 rounded-lg bg-card"
                     />
                     <Input
                       aria-label="New milestone date"
                       type="date"
                       value={newMile.date}
                       onChange={(e) => setNewMile((s) => ({ ...s, date: e.target.value }))}
-                      className="h-9 rounded-lg bg-white"
+                      className="h-9 rounded-lg bg-card"
                     />
                     <Input
                       aria-label="New milestone note"
                       placeholder="Note (optional)"
                       value={newMile.note}
                       onChange={(e) => setNewMile((s) => ({ ...s, note: e.target.value }))}
-                      className="h-9 rounded-lg bg-white"
+                      className="h-9 rounded-lg bg-card"
                     />
                     <Button
                       size="sm"
@@ -2634,7 +2634,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
       </div>
 
       {/* Sticky footer */}
-      <div className="sticky bottom-0 z-20 -mx-5 mt-8 border-t border-up-border bg-white/95 px-5 py-4 backdrop-blur md:-mx-8 md:px-8">
+      <div className="sticky bottom-0 z-20 -mx-5 mt-8 border-t border-up-border bg-background/85 px-5 py-4 backdrop-blur md:-mx-8 md:px-8">
         <div className="flex items-center justify-between gap-3">
           <Button
             variant="ghost"

@@ -5,7 +5,7 @@ import type { TechnologyDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — technology catalog, grouped by category then name ----------
+// ---------- GET - technology catalog, grouped by category then name ----------
 
 export async function GET() {
   try {
@@ -27,7 +27,7 @@ export async function GET() {
   }
 }
 
-// ---------- POST { name } — register a custom tool ("Other") ----------
+// ---------- POST { name } - register a custom tool ("Other") ----------
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60);

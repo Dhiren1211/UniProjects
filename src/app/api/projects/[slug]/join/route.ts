@@ -6,7 +6,7 @@ import { notify } from "../../../_utils/notify";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { message? } — request to join ----------
+// ---------- POST { message? } - request to join ----------
 
 const joinSchema = z.object({
   message: z.string().trim().max(500, "Message is too long").optional(),
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 }
 
-// ---------- DELETE — cancel the viewer's pending request ----------
+// ---------- DELETE - cancel the viewer's pending request ----------
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {

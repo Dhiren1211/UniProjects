@@ -1,15 +1,18 @@
 // ============================================================
-// UniProjects — shared API payload types (the contract between
+// UniProjects - shared API payload types (the contract between
 // backend route handlers and frontend views).
 // ============================================================
 
-export type Role = "STUDENT" | "FACULTY" | "ADMIN";
+// Role hierarchy (highest → lowest). VISITOR = unauthenticated.
+export type Role = "ADMIN" | "MODERATOR" | "PROFESSOR" | "STUDENT";
 
 export type DepartmentDTO = {
   id: string;
   name: string;
   code: string;
   tagline: string | null;
+  website: string | null; // official department homepage - admin-managed
+  capstoneLabel: string; // what this faculty calls its capstone course (default "Capstone Design")
   accent: string;
   projectCount?: number;
 };
@@ -20,14 +23,21 @@ export type SafeUserDTO = {
   displayName: string;
   email: string;
   role: string;
+  studentId: string | null;
+  classId: string | null;
+  capstone: string | null;
+  cohortYear: number | null;
+  professorName: string | null;
+  isTeamLeader: boolean;
   bio: string | null;
   avatarUrl: string | null;
   program: string | null;
   skills: string[];
   website: string | null;
   github: string | null;
+  universityProfileUrl: string | null; // PROFESSOR only - official university faculty profile
   lookingForTeammates: boolean;
-  department: { id: string; name: string; code: string; accent: string } | null;
+  department: { id: string; name: string; code: string; accent: string; capstoneLabel: string } | null;
   createdAt: string;
 };
 
@@ -79,6 +89,7 @@ export type ProjectListItem = {
   year: number;
   semester: string;
   supervisor: string | null;
+  classId: string | null;
   tags: string[];
   demoUrl: string | null;
   repoUrl: string | null;
@@ -103,6 +114,8 @@ export type ProjectDetail = ProjectListItem & {
   timeline: TimelineDTO[];
   comments: CommentDTO[];
   ownerId: string | null;
+  /** Username of the PROFESSOR account whose displayName matches the supervisor string (null when unmatched). */
+  supervisorUsername: string | null;
 };
 
 export type ViewerDTO = {
@@ -113,7 +126,9 @@ export type ViewerDTO = {
   following: boolean;
   liked: boolean;
   joinRequestStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
-  canVerify: boolean; // staff and project not yet verified
+  canVerify: boolean;
+  /** The open verification request, shown to the reviewer on the project page. */
+  pendingVerification: { id: string; requester: string; createdAt: string } | null; // staff and project not yet verified
 };
 
 export type ProjectDetailResponse = {
@@ -140,7 +155,7 @@ export type VerificationDTO = {
 
 export type ReportDTO = {
   id: string;
-  targetType: string; // PROJECT | POST | USER
+  targetType: string; // PROJECT | USER
   targetId: string;
   reason: string;
   status: string; // OPEN | RESOLVED
@@ -159,40 +174,18 @@ export type NotificationDTO = {
   createdAt: string;
 };
 
-export type PostDTO = {
-  id: string;
-  body: string;
-  createdAt: string;
-  user: { id: string; username: string; displayName: string; role: string; avatarUrl?: string | null; departmentCode?: string | null };
-  likeCount: number;
-  liked: boolean;
-  bookmarked: boolean;
-  commentCount: number;
-  comments: CommentDTO[];
-};
-
-export type EventDTO = {
-  id: string;
-  title: string;
-  description: string;
-  location: string | null;
-  date: string;
-};
-
 export type StatsDTO = {
   projects: number;
   departments: number;
   students: number;
   featured: number;
   verified: number;
-  posts: number;
   latestYear: number | null;
 };
 
 export type SearchResults = {
   projects: ProjectListItem[];
   users: SafeUserDTO[];
-  posts: PostDTO[];
 };
 
 export type UserDirectoryEntry = SafeUserDTO & {
@@ -202,34 +195,104 @@ export type UserDirectoryEntry = SafeUserDTO & {
 export type ProfileResponse = {
   user: SafeUserDTO;
   projects: ProjectListItem[];
-  posts: PostDTO[];
   followerCount: number;
   followingCount: number;
   viewerFollows: boolean;
 };
 
-// ===== Admin panel (ADMIN role only) =====
+// ===== Site settings (public contract) =====
+
+export type SiteSettings = {
+  searchEnabled: boolean;
+  accountRequestsOpen: boolean;
+  siteName: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroImage: string;
+};
+
+// ===== Account requests (public intake → admin approval) =====
+
+export type AccountRequestDTO = {
+  id: string;
+  studentId: string;
+  name: string;
+  capstone: string; // I | II | III
+  year: number;
+  professor: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  decisionNote: string | null;
+  classId: string | null;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  createdAt: string;
+};
+
+/** Returned by the approval endpoint - powers the credentials popup. */
+export type ApprovalResultDTO = {
+  request: AccountRequestDTO;
+  account: {
+    userId: string; // login name (the student number)
+    displayName: string;
+    email: string;
+    classId: string;
+    temporaryPassword: string;
+  };
+  emailLogId: string;
+};
+
+export type AnnouncementDTO = {
+  id: string;
+  title: string;
+  body: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmailLogDTO = {
+  id: string;
+  to: string;
+  subject: string;
+  body: string;
+  kind: string; // CREDENTIALS | PASSWORD_RESET | SYSTEM
+  status: string; // SENT | CONSOLE
+  createdAt: string;
+};
+
+/** One public "forgot password" attempt, as shown in the admin Resets tab. */
+export type PasswordResetRow = {
+  id: string;
+  email: string;
+  status: "SENT" | "NOT_FOUND";
+  createdAt: string;
+  /** The account the email matched (null for NOT_FOUND rows). */
+  user: { username: string; displayName: string; role: string } | null;
+};
+
+// ===== Admin panel =====
 
 export type AdminOverviewDTO = {
   users: number;
   students: number;
-  faculty: number;
+  professors: number;
+  moderators: number;
   projects: number;
   published: number;
   drafts: number;
   featured: number;
   verified: number;
   departments: number;
-  events: number;
-  posts: number;
   comments: number;
   resources: number;
   totalViews: number;
   pendingVerifications: number;
   openReports: number;
   pendingJoinRequests: number;
+  pendingAccountRequests: number;
   byCategory: { category: string; count: number }[];
   byDepartment: { code: string; name: string; accent: string; count: number }[];
+  byClass: { classId: string; students: number; projects: number }[];
   recentProjects: ProjectListItem[];
   recentUsers: {
     id: string;
@@ -247,7 +310,7 @@ export type AdminOverviewDTO = {
 
 export type AdminActivityItem = {
   id: string;
-  kind: "PROJECT" | "USER" | "POST" | "COMMENT" | "REPORT" | "JOIN" | "EVENT" | "RESOURCE";
+  kind: "PROJECT" | "USER" | "COMMENT" | "REPORT" | "JOIN" | "ACCOUNT_REQUEST" | "RESOURCE";
   text: string;
   detail?: string | null;
   createdAt: string;
@@ -263,11 +326,9 @@ export type AdminProjectRow = ProjectListItem & {
 
 export type AdminUserRow = SafeUserDTO & {
   projectCount: number;
-  postCount: number;
+  classmateCount: number;
 };
 
-export type AdminEventDTO = EventDTO & { createdAt: string };
-
-// Admin console extra (task 2-c): the admin departments CRUD needs the
-// manual sort order for its edit form — DepartmentDTO intentionally omits it.
+// Admin console extra: the admin departments CRUD needs the
+// manual sort order for its edit form - DepartmentDTO intentionally omits it.
 export type AdminDepartmentDTO = DepartmentDTO & { sortOrder: number };

@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSessionUser, toSafeUser } from "@/lib/auth";
-import {
-  likeCountMap,
-  mapPosts,
-  postInclude,
-  projectInclude,
-  toListItem,
-} from "../../_utils/serialize";
+import { likeCountMap, normalizeSupervisorName, projectInclude, toListItem } from "../../_utils/serialize";
 import type { ProfileResponse, ProjectListItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const deptSelect = { id: true, name: true, code: true, accent: true } as const;
+const deptSelect = {
+  id: true,
+  name: true,
+  code: true,
+  accent: true,
+  capstoneLabel: true,
+} as const;
 
-// ---------- GET /api/users/[username] — public profile ----------
+// ---------- GET /api/users/[username] - public profile ----------
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   try {
@@ -28,8 +28,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     const viewer = await getSessionUser(req);
     const isSelf = viewer?.id === user.id;
 
-    // published projects the user owns or is a member of; drafts visible to the profile owner
-    const projectRows = await db.project.findMany({
+    // published projects the user owns or is a member of; drafts visible to the profile owner.
+    // Professors additionally surface the projects they supervise - that is the
+    // main content of a faculty profile (they rarely own student projects).
+    let projectRows = await db.project.findMany({
       where: {
         OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }],
         ...(isSelf ? {} : { status: "PUBLISHED" }),
@@ -37,14 +39,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
       orderBy: { createdAt: "desc" },
       include: projectInclude,
     });
-
-    const [postRows, followerCount, followingCount] = await Promise.all([
-      db.post.findMany({
-        where: { userId: user.id },
+    if (user.role === "PROFESSOR") {
+      const supervised = await db.project.findMany({
+        where: { supervisor: { not: null }, ...(isSelf ? {} : { status: "PUBLISHED" }) },
         orderBy: { createdAt: "desc" },
-        take: 50,
-        include: postInclude,
-      }),
+        include: projectInclude,
+      });
+      const norm = normalizeSupervisorName(user.displayName);
+      const matching = supervised.filter(
+        (p) => p.supervisor && normalizeSupervisorName(p.supervisor) === norm
+      );
+      const seen = new Set(projectRows.map((p) => p.id));
+      projectRows = [...projectRows, ...matching.filter((p) => !seen.has(p.id))];
+    }
+
+    const [followerCount, followingCount] = await Promise.all([
       db.follow.count({ where: { targetType: "USER", targetId: user.id } }),
       db.follow.count({ where: { followerId: user.id } }),
     ]);
@@ -67,12 +76,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     );
 
     const projects: ProjectListItem[] = projectRows.map((p) => toListItem(p, likes.get(p.id) ?? 0));
-    const posts = await mapPosts(postRows, viewer?.id ?? null);
 
     const profile: ProfileResponse = {
       user: toSafeUser(user),
       projects,
-      posts,
       followerCount,
       followingCount,
       viewerFollows,

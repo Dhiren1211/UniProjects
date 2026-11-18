@@ -1,22 +1,21 @@
 "use client";
 
 // ============================================================
-// SearchDialog — command-palette style global search.
+// SearchDialog - command-palette style global search.
 // ⌘K / Ctrl+K opens it from anywhere, ↑↓ + Enter navigate
-// results (projects · people · posts), quick-destination
-// tiles when empty, and a keyboard hint bar at the bottom.
+// results (projects · people), quick-destination tiles when
+// empty, and a keyboard hint bar at the bottom.
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
 import {
-  FileText,
+  ClipboardList,
   FolderKanban,
   Loader2,
-  MessagesSquare,
+  Megaphone,
   Search,
   SearchX,
   SquarePlus,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -29,23 +28,21 @@ import {
 import {
   globalSearch,
   type Navigate,
-  type PostDTO,
   type ProjectListItem,
   type SafeUserDTO,
 } from "./api-client";
 import { CategoryIcon, MemberAvatar, formatViews } from "./ui-bits";
-import { requireAuth, useAppStore } from "./store";
+import { canSubmit, requireAuth, useAppStore } from "./store";
 
 type Row =
   | { kind: "project"; p: ProjectListItem }
   | { kind: "user"; u: SafeUserDTO }
-  | { kind: "post"; p: PostDTO }
   | {
       kind: "quick";
       label: string;
       sub: string;
       icon: LucideIcon;
-      target: "projects" | "community" | "students" | "submit";
+      target: "projects" | "announcements" | "guidelines" | "submit";
     };
 
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -62,7 +59,6 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
   const [results, setResults] = useState<{
     projects: ProjectListItem[];
     users: SafeUserDTO[];
-    posts: PostDTO[];
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
@@ -75,9 +71,10 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        const { searchOpen: open, authModal, setSearchOpen: setOpen } = useAppStore.getState();
-        if (open || authModal) return;
-        setOpen(true);
+        const { searchOpen: open, authModal, setSearchOpen: setOpen, settings } =
+          useAppStore.getState();
+        // the site-wide toggle (requirement 2) also silences the shortcut
+        if (!open && !authModal && settings?.searchEnabled !== false) setOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -112,8 +109,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
 
   const query = q.trim();
   const showing = query.length >= 2 ? results : null;
-  const hasResults =
-    !!showing && (showing.projects.length > 0 || showing.users.length > 0 || showing.posts.length > 0);
+  const hasResults = !!showing && (showing.projects.length > 0 || showing.users.length > 0);
 
   const go = (fn: () => void) => {
     acRef.current?.abort();
@@ -126,54 +122,58 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
 
   const submitProject = () => {
     const { user, openAuth } = useAppStore.getState();
-    // close the palette first — the auth modal (or create view) takes over cleanly
+    // close the palette first - the auth modal (or create view) takes over cleanly
     go(() => {
       if (!requireAuth(user, openAuth)) return;
       navigate({ name: "create" });
     });
   };
 
+  // quick destination tiles when idle
+  const quickTiles: Extract<Row, { kind: "quick" }>[] = [
+    {
+      kind: "quick",
+      label: "All projects",
+      sub: "Browse every showcase entry",
+      icon: FolderKanban,
+      target: "projects",
+    },
+    {
+      kind: "quick",
+      label: "Announcements",
+      sub: "Updates from the capstone office",
+      icon: Megaphone,
+      target: "announcements",
+    },
+    {
+      kind: "quick",
+      label: "Guidelines",
+      sub: "Accounts, submissions and verification",
+      icon: ClipboardList,
+      target: "guidelines",
+    },
+  ];
+  if (canSubmit(useAppStore.getState().user)) {
+    quickTiles.push({
+      kind: "quick",
+      label: "Submit a project",
+      sub: "Put your build on the stage",
+      icon: SquarePlus,
+      target: "submit",
+    });
+  }
+
   // rows currently under keyboard control: results, or the quick tiles when idle
   const rows: Row[] = hasResults
     ? [
         ...showing!.projects.map((p) => ({ kind: "project", p }) as Row),
         ...showing!.users.map((u) => ({ kind: "user", u }) as Row),
-        ...showing!.posts.map((p) => ({ kind: "post", p }) as Row),
       ]
     : query.length < 2
-      ? [
-          {
-            kind: "quick",
-            label: "All projects",
-            sub: "Browse every showcase entry",
-            icon: FolderKanban,
-            target: "projects",
-          },
-          {
-            kind: "quick",
-            label: "Community board",
-            sub: "Team-up posts and campus chatter",
-            icon: MessagesSquare,
-            target: "community",
-          },
-          {
-            kind: "quick",
-            label: "Student directory",
-            sub: "Find makers and teammates",
-            icon: Users,
-            target: "students",
-          },
-          {
-            kind: "quick",
-            label: "Submit a project",
-            sub: "Put your build on the stage",
-            icon: SquarePlus,
-            target: "submit",
-          },
-        ]
+      ? quickTiles
       : [];
 
-  // (keyboard selection resets live in the input onChange + search callbacks —
+  // (keyboard selection resets live in the input onChange + search callbacks -
   //  no effect needed, which also keeps the react-hooks rules happy)
 
   // keep the active row in view
@@ -185,7 +185,6 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
   const runRow = (r: Row) => {
     if (r.kind === "project") go(() => navigate({ name: "project", slug: r.p.slug }));
     else if (r.kind === "user") go(() => navigate({ name: "profile", username: r.u.username }));
-    else if (r.kind === "post") go(() => navigate({ name: "community" }));
     else {
       // quick destination tile
       const { target } = r;
@@ -228,7 +227,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Search the showcase</DialogTitle>
-          <DialogDescription>Search projects, people, and posts</DialogDescription>
+          <DialogDescription>Search projects and people</DialogDescription>
         </DialogHeader>
 
         {/* input row */}
@@ -245,7 +244,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
               resetSelection();
             }}
             onKeyDown={onInputKeyDown}
-            placeholder="Search projects, people, posts…"
+            placeholder="Search projects, people, tags…"
             aria-label="Search query"
             role="combobox"
             aria-expanded={rows.length > 0}
@@ -382,40 +381,6 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
                       <span className="block truncate text-xs text-muted-foreground">
                         @{u.username}
                         {u.department ? ` · ${u.department.code}` : ""}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          {/* posts */}
-          {hasResults && showing!.posts.length > 0 ? (
-            <div>
-              <p className={sectionCls}>Posts · {showing!.posts.length}</p>
-              {showing!.posts.map((p, i) => {
-                const idx = showing!.projects.length + showing!.users.length + i;
-                return (
-                  <button
-                    key={p.id}
-                    id={`search-row-${idx}`}
-                    data-palette-row
-                    data-active={idx === active}
-                    role="option"
-                    aria-selected={idx === active}
-                    type="button"
-                    onMouseEnter={() => setActive(idx)}
-                    onClick={() => runRow({ kind: "post", p })}
-                    className={`${rowCls(idx)} items-start`}
-                  >
-                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-foreground/60">
-                      <FileText className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium">{p.user.displayName}</span>
-                      <span className="line-clamp-2 block text-xs leading-snug text-muted-foreground">
-                        {p.body}
                       </span>
                     </span>
                   </button>

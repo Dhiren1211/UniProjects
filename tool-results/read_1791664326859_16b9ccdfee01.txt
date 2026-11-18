@@ -1,0 +1,539 @@
+   613→   613→            <div key={p.id} className="shrink-0 snap-start">
+   614→   614→              <CollageCard project={p} onOpen={(slug) => navigate({ name: "project", slug })} />
+   615→   615→            </div>
+   616→   616→          ))}
+   617→   617→          {recent === null
+   618→   618→            ? [0, 1, 2].map((i) => (
+   619→   619→                <div key={i} className="h-60 w-72 shrink-0 animate-pulse rounded-2xl bg-white/[0.06]" />
+   620→   620→              ))
+   621→   621→            : null}
+   622→   622→        </div>
+   623→   623→      </div>
+   624→   624→    </section>
+   625→   625→  );
+   626→   626→}
+   627→   627→
+   628→   628→// ---------- marquee ticker ----------
+   629→   629→
+   630→   630→function Marquee({ projects }: { projects: ProjectListItem[] | null }) {
+   631→   631→  if (!projects || projects.length === 0) {
+   632→   632→    return (
+   633→   633→      <div className="border-b border-up-border bg-white py-4">
+   634→   634→        <div className="mx-auto max-w-6xl px-5">
+   635→   635→          <div className="h-4 w-full max-w-md animate-pulse rounded bg-surface-muted" />
+   636→   636→        </div>
+   637→   637→      </div>
+   638→   638→    );
+   639→   639→  }
+   640→   640→
+   641→   641→  return (
+   642→   642→    <div className="overflow-hidden border-b border-up-border bg-white py-3.5" aria-label="Latest project titles">
+   643→   643→      <div className="flex w-max [animation:up-marquee_45s_linear_infinite] hover:[animation-play-state:paused]">
+   644→   644→        {[0, 1].map((copy) => (
+   645→   645→          <ul key={copy} aria-hidden={copy === 1} className="flex items-center gap-10 pr-10">
+   646→   646→            {projects.map((p) => (
+   647→   647→              <li key={p.id} className="flex items-center gap-2.5 whitespace-nowrap text-sm">
+   648→   648→                <Sparkles className="size-3.5 text-primary-500" aria-hidden />
+   649→   649→                <span className="font-medium text-foreground">{p.title}</span>
+   650→   650→                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+   651→   651→                  {p.department.code}
+   652→   652→                </span>
+   653→   653→              </li>
+   654→   654→            ))}
+   655→   655→          </ul>
+   656→   656→        ))}
+   657→   657→      </div>
+   658→   658→    </div>
+   659→   659→  );
+   660→   660→}
+   661→   661→
+   662→   662→// ---------- count-up stats ----------
+   663→   663→
+   664→   664→function StatsBand({ stats }: { stats: StatsDTO | null }) {
+   665→   665→  const cells = [
+   666→   666→    { icon: FolderKanban, label: "Projects", value: stats?.projects },
+   667→   667→    { icon: Users, label: "Students involved", value: stats?.students },
+   668→   668→    { icon: Building2, label: "Departments", value: stats?.departments },
+   669→   669→    { icon: BadgeCheck, label: "Faculty verified", value: stats?.verified },
+   670→   670→  ];
+   671→   671→
+   672→   672→  return (
+   673→   673→    <section aria-label="Showcase statistics" className="mx-auto mt-12 w-full max-w-6xl px-5 md:mt-14 md:px-8">
+   674→   674→      <Reveal>
+   675→   675→        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-up-border bg-up-border shadow-sm lg:grid-cols-4">
+   676→   676→          {cells.map((c) => (
+   677→   677→            <div key={c.label} className="flex items-center gap-4 bg-card px-5 py-5 md:px-7">
+   678→   678→              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+   679→   679→                <c.icon className="size-5" aria-hidden />
+   680→   680→              </span>
+   681→   681→              <div className="min-w-0">
+   682→   682→                {c.value === undefined ? (
+   683→   683→                  <span className="block h-7 w-12 animate-pulse rounded bg-surface-muted" />
+   684→   684→                ) : (
+   685→   685→                  <CountUp value={c.value} className="block text-2xl font-bold tracking-tight text-foreground md:text-[1.7rem]" />
+   686→   686→                )}
+   687→   687→                <p className="mt-0.5 text-[11px] font-medium uppercase leading-snug tracking-wide text-muted-foreground">
+   688→   688→                  {c.label}
+   689→   689→                </p>
+   690→   690→              </div>
+   691→   691→            </div>
+   692→   692→          ))}
+   693→   693→        </div>
+   694→   694→      </Reveal>
+   695→   695→    </section>
+   696→   696→  );
+   697→   697→}
+   698→   698→
+   699→   699→// ---------- featured spotlight carousel ----------
+   700→   700→
+   701→   701→function Spotlight({ navigate, projects }: { navigate: Navigate; projects: ProjectListItem[] | null }) {
+   702→   702→  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start" });
+   703→   703→  const [selected, setSelected] = useState(0);
+   704→   704→  const [paused, setPaused] = useState(false);
+   705→   705→  const count = projects?.length ?? 0;
+   706→   706→
+   707→   707→  useEffect(() => {
+   708→   708→    if (!emblaApi) return;
+   709→   709→    const onSelect = () => setSelected(emblaApi.selectedScrollSnap());
+   710→   710→    emblaApi.on("select", onSelect);
+   711→   711→    onSelect();
+   712→   712→    return () => {
+   713→   713→      emblaApi.off("select", onSelect);
+   714→   714→    };
+   715→   715→  }, [emblaApi]);
+   716→   716→
+   717→   717→  useEffect(() => {
+   718→   718→    if (!emblaApi || paused || count < 2) return;
+   719→   719→    const t = setInterval(() => emblaApi.scrollNext(), 6000);
+   720→   720→    return () => clearInterval(t);
+   721→   721→  }, [emblaApi, paused, count]);
+   722→   722→
+   723→   723→  return (
+   724→   724→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   725→   725→      <div className="flex items-end justify-between gap-4">
+   726→   726→        <SectionHeading
+   727→   727→          eyebrow="Editor's picks"
+   728→   728→          title="Featured spotlight"
+   729→   729→          description="Hand-picked builds that define this year on campus."
+   730→   730→        />
+   731→   731→        {count > 1 ? (
+   732→   732→          <div className="hidden shrink-0 items-center gap-2 sm:flex">
+   733→   733→            <button
+   734→   734→              type="button"
+   735→   735→              aria-label="Previous featured project"
+   736→   736→              onClick={() => emblaApi?.scrollPrev()}
+   737→   737→              className="flex size-9 items-center justify-center rounded-full border border-up-border bg-card text-foreground shadow-sm transition-colors hover:border-up-border-strong"
+   738→   738→            >
+   739→   739→              <ChevronLeft className="size-4" aria-hidden />
+   740→   740→            </button>
+   741→   741→            <button
+   742→   742→              type="button"
+   743→   743→              aria-label="Next featured project"
+   744→   744→              onClick={() => emblaApi?.scrollNext()}
+   745→   745→              className="flex size-9 items-center justify-center rounded-full border border-up-border bg-card text-foreground shadow-sm transition-colors hover:border-up-border-strong"
+   746→   746→            >
+   747→   747→              <ChevronRight className="size-4" aria-hidden />
+   748→   748→            </button>
+   749→   749→          </div>
+   750→   750→        ) : null}
+   751→   751→      </div>
+   752→   752→
+   753→   753→      <Reveal className="mt-6">
+   754→   754→        <div
+   755→   755→          onMouseEnter={() => setPaused(true)}
+   756→   756→          onMouseLeave={() => setPaused(false)}
+   757→   757→        >
+   758→   758→          {projects === null ? (
+   759→   759→            <div className="h-72 animate-pulse rounded-3xl border border-up-border bg-surface-muted md:h-80" />
+   760→   760→          ) : count === 0 ? null : (
+   761→   761→            <>
+   762→   762→              <div className="overflow-hidden" ref={emblaRef}>
+   763→   763→                <div className="flex">
+   764→   764→                  {projects.map((p) => {
+   765→   765→                    const accent = accentOf(p.department.accent);
+   766→   766→                    return (
+   767→   767→                      <div key={p.id} className="min-w-0 flex-[0_0_100%] pl-0 first:pl-0 sm:pl-0 md:flex-[0_0_88%]">
+   768→   768→                        <article className="group mr-0 grid overflow-hidden rounded-3xl border border-up-border bg-card shadow-sm md:mr-5 md:grid-cols-[0.85fr_1.15fr]">
+   769→   769→                          <div
+   770→   770→                            className={cn(
+   771→   771→                              "relative flex min-h-44 items-center justify-center overflow-hidden bg-gradient-to-br md:min-h-[290px]",
+   772→   772→                              accent.cover
+   773→   773→                            )}
+   774→   774→                          >
+   775→   775→                            {p.coverImage ? (
+   776→   776→                              <img
+   777→   777→                                src={p.coverImage}
+   778→   778→                                alt=""
+   779→   779→                                loading="lazy"
+   780→   780→                                onError={(e) => {
+   781→   781→                                  e.currentTarget.style.display = "none";
+   782→   782→                                }}
+   783→   783→                                className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+   784→   784→                              />
+   785→   785→                            ) : null}
+   786→   786→                            {p.coverImage ? null : (
+   787→   787→                              <span className="flex size-16 items-center justify-center rounded-2xl bg-white/70 text-foreground/60 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+   788→   788→                                <CategoryIcon category={p.category} className="size-7" />
+   789→   789→                              </span>
+   790→   790→                            )}
+   791→   791→                            {p.featured ? (
+   792→   792→                              <span className="absolute left-4 top-4">
+   793→   793→                                <FeaturedBadge />
+   794→   794→                              </span>
+   795→   795→                            ) : null}
+   796→   796→                            <span className="absolute right-4 top-4 flex items-center gap-1.5">
+   797→   797→                              {p.verified ? <VerifiedBadge /> : null}
+   798→   798→                              <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-sm", p.coverImage ? "bg-white/90" : "bg-white/85", accent.chip)}>
+   799→   799→                                {p.department.code}
+   800→   800→                              </span>
+   801→   801→                            </span>
+   802→   802→                          </div>
+   803→   803→                          <div className="flex flex-col p-6 md:p-8">
+   804→   804→                            <p className="text-xs font-semibold uppercase tracking-widest text-primary-600">
+   805→   805→                              {p.category} · {p.year} {p.semester}
+   806→   806→                            </p>
+   807→   807→                            <h3 className="mt-2 line-clamp-1 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-primary-700 md:text-2xl">
+   808→   808→                              {p.title}
+   809→   809→                            </h3>
+   810→   810→                            <p className="mt-2.5 line-clamp-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+   811→   811→                              {p.summary}
+   812→   812→                            </p>
+   813→   813→                            <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-6">
+   814→   814→                              <div className="flex items-center gap-2.5">
+   815→   815→                                <div className="flex -space-x-2">
+   816→   816→                                  {p.members.slice(0, 4).map((m) => (
+   817→   817→                                    <UserAvatar key={m.id} name={m.name} avatarUrl={m.avatarUrl} />
+   818→   818→                                  ))}
+   819→   819→                                </div>
+   820→   820→                                <span className="text-xs font-medium text-muted-foreground">
+   821→   821→                                  {p.members.length} {p.members.length === 1 ? "member" : "members"}
+   822→   822→                                </span>
+   823→   823→                              </div>
+   824→   824→                              <Button
+   825→   825→                                onClick={() => navigate({ name: "project", slug: p.slug })}
+   826→   826→                                className="h-9 rounded-xl px-4 text-sm font-semibold"
+   827→   827→                              >
+   828→   828→                                View project
+   829→   829→                                <ArrowUpRight className="size-4" aria-hidden />
+   830→   830→                              </Button>
+   831→   831→                            </div>
+   832→   832→                          </div>
+   833→   833→                        </article>
+   834→   834→                      </div>
+   835→   835→                    );
+   836→   836→                  })}
+   837→   837→                </div>
+   838→   838→              </div>
+   839→   839→
+   840→   840→              {count > 1 ? (
+   841→   841→                <div className="mt-5 flex items-center justify-center gap-1.5">
+   842→   842→                  {projects.map((p, i) => (
+   843→   843→                    <button
+   844→   844→                      key={p.id}
+   845→   845→                      type="button"
+   846→   846→                      aria-label={`Go to featured project ${i + 1}: ${p.title}`}
+   847→   847→                      onClick={() => emblaApi?.scrollTo(i)}
+   848→   848→                      className={cn(
+   849→   849→                        "h-2 rounded-full transition-all duration-300",
+   850→   850→                        i === selected ? "w-6 bg-primary" : "w-2 bg-up-border-strong hover:bg-muted-foreground/40"
+   851→   851→                      )}
+   852→   852→                    />
+   853→   853→                  ))}
+   854→   854→                </div>
+   855→   855→              ) : null}
+   856→   856→            </>
+   857→   857→          )}
+   858→   858→        </div>
+   859→   859→      </Reveal>
+   860→   860→    </section>
+   861→   861→  );
+   862→   862→}
+   863→   863→
+   864→   864→// ---------- departments ----------
+   865→   865→
+   866→   866→function Departments({ navigate, departments }: { navigate: Navigate; departments: DepartmentDTO[] | null }) {
+   867→   867→  if (departments !== null && departments.length === 0) return null;
+   868→   868→
+   869→   869→  return (
+   870→   870→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   871→   871→      <SectionHeading
+   872→   872→        eyebrow="Browse by department"
+   873→   873→        title="Six departments, one showcase"
+   874→   874→        description="Every project belongs to a department — jump straight into the one you care about."
+   875→   875→      />
+   876→   876→      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   877→   877→        {departments === null
+   878→   878→          ? [0, 1, 2, 3, 4, 5].map((i) => (
+   879→   879→              <div key={i} className="h-44 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+   880→   880→            ))
+   881→   881→          : departments.map((d, i) => {
+   882→   882→              const accent = accentOf(d.accent);
+   883→   883→              return (
+   884→   884→                <Reveal key={d.id} delay={Math.min(i * 0.05, 0.3)}>
+   885→   885→                  <button
+   886→   886→                    type="button"
+   887→   887→                    onClick={() => navigate({ name: "projects", dept: d.code })}
+   888→   888→                    className="group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-up-border bg-card p-5 text-left outline-none transition-all duration-200 hover:-translate-y-0.5 hover:border-up-border-strong hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring"
+   889→   889→                  >
+   890→   890→                    {/* No more bottom accent bar — instead the accent floods the whole card:
+   891→   891→                        a circle of the department color swallows it from the bottom-left corner
+   892→   892→                        and every line of text flips to white while it's flooded. */}
+   893→   893→                    <span
+   894→   894→                      aria-hidden
+   895→   895→                      className={cn(
+   896→   896→                        "absolute -bottom-20 -left-14 size-64 origin-center scale-0 rounded-full transition-transform duration-300 ease-out group-hover:scale-[3]",
+   897→   897→                        accent.dot,
+   898→   898→                      )}
+   899→   899→                    />
+   900→   900→                    <div className="relative z-10 flex h-full w-full flex-col">
+   901→   901→                      <div className="flex items-start justify-between">
+   902→   902→                        <span
+   903→   903→                          className={cn(
+   904→   904→                            "flex size-11 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-foreground/70 transition-transform duration-200 group-hover:scale-110",
+   905→   905→                            accent.cover,
+   906→   906→                          )}
+   907→   907→                        >
+   908→   908→                          {d.code.slice(0, 2)}
+   909→   909→                        </span>
+   910→   910→                        <ArrowUpRight
+   911→   911→                          className="size-4 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-white group-hover:opacity-100"
+   912→   912→                          aria-hidden
+   913→   913→                        />
+   914→   914→                      </div>
+   915→   915→                      <h3 className="mt-3.5 font-semibold tracking-tight text-foreground transition-colors duration-200 group-hover:text-white">
+   916→   916→                        {d.name}
+   917→   917→                      </h3>
+   918→   918→                      {d.tagline ? (
+   919→   919→                        <p className="mt-1 text-sm text-muted-foreground transition-colors duration-200 group-hover:text-white/85">
+   920→   920→                          {d.tagline}
+   921→   921→                        </p>
+   922→   922→                      ) : null}
+   923→   923→                      <p className="mt-auto pt-3.5 text-xs font-medium text-muted-foreground transition-colors duration-200 group-hover:text-white/80">
+   924→   924→                        {d.projectCount} {d.projectCount === 1 ? "project" : "projects"}
+   925→   925→                      </p>
+   926→   926→                    </div>
+   927→   927→                  </button>
+   928→   928→                </Reveal>
+   929→   929→              );
+   930→   930→            })}
+   931→   931→      </div>
+   932→   932→    </section>
+   933→   933→  );
+   934→   934→}
+   935→   935→
+   936→   936→// ---------- events ----------
+   937→   937→
+   938→   938→function EventCard({ event, next }: { event: EventDTO; next?: boolean }) {
+   939→   939→  const d = new Date(event.date);
+   940→   940→  const countdown = formatDistanceToNowStrict(d, { addSuffix: true });
+   941→   941→
+   942→   942→  return (
+   943→   943→    <article className="relative flex h-full items-start gap-4 rounded-2xl border border-up-border bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-up-border-strong">
+   944→   944→      {next ? (
+   945→   945→        <span className="absolute -top-2.5 left-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground shadow-sm">
+   946→   946→          Next up
+   947→   947→        </span>
+   948→   948→      ) : null}
+   949→   949→      <span className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary-700">
+   950→   950→        <span className="text-[10px] font-bold uppercase tracking-wide">{format(d, "MMM")}</span>
+   951→   951→        <span className="text-2xl font-bold leading-none">{format(d, "d")}</span>
+   952→   952→      </span>
+   953→   953→      <div className="flex min-w-0 flex-1 flex-col">
+   954→   954→        <div className="flex items-start justify-between gap-2">
+   955→   955→          <h3 className="font-semibold tracking-tight text-foreground">{event.title}</h3>
+   956→   956→          <span className="mt-0.5 shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+   957→   957→            {countdown}
+   958→   958→          </span>
+   959→   959→        </div>
+   960→   960→        <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-primary-700">
+   961→   961→          <CalendarDays className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+   962→   962→          <span>
+   963→   963→            {format(d, "EEEE, MMM d, yyyy")}
+   964→   964→            <span aria-hidden> · </span>
+   965→   965→            {format(d, "h:mm a")}
+   966→   966→          </span>
+   967→   967→        </p>
+   968→   968→        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{event.description}</p>
+   969→   969→        {event.location ? (
+   970→   970→          <p className="mt-auto flex items-start gap-1.5 pt-3 text-xs text-muted-foreground">
+   971→   971→            <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+   972→   972→            <span>{event.location}</span>
+   973→   973→          </p>
+   974→   974→        ) : null}
+   975→   975→      </div>
+   976→   976→    </article>
+   977→   977→  );
+   978→   978→}
+   979→   979→
+   980→   980→function Events({ events }: { events: EventDTO[] | null }) {
+   981→   981→  if (events !== null && events.length === 0) return null;
+   982→   982→
+   983→   983→  return (
+   984→   984→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+   985→   985→      <SectionHeading
+   986→   986→        eyebrow="On campus"
+   987→   987→        title="What's coming up"
+   988→   988→        description="Demo days, critique sessions, and showcases worth marking in your calendar."
+   989→   989→      />
+   990→   990→      <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   991→   991→        {events === null
+   992→   992→          ? [0, 1, 2].map((i) => (
+   993→   993→              <div key={i} className="h-52 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+   994→   994→            ))
+   995→   995→          : events.map((ev, i) => (
+   996→   996→              <Reveal key={ev.id} delay={Math.min(i * 0.06, 0.24)} className="h-full">
+   997→   997→                <EventCard event={ev} next={i === 0} />
+   998→   998→              </Reveal>
+   999→   999→            ))}
+  1000→  1000→      </div>
+  1001→  1001→    </section>
+  1002→  1002→  );
+  1003→  1003→}
+  1004→  1004→
+  1005→  1005→// ---------- latest grid ----------
+  1006→  1006→
+  1007→  1007→function Latest({ navigate, recent }: { navigate: Navigate; recent: ProjectListItem[] | null }) {
+  1008→  1008→  return (
+  1009→  1009→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 md:mt-24 md:px-8">
+  1010→  1010→      <div className="flex items-end justify-between gap-4">
+  1011→  1011→        <SectionHeading
+  1012→  1012→          eyebrow="Fresh from the labs"
+  1013→  1013→          title="Latest submissions"
+  1014→  1014→          description="The most recent projects added to the showcase."
+  1015→  1015→        />
+  1016→  1016→        <Button
+  1017→  1017→          variant="ghost"
+  1018→  1018→          onClick={() => navigate({ name: "projects" })}
+  1019→  1019→          className="hidden shrink-0 text-primary-700 hover:text-primary-600 sm:inline-flex"
+  1020→  1020→        >
+  1021→  1021→          View all
+  1022→  1022→          <ArrowRight className="size-4" aria-hidden />
+  1023→  1023→        </Button>
+  1024→  1024→      </div>
+  1025→  1025→      <div className="mt-6">
+  1026→  1026→        {recent === null ? (
+  1027→  1027→          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1028→  1028→            {[0, 1, 2].map((i) => (
+  1029→  1029→              <div key={i} className="h-64 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+  1030→  1030→            ))}
+  1031→  1031→          </div>
+  1032→  1032→        ) : recent.length === 0 ? (
+  1033→  1033→          <p className="rounded-2xl border border-dashed border-up-border-strong bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+  1034→  1034→            No projects yet — be the first to submit one.
+  1035→  1035→          </p>
+  1036→  1036→        ) : (
+  1037→  1037→          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1038→  1038→            {recent.slice(0, 6).map((p, i) => (
+  1039→  1039→              <Reveal key={p.id} delay={Math.min(i * 0.06, 0.3)}>
+  1040→  1040→                <ProjectCard project={p} onOpen={(slug) => navigate({ name: "project", slug })} />
+  1041→  1041→              </Reveal>
+  1042→  1042→            ))}
+  1043→  1043→          </div>
+  1044→  1044→        )}
+  1045→  1045→      </div>
+  1046→  1046→      <div className="mt-8 text-center sm:hidden">
+  1047→  1047→        <Button variant="outline" className="h-11 rounded-xl px-6 font-semibold" onClick={() => navigate({ name: "projects" })}>
+  1048→  1048→          Browse all projects
+  1049→  1049→          <ArrowRight className="size-4" aria-hidden />
+  1050→  1050→        </Button>
+  1051→  1051→      </div>
+  1052→  1052→    </section>
+  1053→  1053→  );
+  1054→  1054→}
+  1055→  1055→
+  1056→  1056→// ---------- CTA ----------
+  1057→  1057→
+  1058→  1058→function CtaPanel({ navigate }: { navigate: Navigate }) {
+  1059→  1059→  const submit = () => {
+  1060→  1060→    const { user, openAuth } = useAppStore.getState();
+  1061→  1061→    if (!user) {
+  1062→  1062→      toast.info("Sign in to submit a project");
+  1063→  1063→      openAuth("login");
+  1064→  1064→      return;
+  1065→  1065→    }
+  1066→  1066→    navigate({ name: "create" });
+  1067→  1067→  };
+  1068→  1068→
+  1069→  1069→  return (
+  1070→  1070→    <section className="mx-auto mt-16 w-full max-w-6xl px-5 pb-20 md:mt-24 md:px-8">
+  1071→  1071→      <Reveal>
+  1072→  1072→        <div className="relative overflow-hidden rounded-3xl bg-night px-6 py-14 text-center text-white md:px-12 md:py-20">
+  1073→  1073→          <DarkBackdrop />
+  1074→  1074→          <div className="relative">
+  1075→  1075→            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.07] px-3.5 py-1.5 text-xs font-medium text-teal-100/90">
+  1076→  1076→              <Sparkles className="size-3.5 text-teal-300" aria-hidden />
+  1077→  1077→              Join the showcase
+  1078→  1078→            </span>
+  1079→  1079→            <h2 className="mx-auto mt-5 max-w-xl text-2xl font-bold tracking-tight md:text-4xl">
+  1080→  1080→              Built something worth showing?
+  1081→  1081→            </h2>
+  1082→  1082→            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-teal-100/70 md:text-base">
+  1083→  1083→              Put your project in front of the whole campus — professors, recruiters, and future teammates included.
+  1084→  1084→            </p>
+  1085→  1085→            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+  1086→  1086→              <Button
+  1087→  1087→                onClick={submit}
+  1088→  1088→                className="h-11 rounded-xl bg-teal-400 px-6 font-semibold text-teal-950 shadow-float hover:bg-teal-300"
+  1089→  1089→              >
+  1090→  1090→                Submit your project
+  1091→  1091→                <ArrowRight className="size-4" aria-hidden />
+  1092→  1092→              </Button>
+  1093→  1093→              <Button
+  1094→  1094→                variant="outline"
+  1095→  1095→                onClick={() => navigate({ name: "projects" })}
+  1096→  1096→                className="h-11 rounded-xl border-white/20 bg-white/[0.04] px-6 font-semibold text-white hover:bg-white/10 hover:text-white"
+  1097→  1097→              >
+  1098→  1098→                Browse projects
+  1099→  1099→              </Button>
+  1100→  1100→            </div>
+  1101→  1101→          </div>
+  1102→  1102→        </div>
+  1103→  1103→      </Reveal>
+  1104→  1104→    </section>
+  1105→  1105→  );
+  1106→  1106→}
+  1107→  1107→
+  1108→  1108→// ---------- root ----------
+  1109→  1109→
+  1110→  1110→export function HomeView({ navigate }: { navigate: Navigate }) {
+  1111→  1111→  const [stats, setStats] = useState<StatsDTO | null>(null);
+  1112→  1112→  const [featured, setFeatured] = useState<ProjectListItem[] | null>(null);
+  1113→  1113→  const [recent, setRecent] = useState<ProjectListItem[] | null>(null);
+  1114→  1114→  const [departments, setDepartments] = useState<DepartmentDTO[] | null>(null);
+  1115→  1115→  const [events, setEvents] = useState<EventDTO[] | null>(null);
+  1116→  1116→
+  1117→  1117→  useEffect(() => {
+  1118→  1118→    const ac = new AbortController();
+  1119→  1119→    fetchStats(ac.signal)
+  1120→  1120→      .then(setStats)
+  1121→  1121→      .catch(() => {});
+  1122→  1122→    fetchDepartments(ac.signal)
+  1123→  1123→      .then(setDepartments)
+  1124→  1124→      .catch(() => {});
+  1125→  1125→    fetchEvents(ac.signal)
+  1126→  1126→      .then(setEvents)
+  1127→  1127→      .catch(() => {});
+  1128→  1128→    fetchProjects({ featured: "1", limit: 5 }, ac.signal)
+  1129→  1129→      .then(setFeatured)
+  1130→  1130→      .catch(() => {});
+  1131→  1131→    fetchProjects({ sort: "newest", limit: 6 }, ac.signal)
+  1132→  1132→      .then(setRecent)
+  1133→  1133→      .catch(() => {});
+  1134→  1134→    return () => ac.abort();
+  1135→  1135→  }, []);
+  1136→  1136→
+  1137→  1137→  return (
+  1138→  1138→    <div>
+  1139→  1139→      <Hero navigate={navigate} stats={stats} recent={recent} />
+  1140→  1140→      <Marquee projects={recent} />
+  1141→  1141→      <StatsBand stats={stats} />
+  1142→  1142→      <Spotlight navigate={navigate} projects={featured} />
+  1143→  1143→      <Departments navigate={navigate} departments={departments} />
+  1144→  1144→      <Events events={events} />
+  1145→  1145→      <Latest navigate={navigate} recent={recent} />
+  1146→  1146→      <CtaPanel navigate={navigate} />
+  1147→  1147→    </div>
+  1148→  1148→  );
+  1149→  1149→}
+  1150→  1150→
+  1151→  1151→

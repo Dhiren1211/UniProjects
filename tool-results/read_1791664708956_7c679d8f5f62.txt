@@ -1,0 +1,1959 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useRef, useState } from "react";
+     4→import useEmblaCarousel from "embla-carousel-react";
+     5→import { format } from "date-fns";
+     6→import {
+     7→  AlertTriangle,
+     8→  ArrowLeft,
+     9→  BadgeCheck,
+    10→  Bell,
+    11→  BellRing,
+    12→  Bookmark,
+    13→  BookmarkCheck,
+    14→  CalendarDays,
+    15→  Check,
+    16→  ChevronLeft,
+    17→  ChevronRight,
+    18→  Clock,
+    19→  Crown,
+    20→  Download,
+    21→  ExternalLink,
+    22→  Eye,
+    23→  FileCheck2,
+    24→  FileQuestion,
+    25→  FileText,
+    26→  Flag,
+    27→  Github,
+    28→  Globe,
+    29→  Heart,
+    30→  Loader2,
+    31→  Paperclip,
+    32→  Pencil,
+    33→  Plus,
+    34→  Presentation,
+    35→  Search,
+    36→  Send,
+    37→  Share2,
+    38→  Trash2,
+    39→  UserRound,
+    40→  UserRoundPlus,
+    41→  Users,
+    42→  Video,
+    43→  X,
+    44→  type LucideIcon,
+    45→} from "lucide-react";
+    46→import { toast } from "sonner";
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→  AlertDialogTrigger,
+    57→} from "@/components/ui/alert-dialog";
+    58→import { Button } from "@/components/ui/button";
+    59→import {
+    60→  Dialog,
+    61→  DialogContent,
+    62→  DialogDescription,
+    63→  DialogFooter,
+    64→  DialogHeader,
+    65→  DialogTitle,
+    66→} from "@/components/ui/dialog";
+    67→import { Input } from "@/components/ui/input";
+    68→import { Label } from "@/components/ui/label";
+    69→import {
+    70→  Select,
+    71→  SelectContent,
+    72→  SelectItem,
+    73→  SelectTrigger,
+    74→  SelectValue,
+    75→} from "@/components/ui/select";
+    76→import { Textarea } from "@/components/ui/textarea";
+    77→import { accentOf } from "@/lib/config";
+    78→import { cn } from "@/lib/utils";
+    79→import {
+    80→  addComment,
+    81→  addMember,
+    82→  addResource,
+    83→  addTimelineItem,
+    84→  cancelJoinRequest,
+    85→  deleteProject,
+    86→  deleteResource,
+    87→  deleteTimelineItem,
+    88→  fetchProject,
+    89→  fetchProjects,
+    90→  fileReport,
+    91→  removeMember,
+    92→  requestToJoin,
+    93→  requestVerification,
+    94→  searchUsers,
+    95→  setProjectStatus,
+    96→  toggleBookmark,
+    97→  toggleFollow,
+    98→  toggleLike,
+    99→  updateMember,
+   100→  uploadFile,
+   101→  type CommentDTO,
+   102→  type MemberDTO,
+   103→  type Navigate,
+   104→  type ProjectDetail,
+   105→  type ProjectDetailResponse,
+   106→  type ProjectListItem,
+   107→  type ResourceDTO,
+   108→  type SafeUserDTO,
+   109→  type TimelineDTO,
+   110→} from "../api-client";
+   111→import { ProjectCard } from "../project-card";
+   112→import { requireAuth, useAppStore } from "../store";
+   113→import {
+   114→  CategoryIcon,
+   115→  EmptyState,
+   116→  FeaturedBadge,
+   117→  Lightbox,
+   118→  StaffBadge,
+   119→  StatusBadge,
+   120→  TeammateWantedChip,
+   121→  UserAvatar,
+   122→  VerifiedBadge,
+   123→  formatMonthYear,
+   124→  formatViews,
+   125→  timeAgo,
+   126→} from "../ui-bits";
+   127→
+   128→// ---------- helpers ----------
+   129→
+   130→const RESOURCE_META: Record<string, { icon: LucideIcon; label: string }> = {
+   131→  DEMO: { icon: Globe, label: "Live demo" },
+   132→  GITHUB: { icon: Github, label: "Repository" },
+   133→  DOCUMENT: { icon: FileText, label: "Document" },
+   134→  VIDEO: { icon: Video, label: "Video" },
+   135→  PRESENTATION: { icon: Presentation, label: "Slides" },
+   136→};
+   137→
+   138→const ROLE_LABEL: Record<string, string> = {
+   139→  OWNER: "Owner",
+   140→  LEAD: "Lead",
+   141→  MEMBER: "Member",
+   142→};
+   143→
+   144→const URL_RE = /^https?:\/\/\S+/i;
+   145→
+   146→const RESOURCE_FILE_ACCEPT =
+   147→  ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif";
+   148→
+   149→/** Uppercase file extension of an /uploads/… URL, e.g. "PDF". */
+   150→function extOf(url: string) {
+   151→  const m = url.match(/\.([a-z0-9]{1,5})(?:[?#]|$)/i);
+   152→  return m ? m[1].toUpperCase() : "FILE";
+   153→}
+   154→
+   155→/** Decoded basename of an /uploads/… path (falls back to the raw string). */
+   156→function uploadBaseName(url: string) {
+   157→  const last = url.split("/").pop() ?? url;
+   158→  try {
+   159→    return decodeURIComponent(last);
+   160→  } catch {
+   161→    return last;
+   162→  }
+   163→}
+   164→
+   165→function fmtDay(iso: string) {
+   166→  try {
+   167→    return format(new Date(iso), "MMM d, yyyy");
+   168→  } catch {
+   169→    return "";
+   170→  }
+   171→}
+   172→
+   173→function InfoRow({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+   174→  return (
+   175→    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+   176→      <Icon className="size-4" aria-hidden />
+   177→      {children}
+   178→    </span>
+   179→  );
+   180→}
+   181→
+   182→function SidebarCard({
+   183→  title,
+   184→  action,
+   185→  children,
+   186→}: {
+   187→  title: string;
+   188→  action?: React.ReactNode;
+   189→  children: React.ReactNode;
+   190→}) {
+   191→  return (
+   192→    <section className="rounded-2xl border border-up-border bg-card p-5">
+   193→      <div className="flex items-center justify-between gap-2">
+   194→        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+   195→          {title}
+   196→        </h2>
+   197→        {action}
+   198→      </div>
+   199→      <div className="mt-3.5">{children}</div>
+   200→    </section>
+   201→  );
+   202→}
+   203→
+   204→function MemberRow({ member, onOpen }: { member: MemberDTO; onOpen: (username: string) => void }) {
+   205→  return (
+   206→    <button
+   207→      type="button"
+   208→      onClick={() => onOpen(member.username)}
+   209→      aria-label={`View profile: ${member.name}`}
+   210→      className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-200 hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   211→    >
+   212→      <UserAvatar name={member.name} avatarUrl={member.avatarUrl} ring={false} />
+   213→      <div className="min-w-0 flex-1">
+   214→        <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
+   215→        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+   216→          {member.role === "OWNER" ? (
+   217→            <Crown className="size-3 text-warning" aria-hidden />
+   218→          ) : null}
+   219→          {ROLE_LABEL[member.role] ?? member.role}
+   220→        </p>
+   221→      </div>
+   222→      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden />
+   223→    </button>
+   224→  );
+   225→}
+   226→
+   227→function ResourceRow({
+   228→  resource,
+   229→  canDelete,
+   230→  onDelete,
+   231→}: {
+   232→  resource: ResourceDTO;
+   233→  canDelete?: boolean;
+   234→  onDelete?: () => void;
+   235→}) {
+   236→  const meta = RESOURCE_META[resource.type] ?? RESOURCE_META.DEMO;
+   237→  const Icon = meta.icon;
+   238→  const uploaded = resource.url.startsWith("/uploads/");
+   239→  return (
+   240→    <li className="group flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5 transition-colors duration-200 hover:border-up-border-strong">
+   241→      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-foreground/70">
+   242→        <Icon className="size-4" aria-hidden />
+   243→      </span>
+   244→      <a
+   245→        href={resource.url}
+   246→        {...(uploaded ? { download: "" } : { target: "_blank", rel: "noopener noreferrer" })}
+   247→        className="min-w-0 flex-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   248→      >
+   249→        <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary-700">
+   250→          {resource.label}
+   251→        </p>
+   252→        <p className="truncate text-xs text-muted-foreground">
+   253→          {uploaded ? `Uploaded file · ${uploadBaseName(resource.url)}` : resource.url}
+   254→        </p>
+   255→      </a>
+   256→      {uploaded ? (
+   257→        <>
+   258→          <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+   259→            {extOf(resource.url)}
+   260→          </span>
+   261→          <Download className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+   262→        </>
+   263→      ) : (
+   264→        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+   265→      )}
+   266→      {canDelete && onDelete ? (
+   267→        <Button
+   268→          variant="ghost"
+   269→          size="icon"
+   270→          aria-label={`Delete resource: ${resource.label}`}
+   271→          onClick={onDelete}
+   272→          className="size-9 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+   273→        >
+   274→          <Trash2 className="size-4" aria-hidden />
+   275→        </Button>
+   276→      ) : null}
+   277→    </li>
+   278→  );
+   279→}
+   280→
+   281→// ---------- gallery slider ----------
+   282→
+   283→function ProjectGallery({ images }: { images: string[] }) {
+   284→  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+   285→  const [selected, setSelected] = useState(0);
+   286→  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+   287→  const count = images.length;
+   288→
+   289→  useEffect(() => {
+   290→    if (!emblaApi) return;
+   291→    const onSelect = () => setSelected(emblaApi.selectedScrollSnap());
+   292→    emblaApi.on("select", onSelect);
+   293→    return () => {
+   294→      emblaApi.off("select", onSelect);
+   295→    };
+   296→  }, [emblaApi]);
+   297→
+   298→  return (
+   299→    <section className="rounded-2xl border border-up-border bg-card p-6">
+   300→      <div className="flex items-center justify-between gap-2">
+   301→        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+   302→          Project gallery
+   303→        </h2>
+   304→        <span className="text-xs tabular-nums text-muted-foreground">
+   305→          {selected + 1}/{count}
+   306→        </span>
+   307→      </div>
+   308→
+   309→      <div className="relative mt-4">
+   310→        <div className="overflow-hidden rounded-2xl border border-up-border bg-surface-muted" ref={emblaRef}>
+   311→          <div className="flex">
+   312→            {images.map((src, i) => (
+   313→              <div key={`${i}-${src}`} className="min-w-0 flex-[0_0_100%]">
+   314→                <button
+   315→                  type="button"
+   316→                  aria-label={`View photo ${i + 1} full size`}
+   317→                  onClick={() => setLightboxIndex(i)}
+   318→                  className="block w-full cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+   319→                >
+   320→                  <div className="aspect-video">
+   321→                    <img
+   322→                      src={src}
+   323→                      alt={`Project photo ${i + 1} of ${count}`}
+   324→                      className="size-full object-contain"
+   325→                      draggable={false}
+   326→                      onError={(e) => {
+   327→                        e.currentTarget.style.display = "none";
+   328→                      }}
+   329→                    />
+   330→                  </div>
+   331→                </button>
+   332→              </div>
+   333→            ))}
+   334→          </div>
+   335→        </div>
+   336→
+   337→        {count > 1 ? (
+   338→          <>
+   339→            <button
+   340→              type="button"
+   341→              aria-label="Previous photo"
+   342→              onClick={() => emblaApi?.scrollPrev()}
+   343→              className="absolute left-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-white/90 text-foreground shadow-md backdrop-blur transition-colors hover:text-primary-700"
+   344→            >
+   345→              <ChevronLeft className="size-4" aria-hidden />
+   346→            </button>
+   347→            <button
+   348→              type="button"
+   349→              aria-label="Next photo"
+   350→              onClick={() => emblaApi?.scrollNext()}
+   351→              className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-white/90 text-foreground shadow-md backdrop-blur transition-colors hover:text-primary-700"
+   352→            >
+   353→              <ChevronRight className="size-4" aria-hidden />
+   354→            </button>
+   355→          </>
+   356→        ) : null}
+   357→      </div>
+   358→
+   359→      {count > 1 ? (
+   360→        <div className="mt-3 flex items-center justify-center gap-1.5">
+   361→          {images.map((src, i) => (
+   362→            <button
+   363→              key={`dot-${i}-${src}`}
+   364→              type="button"
+   365→              aria-label={`Go to photo ${i + 1}`}
+   366→              onClick={() => emblaApi?.scrollTo(i)}
+   367→              className={cn(
+   368→                "h-2 rounded-full transition-all duration-300",
+   369→                i === selected ? "w-6 bg-primary" : "w-2 bg-up-border-strong hover:bg-muted-foreground/40"
+   370→              )}
+   371→            />
+   372→          ))}
+   373→        </div>
+   374→      ) : null}
+   375→
+   376→      {lightboxIndex !== null ? (
+   377→        <Lightbox
+   378→          src={images[lightboxIndex]}
+   379→          alt={`Project photo ${lightboxIndex + 1} of ${count}`}
+   380→          onClose={() => setLightboxIndex(null)}
+   381→          onPrev={count > 1 ? () => setLightboxIndex((i) => ((i ?? 0) + count - 1) % count) : undefined}
+   382→          onNext={count > 1 ? () => setLightboxIndex((i) => ((i ?? 0) + 1) % count) : undefined}
+   383→        />
+   384→      ) : null}
+   385→
+   386→      <div className="nice-scroll mt-4 flex gap-2.5 overflow-x-auto pb-1">
+   387→        {images.map((src, i) => (
+   388→          <button
+   389→            key={`thumb-${i}-${src}`}
+   390→            type="button"
+   391→            aria-label={`Show photo ${i + 1}`}
+   392→            aria-current={i === selected ? "true" : undefined}
+   393→            onClick={() => emblaApi?.scrollTo(i)}
+   394→            className={cn(
+   395→              "relative size-16 shrink-0 overflow-hidden rounded-lg bg-surface-muted transition-all duration-200",
+   396→              i === selected
+   397→                ? "ring-2 ring-primary-500 ring-offset-2 ring-offset-white"
+   398→                : "opacity-75 hover:opacity-100"
+   399→            )}
+   400→          >
+   401→            <img src={src} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+   402→          </button>
+   403→        ))}
+   404→      </div>
+   405→    </section>
+   406→  );
+   407→}
+   408→
+   409→// ---------- dialogs ----------
+   410→
+   411→function JoinDialog({
+   412→  open,
+   413→  onOpenChange,
+   414→  slug,
+   415→  projectTitle,
+   416→  onSent,
+   417→}: {
+   418→  open: boolean;
+   419→  onOpenChange: (v: boolean) => void;
+   420→  slug: string;
+   421→  projectTitle: string;
+   422→  onSent: () => void;
+   423→}) {
+   424→  const [message, setMessage] = useState("");
+   425→  const [busy, setBusy] = useState(false);
+   426→
+   427→  const submit = () => {
+   428→    setBusy(true);
+   429→    requestToJoin(slug, message.trim() || undefined)
+   430→      .then(() => {
+   431→        toast.success("Request sent — the team will review it");
+   432→        onOpenChange(false);
+   433→        setMessage("");
+   434→        onSent();
+   435→      })
+   436→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Request failed"))
+   437→      .finally(() => setBusy(false));
+   438→  };
+   439→
+   440→  return (
+   441→    <Dialog open={open} onOpenChange={onOpenChange}>
+   442→      <DialogContent className="sm:max-w-md">
+   443→        <DialogHeader>
+   444→          <DialogTitle>Request to join</DialogTitle>
+   445→          <DialogDescription>
+   446→            Ask the team behind “{projectTitle}” to add you as a teammate.
+   447→          </DialogDescription>
+   448→        </DialogHeader>
+   449→        <div className="space-y-1.5">
+   450→          <Label htmlFor="join-msg">Message (optional)</Label>
+   451→          <Textarea
+   452→            id="join-msg"
+   453→            rows={3}
+   454→            value={message}
+   455→            onChange={(e) => setMessage(e.target.value)}
+   456→            placeholder="Tell them what you'd bring to the project…"
+   457→            className="rounded-xl"
+   458→          />
+   459→        </div>
+   460→        <DialogFooter>
+   461→          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
+   462→            Cancel
+   463→          </Button>
+   464→          <Button onClick={submit} disabled={busy} className="rounded-xl font-semibold">
+   465→            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+   466→            Send request
+   467→          </Button>
+   468→        </DialogFooter>
+   469→      </DialogContent>
+   470→    </Dialog>
+   471→  );
+   472→}
+   473→
+   474→function ReportDialog({
+   475→  open,
+   476→  onOpenChange,
+   477→  targetId,
+   478→}: {
+   479→  open: boolean;
+   480→  onOpenChange: (v: boolean) => void;
+   481→  targetId: string;
+   482→}) {
+   483→  const [reason, setReason] = useState("");
+   484→  const [err, setErr] = useState<string | null>(null);
+   485→  const [busy, setBusy] = useState(false);
+   486→
+   487→  const submit = () => {
+   488→    if (reason.trim().length < 4) {
+   489→      setErr("Please describe the problem (at least a few words).");
+   490→      return;
+   491→    }
+   492→    setBusy(true);
+   493→    setErr(null);
+   494→    fileReport({ targetType: "PROJECT", targetId, reason: reason.trim() })
+   495→      .then(() => {
+   496→        toast.success("Report submitted — our moderators will take a look");
+   497→        onOpenChange(false);
+   498→        setReason("");
+   499→      })
+   500→      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Report failed"))
+   501→      .finally(() => setBusy(false));
+   502→  };
+   503→
+   504→  return (
+   505→    <Dialog open={open} onOpenChange={onOpenChange}>
+   506→      <DialogContent className="sm:max-w-md">
+   507→        <DialogHeader>
+   508→          <DialogTitle>Report this project</DialogTitle>
+   509→          <DialogDescription>
+   510→            Flag inappropriate or inaccurate content for the moderation team.
+   511→          </DialogDescription>
+   512→        </DialogHeader>
+   513→        <div className="space-y-1.5">
+   514→          <Label htmlFor="report-reason">What's wrong?</Label>
+   515→          <Textarea
+   516→            id="report-reason"
+   517→            rows={3}
+   518→            value={reason}
+   519→            onChange={(e) => setReason(e.target.value)}
+   520→            placeholder="e.g. This project isn't theirs / misleading links…"
+   521→            className="rounded-xl"
+   522→          />
+   523→          {err ? <p className="text-xs font-medium text-danger">{err}</p> : null}
+   524→        </div>
+   525→        <DialogFooter>
+   526→          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
+   527→            Cancel
+   528→          </Button>
+   529→          <Button
+   530→            onClick={submit}
+   531→            disabled={busy}
+   532→            className="rounded-xl bg-danger font-semibold text-white hover:bg-danger/90"
+   533→          >
+   534→            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Flag className="size-4" aria-hidden />}
+   535→            Submit report
+   536→          </Button>
+   537→        </DialogFooter>
+   538→      </DialogContent>
+   539→    </Dialog>
+   540→  );
+   541→}
+   542→
+   543→function ManageTeamDialog({
+   544→  open,
+   545→  onOpenChange,
+   546→  slug,
+   547→  members,
+   548→  viewerUsername,
+   549→  onChanged,
+   550→}: {
+   551→  open: boolean;
+   552→  onOpenChange: (v: boolean) => void;
+   553→  slug: string;
+   554→  members: MemberDTO[];
+   555→  viewerUsername: string;
+   556→  onChanged: () => void;
+   557→}) {
+   558→  const [query, setQuery] = useState("");
+   559→  const [debounced, setDebounced] = useState("");
+   560→  const [found, setFound] = useState<SafeUserDTO[] | null>(null);
+   561→  const [foundFor, setFoundFor] = useState("");
+   562→  const [roles, setRoles] = useState<Record<string, string>>({});
+   563→  const [busyUser, setBusyUser] = useState<string | null>(null);
+   564→  const [busyMember, setBusyMember] = useState<string | null>(null);
+   565→  const [removing, setRemoving] = useState<MemberDTO | null>(null);
+   566→
+   567→  useEffect(() => {
+   568→    const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), 300);
+   569→    return () => clearTimeout(t);
+   570→  }, [query]);
+   571→
+   572→  useEffect(() => {
+   573→    const q = debounced;
+   574→    if (q.length < 2) return;
+   575→    const ac = new AbortController();
+   576→    searchUsers(q, ac.signal)
+   577→      .then((rows) => {
+   578→        setFound(rows);
+   579→        setFoundFor(q);
+   580→      })
+   581→      .catch(() => {});
+   582→    return () => ac.abort();
+   583→  }, [debounced]);
+   584→
+   585→  const existing = new Set(
+   586→    members.map((m) => m.username.toLowerCase()).concat(viewerUsername.toLowerCase())
+   587→  );
+   588→  const ready = debounced.length >= 2 && foundFor === debounced;
+   589→  const visible = ready
+   590→    ? (found ?? []).filter((u) => !existing.has(u.username.toLowerCase()))
+   591→    : null;
+   592→
+   593→  const changeRole = (m: MemberDTO, role: string) => {
+   594→    if (role === m.role) return;
+   595→    setBusyMember(m.id);
+   596→    updateMember(slug, { memberId: m.id, role })
+   597→      .then(() => {
+   598→        toast.success(`${m.name} is now ${ROLE_LABEL[role] ?? role.toLowerCase()}`);
+   599→        onChanged();
+   600→      })
+   601→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Update failed"))
+   602→      .finally(() => setBusyMember(null));
+   603→  };
+   604→
+   605→  const confirmRemove = () => {
+   606→    if (!removing) return;
+   607→    const m = removing;
+   608→    setBusyMember(m.id);
+   609→    removeMember(slug, { memberId: m.id })
+   610→      .then(() => {
+   611→        toast.success(`${m.name} was removed from the team`);
+   612→        onChanged();
+   613→      })
+   614→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Remove failed"))
+   615→      .finally(() => {
+   616→        setBusyMember(null);
+   617→        setRemoving(null);
+   618→      });
+   619→  };
+   620→
+   621→  const addUser = (u: SafeUserDTO) => {
+   622→    setBusyUser(u.id);
+   623→    addMember(slug, { username: u.username, role: roles[u.id] ?? "MEMBER" })
+   624→      .then(() => {
+   625→        toast.success(`${u.displayName} joined the team`);
+   626→        onChanged();
+   627→      })
+   628→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Could not add teammate"))
+   629→      .finally(() => setBusyUser(null));
+   630→  };
+   631→
+   632→  return (
+   633→    <Dialog open={open} onOpenChange={onOpenChange}>
+   634→      <DialogContent className="sm:max-w-lg">
+   635→        <DialogHeader>
+   636→          <DialogTitle>Manage team</DialogTitle>
+   637→          <DialogDescription>
+   638→            Change roles or remove teammates. The project owner role can't be reassigned.
+   639→          </DialogDescription>
+   640→        </DialogHeader>
+   641→
+   642→        <div className="nice-scroll max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+   643→          {/* current members */}
+   644→          <div className="divide-y divide-up-border rounded-xl border border-up-border bg-white px-3.5">
+   645→            {members.map((m) => (
+   646→              <div key={m.id} className="flex items-center gap-3 py-2.5">
+   647→                <UserAvatar name={m.name} avatarUrl={m.avatarUrl} ring={false} />
+   648→                <div className="min-w-0 flex-1">
+   649→                  <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+   650→                  <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+   651→                </div>
+   652→                {m.role === "OWNER" ? (
+   653→                  <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+   654→                    <Crown className="size-3" aria-hidden />
+   655→                    Owner
+   656→                  </span>
+   657→                ) : (
+   658→                  <>
+   659→                    <Select
+   660→                      value={m.role}
+   661→                      onValueChange={(role) => changeRole(m, role)}
+   662→                      disabled={busyMember === m.id}
+   663→                    >
+   664→                      <SelectTrigger
+   665→                        aria-label={`Role for ${m.name}`}
+   666→                        className="h-8 w-[100px] rounded-lg text-xs"
+   667→                      >
+   668→                        <SelectValue />
+   669→                      </SelectTrigger>
+   670→                      <SelectContent>
+   671→                        <SelectItem value="LEAD">Lead</SelectItem>
+   672→                        <SelectItem value="MEMBER">Member</SelectItem>
+   673→                      </SelectContent>
+   674→                    </Select>
+   675→                    <AlertDialog>
+   676→                      <AlertDialogTrigger asChild>
+   677→                        <Button
+   678→                          variant="ghost"
+   679→                          size="icon"
+   680→                          aria-label={`Remove ${m.name} from the team`}
+   681→                          className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+   682→                        >
+   683→                          <Trash2 className="size-4" aria-hidden />
+   684→                        </Button>
+   685→                      </AlertDialogTrigger>
+   686→                      <AlertDialogContent>
+   687→                        <AlertDialogHeader>
+   688→                          <AlertDialogTitle>Remove {m.name}?</AlertDialogTitle>
+   689→                          <AlertDialogDescription>
+   690→                            They'll be untagged from this project and lose team access.
+   691→                          </AlertDialogDescription>
+   692→                        </AlertDialogHeader>
+   693→                        <AlertDialogFooter>
+   694→                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+   695→                          <AlertDialogAction
+   696→                            onClick={confirmRemove}
+   697→                            className="bg-danger text-white hover:bg-danger/90"
+   698→                          >
+   699→                            Remove
+   700→                          </AlertDialogAction>
+   701→                        </AlertDialogFooter>
+   702→                      </AlertDialogContent>
+   703→                    </AlertDialog>
+   704→                  </>
+   705→                )}
+   706→              </div>
+   707→            ))}
+   708→          </div>
+   709→
+   710→          {/* add by username */}
+   711→          <div>
+   712→            <Label htmlFor="team-search">Add teammates</Label>
+   713→            <div className="relative mt-1.5">
+   714→              <Search
+   715→                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+   716→                aria-hidden
+   717→              />
+   718→              <Input
+   719→                id="team-search"
+   720→                value={query}
+   721→                onChange={(e) => setQuery(e.target.value)}
+   722→                placeholder="Search by name or username…"
+   723→                className="h-10 rounded-xl bg-white pl-9"
+   724→                autoComplete="off"
+   725→              />
+   726→            </div>
+   727→            <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto nice-scroll">
+   728→              {visible === null ? (
+   729→                <p className="px-1 py-2 text-xs text-muted-foreground">
+   730→                  {debounced.length >= 2 ? "Searching…" : "Type at least 2 characters to search students."}
+   731→                </p>
+   732→              ) : visible.length === 0 ? (
+   733→                <p className="px-1 py-2 text-xs text-muted-foreground">No matching students.</p>
+   734→              ) : (
+   735→                visible.map((u) => (
+   736→                  <div
+   737→                    key={u.id}
+   738→                    className="flex items-center gap-2.5 rounded-xl border border-up-border bg-white px-3 py-2"
+   739→                  >
+   740→                    <UserAvatar name={u.displayName} avatarUrl={u.avatarUrl} ring={false} className="size-7" />
+   741→                    <div className="min-w-0 flex-1">
+   742→                      <p className="truncate text-sm font-medium text-foreground">{u.displayName}</p>
+   743→                      <p className="truncate text-xs text-muted-foreground">@{u.username}</p>
+   744→                    </div>
+   745→                    <Select
+   746→                      value={roles[u.id] ?? "MEMBER"}
+   747→                      onValueChange={(role) => setRoles((r) => ({ ...r, [u.id]: role }))}
+   748→                    >
+   749→                      <SelectTrigger
+   750→                        aria-label={`Role for ${u.displayName}`}
+   751→                        className="h-8 w-[92px] rounded-lg text-xs"
+   752→                      >
+   753→                        <SelectValue />
+   754→                      </SelectTrigger>
+   755→                      <SelectContent>
+   756→                        <SelectItem value="LEAD">Lead</SelectItem>
+   757→                        <SelectItem value="MEMBER">Member</SelectItem>
+   758→                      </SelectContent>
+   759→                    </Select>
+   760→                    <Button
+   761→                      size="sm"
+   762→                      className="h-8 rounded-lg px-3 font-semibold"
+   763→                      disabled={busyUser === u.id}
+   764→                      onClick={() => addUser(u)}
+   765→                    >
+   766→                      {busyUser === u.id ? (
+   767→                        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+   768→                      ) : (
+   769→                        "Add"
+   770→                      )}
+   771→                    </Button>
+   772→                  </div>
+   773→                ))
+   774→              )}
+   775→            </div>
+   776→          </div>
+   777→        </div>
+   778→      </DialogContent>
+   779→    </Dialog>
+   780→  );
+   781→}
+   782→
+   783→function ResourceDialog({
+   784→  open,
+   785→  onOpenChange,
+   786→  slug,
+   787→  onSaved,
+   788→}: {
+   789→  open: boolean;
+   790→  onOpenChange: (v: boolean) => void;
+   791→  slug: string;
+   792→  onSaved: () => void;
+   793→}) {
+   794→  const [type, setType] = useState("DEMO");
+   795→  const [label, setLabel] = useState("");
+   796→  const [url, setUrl] = useState("");
+   797→  const [mode, setMode] = useState<"link" | "upload">("link");
+   798→  const [fileName, setFileName] = useState<string | null>(null);
+   799→  const [pct, setPct] = useState<number | null>(null);
+   800→  const [err, setErr] = useState<string | null>(null);
+   801→  const [busy, setBusy] = useState(false);
+   802→  const fileRef = useRef<HTMLInputElement>(null);
+   803→
+   804→  const close = (v: boolean) => {
+   805→    onOpenChange(v);
+   806→    if (!v) {
+   807→      setType("DEMO");
+   808→      setLabel("");
+   809→      setUrl("");
+   810→      setMode("link");
+   811→      setFileName(null);
+   812→      setPct(null);
+   813→      setErr(null);
+   814→    }
+   815→  };
+   816→
+   817→  const switchMode = (m: "link" | "upload") => {
+   818→    if (m === mode) return;
+   819→    setMode(m);
+   820→    // a /uploads/… path is not a valid link — drop it on switch
+   821→    if (m === "link" && url.startsWith("/uploads/")) setUrl("");
+   822→  };
+   823→
+   824→  const onFile = (file: File) => {
+   825→    setPct(0);
+   826→    uploadFile(file, "resource", setPct)
+   827→      .then((u) => {
+   828→        setUrl(u);
+   829→        setFileName(file.name);
+   830→      })
+   831→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Upload failed"))
+   832→      .finally(() => setPct(null));
+   833→  };
+   834→
+   835→  const submit = () => {
+   836→    if (!label.trim()) {
+   837→      setErr("Give the resource a short label.");
+   838→      return;
+   839→    }
+   840→    if (mode === "upload") {
+   841→      if (!url.startsWith("/uploads/")) {
+   842→        setErr("Upload a file first.");
+   843→        return;
+   844→      }
+   845→    } else if (!URL_RE.test(url.trim())) {
+   846→      setErr("Enter a full URL starting with http:// or https://");
+   847→      return;
+   848→    }
+   849→    setBusy(true);
+   850→    setErr(null);
+   851→    addResource(slug, { type, label: label.trim(), url: url.trim() })
+   852→      .then(() => {
+   853→        toast.success("Resource added");
+   854→        close(false);
+   855→        onSaved();
+   856→      })
+   857→      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Could not add resource"))
+   858→      .finally(() => setBusy(false));
+   859→  };
+   860→
+   861→  return (
+   862→    <Dialog open={open} onOpenChange={close}>
+   863→      <DialogContent className="sm:max-w-md">
+   864→        <DialogHeader>
+   865→          <DialogTitle>Add resource</DialogTitle>
+   866→          <DialogDescription>Links and uploaded files are shown on the project page.</DialogDescription>
+   867→        </DialogHeader>
+   868→        <div className="space-y-4">
+   869→          <div className="space-y-1.5">
+   870→            <Label htmlFor="res-type">Type</Label>
+   871→            <Select
+   872→              value={type}
+   873→              onValueChange={(v) => {
+   874→                setType(v);
+   875→                if (v === "GITHUB" && mode === "upload") {
+   876→                  setMode("link");
+   877→                  if (url.startsWith("/uploads/")) setUrl("");
+   878→                }
+   879→              }}
+   880→            >
+   881→              <SelectTrigger id="res-type" className="h-10 w-full rounded-xl">
+   882→                <SelectValue />
+   883→              </SelectTrigger>
+   884→              <SelectContent>
+   885→                {Object.entries(RESOURCE_META).map(([value, meta]) => (
+   886→                  <SelectItem key={value} value={value}>
+   887→                    {meta.label}
+   888→                  </SelectItem>
+   889→                ))}
+   890→              </SelectContent>
+   891→            </Select>
+   892→          </div>
+   893→          <div className="space-y-1.5">
+   894→            <Label>Source</Label>
+   895→            <div className="inline-flex items-center rounded-lg bg-surface-muted p-0.5" role="group" aria-label="Resource source">
+   896→              <button
+   897→                type="button"
+   898→                aria-pressed={mode === "link"}
+   899→                onClick={() => switchMode("link")}
+   900→                className={cn(
+   901→                  "rounded-[7px] px-3 py-1.5 text-xs font-semibold transition-colors duration-200",
+   902→                  mode === "link" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+   903→                )}
+   904→              >
+   905→                Link
+   906→              </button>
+   907→              <button
+   908→                type="button"
+   909→                aria-pressed={mode === "upload"}
+   910→                disabled={type === "GITHUB"}
+   911→                title={type === "GITHUB" ? "Repositories must be links" : undefined}
+   912→                onClick={() => switchMode("upload")}
+   913→                className={cn(
+   914→                  "rounded-[7px] px-3 py-1.5 text-xs font-semibold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40",
+   915→                  mode === "upload" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+   916→                )}
+   917→              >
+   918→                Upload
+   919→              </button>
+   920→            </div>
+   921→            {type === "GITHUB" ? (
+   922→              <p className="text-xs text-muted-foreground">Repositories must be links.</p>
+   923→            ) : null}
+   924→          </div>
+   925→          <div className="space-y-1.5">
+   926→            <Label htmlFor="res-label">Label</Label>
+   927→            <Input
+   928→              id="res-label"
+   929→              value={label}
+   930→              onChange={(e) => setLabel(e.target.value)}
+   931→              placeholder="e.g. Figma prototype"
+   932→              className="h-10 rounded-xl"
+   933→            />
+   934→          </div>
+   935→          {mode === "link" ? (
+   936→            <div className="space-y-1.5">
+   937→              <Label htmlFor="res-url">URL</Label>
+   938→              <Input
+   939→                id="res-url"
+   940→                value={url}
+   941→                onChange={(e) => setUrl(e.target.value)}
+   942→                placeholder="https://…"
+   943→                inputMode="url"
+   944→                className="h-10 rounded-xl"
+   945→              />
+   946→            </div>
+   947→          ) : (
+   948→            <div className="space-y-1.5">
+   949→              <Label>File</Label>
+   950→              <input
+   951→                ref={fileRef}
+   952→                type="file"
+   953→                accept={RESOURCE_FILE_ACCEPT}
+   954→                className="hidden"
+   955→                onChange={(e) => {
+   956→                  const file = e.target.files?.[0];
+   957→                  if (file) onFile(file);
+   958→                  e.target.value = "";
+   959→                }}
+   960→              />
+   961→              {url.startsWith("/uploads/") ? (
+   962→                <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-up-border bg-surface-muted px-2.5 py-2 text-xs font-medium text-foreground">
+   963→                  <FileCheck2 className="size-3.5 shrink-0 text-success" aria-hidden />
+   964→                  <span className="truncate">{fileName ?? "Uploaded file"}</span>
+   965→                  <Check className="size-3.5 shrink-0 text-success" aria-hidden />
+   966→                </span>
+   967→              ) : (
+   968→                <Button
+   969→                  type="button"
+   970→                  variant="outline"
+   971→                  className="h-10 rounded-xl font-semibold"
+   972→                  disabled={pct !== null}
+   973→                  onClick={() => fileRef.current?.click()}
+   974→                >
+   975→                  {pct !== null ? (
+   976→                    <Loader2 className="size-4 animate-spin" aria-hidden />
+   977→                  ) : (
+   978→                    <Paperclip className="size-4" aria-hidden />
+   979→                  )}
+   980→                  {pct !== null ? `Uploading ${pct}%` : "Choose file"}
+   981→                </Button>
+   982→              )}
+   983→              {pct !== null ? (
+   984→                <div
+   985→                  className="h-1 w-full max-w-56 overflow-hidden rounded-full bg-surface-muted"
+   986→                  role="progressbar"
+   987→                  aria-valuemin={0}
+   988→                  aria-valuemax={100}
+   989→                  aria-valuenow={pct}
+   990→                  aria-label="Upload progress"
+   991→                >
+   992→                  <div
+   993→                    className="h-full rounded-full bg-primary-500 transition-[width] duration-200"
+   994→                    style={{ width: `${pct}%` }}
+   995→                  />
+   996→                </div>
+   997→              ) : null}
+   998→            </div>
+   999→          )}
+  1000→          {err ? <p className="text-xs font-medium text-danger">{err}</p> : null}
+  1001→        </div>
+  1002→        <DialogFooter>
+  1003→          <Button variant="outline" onClick={() => close(false)} className="rounded-xl">
+  1004→            Cancel
+  1005→          </Button>
+  1006→          <Button onClick={submit} disabled={busy || pct !== null} className="rounded-xl font-semibold">
+  1007→            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1008→            Add resource
+  1009→          </Button>
+  1010→        </DialogFooter>
+  1011→      </DialogContent>
+  1012→    </Dialog>
+  1013→  );
+  1014→}
+  1015→
+  1016→function MilestoneDialog({
+  1017→  open,
+  1018→  onOpenChange,
+  1019→  slug,
+  1020→  onSaved,
+  1021→}: {
+  1022→  open: boolean;
+  1023→  onOpenChange: (v: boolean) => void;
+  1024→  slug: string;
+  1025→  onSaved: () => void;
+  1026→}) {
+  1027→  const [title, setTitle] = useState("");
+  1028→  const [date, setDate] = useState("");
+  1029→  const [note, setNote] = useState("");
+  1030→  const [err, setErr] = useState<string | null>(null);
+  1031→  const [busy, setBusy] = useState(false);
+  1032→
+  1033→  const close = (v: boolean) => {
+  1034→    onOpenChange(v);
+  1035→    if (!v) {
+  1036→      setTitle("");
+  1037→      setDate("");
+  1038→      setNote("");
+  1039→      setErr(null);
+  1040→    }
+  1041→  };
+  1042→
+  1043→  const submit = () => {
+  1044→    if (!title.trim()) {
+  1045→      setErr("Give the milestone a title.");
+  1046→      return;
+  1047→    }
+  1048→    if (!date) {
+  1049→      setErr("Pick a date.");
+  1050→      return;
+  1051→    }
+  1052→    setBusy(true);
+  1053→    setErr(null);
+  1054→    addTimelineItem(slug, { title: title.trim(), date, note: note.trim() || undefined })
+  1055→      .then(() => {
+  1056→        toast.success("Milestone added");
+  1057→        close(false);
+  1058→        onSaved();
+  1059→      })
+  1060→      .catch((e: unknown) => setErr(e instanceof Error ? e.message : "Could not add milestone"))
+  1061→      .finally(() => setBusy(false));
+  1062→  };
+  1063→
+  1064→  return (
+  1065→    <Dialog open={open} onOpenChange={close}>
+  1066→      <DialogContent className="sm:max-w-md">
+  1067→        <DialogHeader>
+  1068→          <DialogTitle>Add milestone</DialogTitle>
+  1069→          <DialogDescription>Mark a moment on the project timeline.</DialogDescription>
+  1070→        </DialogHeader>
+  1071→        <div className="space-y-4">
+  1072→          <div className="space-y-1.5">
+  1073→            <Label htmlFor="mile-title">Title</Label>
+  1074→            <Input
+  1075→              id="mile-title"
+  1076→              value={title}
+  1077→              onChange={(e) => setTitle(e.target.value)}
+  1078→              placeholder="e.g. Mid-term demo day"
+  1079→              className="h-10 rounded-xl"
+  1080→            />
+  1081→          </div>
+  1082→          <div className="space-y-1.5">
+  1083→            <Label htmlFor="mile-date">Date</Label>
+  1084→            <Input
+  1085→              id="mile-date"
+  1086→              type="date"
+  1087→              value={date}
+  1088→              onChange={(e) => setDate(e.target.value)}
+  1089→              className="h-10 rounded-xl"
+  1090→            />
+  1091→          </div>
+  1092→          <div className="space-y-1.5">
+  1093→            <Label htmlFor="mile-note">Note (optional)</Label>
+  1094→            <Textarea
+  1095→              id="mile-note"
+  1096→              rows={2}
+  1097→              value={note}
+  1098→              onChange={(e) => setNote(e.target.value)}
+  1099→              placeholder="One line about what happened…"
+  1100→              className="rounded-xl"
+  1101→            />
+  1102→          </div>
+  1103→          {err ? <p className="text-xs font-medium text-danger">{err}</p> : null}
+  1104→        </div>
+  1105→        <DialogFooter>
+  1106→          <Button variant="outline" onClick={() => close(false)} className="rounded-xl">
+  1107→            Cancel
+  1108→          </Button>
+  1109→          <Button onClick={submit} disabled={busy} className="rounded-xl font-semibold">
+  1110→            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1111→            Add milestone
+  1112→          </Button>
+  1113→        </DialogFooter>
+  1114→      </DialogContent>
+  1115→    </Dialog>
+  1116→  );
+  1117→}
+  1118→
+  1119→// ---------- view ----------
+  1120→
+  1121→export function DetailView({ slug, navigate }: { slug: string; navigate: Navigate }) {
+  1122→  const { user, openAuth } = useAppStore();
+  1123→  const [data, setData] = useState<ProjectDetailResponse | null>(null);
+  1124→  const [comments, setComments] = useState<CommentDTO[] | null>(null);
+  1125→  const [related, setRelated] = useState<ProjectListItem[] | null>(null);
+  1126→  const [notFound, setNotFound] = useState(false);
+  1127→  const [failed, setFailed] = useState(false);
+  1128→  const [retry, setRetry] = useState(0);
+  1129→
+  1130→  const [joinOpen, setJoinOpen] = useState(false);
+  1131→  const [coverLbOpen, setCoverLbOpen] = useState(false);
+  1132→  const [reportOpen, setReportOpen] = useState(false);
+  1133→  const [teamOpen, setTeamOpen] = useState(false);
+  1134→  const [resourceOpen, setResourceOpen] = useState(false);
+  1135→  const [milestoneOpen, setMilestoneOpen] = useState(false);
+  1136→  const [commentDraft, setCommentDraft] = useState("");
+  1137→  const [commentBusy, setCommentBusy] = useState(false);
+  1138→  const [joinBusy, setJoinBusy] = useState(false);
+  1139→
+  1140→  useEffect(() => {
+  1141→    const ac = new AbortController();
+  1142→    fetchProject(slug, ac.signal)
+  1143→      .then((res) => {
+  1144→        setData(res);
+  1145→        setComments(res.project.comments);
+  1146→        setNotFound(false);
+  1147→        setFailed(false);
+  1148→        // related projects from the same department
+  1149→        return fetchProjects({ dept: res.project.department.code, limit: 7 }, ac.signal)
+  1150→          .then((rows) => setRelated(rows.filter((r) => r.slug !== res.project.slug).slice(0, 3)))
+  1151→          .catch(() => setRelated([]));
+  1152→      })
+  1153→      .catch((e) => {
+  1154→        if (ac.signal.aborted) return;
+  1155→        const msg = e instanceof Error ? e.message : "";
+  1156→        if (msg === "Project not found") setNotFound(true);
+  1157→        else setFailed(true);
+  1158→      });
+  1159→    return () => ac.abort();
+  1160→  }, [slug, user?.id, retry]);
+  1161→
+  1162→  if (notFound) {
+  1163→    return (
+  1164→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+  1165→        <EmptyState
+  1166→          icon={FileQuestion}
+  1167→          title="Project not found"
+  1168→          hint="This project may have been removed, or the link is incorrect."
+  1169→          action={
+  1170→            <Button onClick={() => navigate({ name: "projects" })} className="rounded-xl font-semibold">
+  1171→              Browse all projects
+  1172→            </Button>
+  1173→          }
+  1174→        />
+  1175→      </div>
+  1176→    );
+  1177→  }
+  1178→
+  1179→  if (failed) {
+  1180→    return (
+  1181→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+  1182→        <EmptyState
+  1183→          icon={AlertTriangle}
+  1184→          title="Something went wrong"
+  1185→          hint="We couldn't load this project. Check your connection and try again."
+  1186→          action={
+  1187→            <Button onClick={() => setRetry((r) => r + 1)} variant="outline" className="rounded-xl font-semibold">
+  1188→              Try again
+  1189→            </Button>
+  1190→          }
+  1191→        />
+  1192→      </div>
+  1193→    );
+  1194→  }
+  1195→
+  1196→  if (!data) {
+  1197→    return (
+  1198→      <div className="mx-auto w-full max-w-6xl px-5 py-10 md:px-8 md:py-14">
+  1199→        <div className="h-44 animate-pulse rounded-3xl border border-up-border bg-surface-muted" />
+  1200→        <div className="mt-8 space-y-4">
+  1201→          <div className="h-9 w-2/3 animate-pulse rounded-lg bg-surface-muted" />
+  1202→          <div className="h-4 w-1/2 animate-pulse rounded bg-surface-muted" />
+  1203→          <div className="h-40 w-full animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+  1204→        </div>
+  1205→      </div>
+  1206→    );
+  1207→  }
+  1208→
+  1209→  const project = data.project;
+  1210→  const viewer = data.viewer;
+  1211→  const isOwner = viewer.isOwner;
+  1212→  const isMember = viewer.isMember;
+  1213→  const accent = accentOf(project.department.accent);
+  1214→
+  1215→  const refresh = () => setRetry((r) => r + 1);
+  1216→
+  1217→  const patchViewer = (patch: Partial<typeof viewer>) =>
+  1218→    setData((d) => (d ? { ...d, viewer: { ...d.viewer, ...patch } } : d));
+  1219→  const patchProject = (patch: Partial<ProjectDetail>) =>
+  1220→    setData((d) => (d ? { ...d, project: { ...d.project, ...patch } } : d));
+  1221→
+  1222→  // ---------- actions ----------
+  1223→
+  1224→  const onBookmark = () => {
+  1225→    if (!requireAuth(user, openAuth) || !data) return;
+  1226→    const next = !data.viewer.bookmarked;
+  1227→    patchViewer({ bookmarked: next });
+  1228→    toggleBookmark({ targetType: "PROJECT", targetId: project.id })
+  1229→      .then((res) => patchViewer({ bookmarked: res.active }))
+  1230→      .catch(() => {
+  1231→        patchViewer({ bookmarked: !next });
+  1232→        toast.error("Couldn't update your library");
+  1233→      });
+  1234→  };
+  1235→
+  1236→  const onFollow = () => {
+  1237→    if (!requireAuth(user, openAuth) || !data) return;
+  1238→    const next = !data.viewer.following;
+  1239→    patchViewer({ following: next });
+  1240→    toggleFollow({ targetType: "PROJECT", targetId: project.id })
+  1241→      .then((res) => patchViewer({ following: res.active }))
+  1242→      .catch(() => {
+  1243→        patchViewer({ following: !next });
+  1244→        toast.error("Couldn't update follow");
+  1245→      });
+  1246→  };
+  1247→
+  1248→  const onLike = () => {
+  1249→    if (!requireAuth(user, openAuth) || !data) return;
+  1250→    const next = !data.viewer.liked;
+  1251→    const prevCount = project.likeCount;
+  1252→    patchViewer({ liked: next });
+  1253→    patchProject({ likeCount: Math.max(0, prevCount + (next ? 1 : -1)) });
+  1254→    toggleLike({ targetType: "PROJECT", targetId: project.id })
+  1255→      .then((res) => patchViewer({ liked: res.active }))
+  1256→      .catch(() => {
+  1257→        patchViewer({ liked: !next });
+  1258→        patchProject({ likeCount: prevCount });
+  1259→        toast.error("Couldn't update like");
+  1260→      });
+  1261→  };
+  1262→
+  1263→  const onShare = () => {
+  1264→    const url = window.location.href;
+  1265→    if (navigator.clipboard?.writeText) {
+  1266→      navigator.clipboard
+  1267→        .writeText(url)
+  1268→        .then(() => toast.success("Link copied"))
+  1269→        .catch(() => toast.error("Couldn't copy the link"));
+  1270→    } else {
+  1271→      toast.error("Couldn't copy the link");
+  1272→    }
+  1273→  };
+  1274→
+  1275→  const onJoinClick = () => {
+  1276→    if (!requireAuth(user, openAuth) || !data) return;
+  1277→    setJoinOpen(true);
+  1278→  };
+  1279→
+  1280→  const onCancelJoin = () => {
+  1281→    if (!requireAuth(user, openAuth) || !data) return;
+  1282→    setJoinBusy(true);
+  1283→    cancelJoinRequest(slug)
+  1284→      .then(() => {
+  1285→        toast.success("Join request cancelled");
+  1286→        refresh();
+  1287→      })
+  1288→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't cancel request"))
+  1289→      .finally(() => setJoinBusy(false));
+  1290→  };
+  1291→
+  1292→  const onStatusChange = (status: string) => {
+  1293→    const next = status as "DRAFT" | "PUBLISHED";
+  1294→    if (next === project.status) return;
+  1295→    setProjectStatus(slug, next)
+  1296→      .then(() => {
+  1297→        toast.success(next === "PUBLISHED" ? "Project is now live" : "Project moved to drafts");
+  1298→        refresh();
+  1299→      })
+  1300→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't update status"));
+  1301→  };
+  1302→
+  1303→  const onVerifyRequest = () => {
+  1304→    requestVerification(slug)
+  1305→      .then(() => toast.success("Verification requested — faculty will review it"))
+  1306→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Request failed"));
+  1307→  };
+  1308→
+  1309→  const onDelete = () => {
+  1310→    deleteProject(slug)
+  1311→      .then(() => {
+  1312→        toast.success("Project deleted");
+  1313→        navigate({ name: "projects" });
+  1314→      })
+  1315→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+  1316→  };
+  1317→
+  1318→  const onResourceDelete = (r: ResourceDTO) => {
+  1319→    deleteResource(slug, r.id)
+  1320→      .then(() => {
+  1321→        toast.success("Resource removed");
+  1322→        patchProject({ resources: project.resources.filter((x) => x.id !== r.id) });
+  1323→      })
+  1324→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+  1325→  };
+  1326→
+  1327→  const onMilestoneDelete = (t: TimelineDTO) => {
+  1328→    deleteTimelineItem(slug, t.id)
+  1329→      .then(() => {
+  1330→        toast.success("Milestone removed");
+  1331→        patchProject({ timeline: project.timeline.filter((x) => x.id !== t.id) });
+  1332→      })
+  1333→      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+  1334→  };
+  1335→
+  1336→  const onCommentSubmit = (e: React.FormEvent) => {
+  1337→    e.preventDefault();
+  1338→    const body = commentDraft.trim();
+  1339→    if (!body || commentBusy) return;
+  1340→    setCommentBusy(true);
+  1341→    addComment(slug, body)
+  1342→      .then((c) => {
+  1343→        setComments((prev) => [c, ...(prev ?? [])]);
+  1344→        setCommentDraft("");
+  1345→        toast.success("Comment posted");
+  1346→      })
+  1347→      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Couldn't post comment"))
+  1348→      .finally(() => setCommentBusy(false));
+  1349→  };
+  1350→
+  1351→  const toggleBtn = (active: boolean) =>
+  1352→    cn(
+  1353→      "inline-flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-all duration-200",
+  1354→      active
+  1355→        ? "border-primary-200 bg-primary-50 text-primary-700"
+  1356→        : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+  1357→    );
+  1358→
+  1359→  const showJoin =
+  1360→    !isOwner && !isMember && project.allowJoinRequests && viewer.joinRequestStatus !== "APPROVED";
+  1361→
+  1362→  return (
+  1363→    <article className="mx-auto w-full max-w-6xl px-5 py-8 pb-20 md:px-8 md:py-12">
+  1364→      {/* Back */}
+  1365→      <Button
+  1366→        variant="ghost"
+  1367→        onClick={() => navigate({ name: "projects" })}
+  1368→        className="-ml-2 h-9 rounded-lg text-muted-foreground hover:text-foreground"
+  1369→      >
+  1370→        <ArrowLeft className="size-4" aria-hidden />
+  1371→        All projects
+  1372→      </Button>
+  1373→
+  1374→      {/* Banner */}
+  1375→      {project.coverImage ? (
+  1376→        <div className="relative mt-4 h-56 overflow-hidden rounded-3xl border border-up-border bg-gradient-to-br sm:h-64 md:h-72">
+  1377→          <div aria-hidden className={cn("absolute inset-0 bg-gradient-to-br", accent.cover)} />
+  1378→          <img
+  1379→            src={project.coverImage}
+  1380→            alt=""
+  1381→            onError={(e) => {
+  1382→              e.currentTarget.style.display = "none";
+  1383→            }}
+  1384→            className="absolute inset-0 size-full object-contain"
+  1385→          />
+  1386→          <div
+  1387→            aria-hidden
+  1388→            className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent"
+  1389→          />
+  1390→          {project.featured ? (
+  1391→            <span className="absolute left-4 top-4 z-20">
+  1392→              <FeaturedBadge />
+  1393→            </span>
+  1394→          ) : null}
+  1395→          <span className="absolute right-4 top-4 z-20 flex items-center gap-2">
+  1396→            {project.verified ? <VerifiedBadge /> : null}
+  1397→            <span
+  1398→              className={cn(
+  1399→                "rounded-full border bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm",
+  1400→                accent.chip
+  1401→              )}
+  1402→            >
+  1403→              {project.department.code}
+  1404→            </span>
+  1405→          </span>
+  1406→          <button
+  1407→            type="button"
+  1408→            aria-label="View cover image full size"
+  1409→            onClick={() => setCoverLbOpen(true)}
+  1410→            className="absolute inset-0 z-10 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  1411→          />
+  1412→        </div>
+  1413→      ) : (
+  1414→        <div
+  1415→          className={cn(
+  1416→            "relative mt-4 flex h-40 items-center justify-center overflow-hidden rounded-3xl border border-up-border bg-gradient-to-br md:h-52",
+  1417→            accent.cover
+  1418→          )}
+  1419→        >
+  1420→          <span className="flex size-14 items-center justify-center rounded-2xl bg-white/70 text-foreground/60 shadow-sm">
+  1421→            <CategoryIcon category={project.category} className="size-7" />
+  1422→          </span>
+  1423→          {project.featured ? (
+  1424→            <span className="absolute left-4 top-4">
+  1425→              <FeaturedBadge />
+  1426→            </span>
+  1427→          ) : null}
+  1428→          <span className="absolute right-4 top-4 flex items-center gap-2">
+  1429→            {project.verified ? <VerifiedBadge /> : null}
+  1430→            <span
+  1431→              className={cn(
+  1432→                "rounded-full border bg-white/85 px-3 py-1 text-xs font-semibold shadow-sm",
+  1433→                accent.chip
+  1434→              )}
+  1435→            >
+  1436→              {project.department.code}
+  1437→            </span>
+  1438→          </span>
+  1439→        </div>
+  1440→      )}
+  1441→
+  1442→      {/* Header */}
+  1443→      <header className="mt-8 max-w-3xl">
+  1444→        <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+  1445→          <span className={cn("rounded-full border px-2.5 py-1", accent.chip)}>
+  1446→            {project.department.name}
+  1447→          </span>
+  1448→          <span className="rounded-full border border-up-border bg-white px-2.5 py-1 text-muted-foreground">
+  1449→            {project.category}
+  1450→          </span>
+  1451→          <span className="rounded-full border border-up-border bg-white px-2.5 py-1 text-muted-foreground">
+  1452→            {project.year} · {project.semester}
+  1453→          </span>
+  1454→          {project.status === "DRAFT" ? <StatusBadge status={project.status} /> : null}
+  1455→          {project.lookingForTeammates ? <TeammateWantedChip /> : null}
+  1456→        </div>
+  1457→        <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
+  1458→          {project.title}
+  1459→        </h1>
+  1460→        <p className="mt-3 text-base leading-relaxed text-muted-foreground md:text-lg">
+  1461→          {project.summary}
+  1462→        </p>
+  1463→
+  1464→        {/* Meta */}
+  1465→        <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
+  1466→          {project.supervisor ? <InfoRow icon={UserRound}>{project.supervisor}</InfoRow> : null}
+  1467→          <InfoRow icon={Users}>{project.members.length} members</InfoRow>
+  1468→          <InfoRow icon={Eye}>{formatViews(project.views)} views</InfoRow>
+  1469→          <InfoRow icon={Heart}>
+  1470→            {project.likeCount} {project.likeCount === 1 ? "like" : "likes"}
+  1471→          </InfoRow>
+  1472→          <InfoRow icon={CalendarDays}>Added {formatMonthYear(project.createdAt)}</InfoRow>
+  1473→        </div>
+  1474→
+  1475→        {/* Action row */}
+  1476→        <div className="mt-6 flex flex-wrap items-center gap-2.5">
+  1477→          {project.demoUrl ? (
+  1478→            <Button asChild className="h-10 rounded-xl font-semibold">
+  1479→              <a href={project.demoUrl} target="_blank" rel="noopener noreferrer">
+  1480→                <Globe className="size-4" aria-hidden />
+  1481→                Open demo
+  1482→                <ExternalLink className="size-3.5 opacity-60" aria-hidden />
+  1483→              </a>
+  1484→            </Button>
+  1485→          ) : null}
+  1486→          {project.repoUrl ? (
+  1487→            <Button asChild variant="outline" className="h-10 rounded-xl font-semibold">
+  1488→              <a href={project.repoUrl} target="_blank" rel="noopener noreferrer">
+  1489→                <Github className="size-4" aria-hidden />
+  1490→                View repository
+  1491→                <ExternalLink className="size-3.5 opacity-60" aria-hidden />
+  1492→              </a>
+  1493→            </Button>
+  1494→          ) : null}
+  1495→
+  1496→          <button type="button" onClick={onBookmark} aria-pressed={viewer.bookmarked} className={toggleBtn(viewer.bookmarked)}>
+  1497→            {viewer.bookmarked ? (
+  1498→              <BookmarkCheck className="size-4 fill-current" aria-hidden />
+  1499→            ) : (
+  1500→              <Bookmark className="size-4" aria-hidden />
+  1501→            )}
+  1502→            {viewer.bookmarked ? "Saved" : "Save"}
+  1503→          </button>
+  1504→
+  1505→          <button type="button" onClick={onFollow} aria-pressed={viewer.following} className={toggleBtn(viewer.following)}>
+  1506→            {viewer.following ? (
+  1507→              <BellRing className="size-4" aria-hidden />
+  1508→            ) : (
+  1509→              <Bell className="size-4" aria-hidden />
+  1510→            )}
+  1511→            {viewer.following ? "Following" : "Follow"}
+  1512→          </button>
+  1513→
+  1514→          <button type="button" onClick={onLike} aria-pressed={viewer.liked} className={cn(toggleBtn(viewer.liked), viewer.liked && "border-danger/30 bg-danger-soft text-danger")}>
+  1515→            <Heart className={cn("size-4", viewer.liked && "fill-current")} aria-hidden />
+  1516→            {project.likeCount}
+  1517→            <span className="sr-only">likes — {viewer.liked ? "liked" : "like this project"}</span>
+  1518→          </button>
+  1519→
+  1520→          <button type="button" onClick={onShare} className={toggleBtn(false)}>
+  1521→            <Share2 className="size-4" aria-hidden />
+  1522→            Share
+  1523→          </button>
+  1524→
+  1525→          {showJoin ? (
+  1526→            viewer.joinRequestStatus === "PENDING" ? (
+  1527→              <>
+  1528→                <Button variant="outline" disabled className="h-10 rounded-xl font-semibold">
+  1529→                  <Clock className="size-4" aria-hidden />
+  1530→                  Request pending
+  1531→                </Button>
+  1532→                <Button
+  1533→                  variant="ghost"
+  1534→                  onClick={onCancelJoin}
+  1535→                  disabled={joinBusy}
+  1536→                  className="h-10 rounded-xl text-muted-foreground hover:text-danger"
+  1537→                >
+  1538→                  <X className="size-4" aria-hidden />
+  1539→                  Cancel request
+  1540→                </Button>
+  1541→              </>
+  1542→            ) : (
+  1543→              <Button onClick={onJoinClick} className="h-10 rounded-xl font-semibold">
+  1544→                <UserRoundPlus className="size-4" aria-hidden />
+  1545→                Request to join
+  1546→              </Button>
+  1547→            )
+  1548→          ) : null}
+  1549→
+  1550→          <Button
+  1551→            variant="ghost"
+  1552→            onClick={() => {
+  1553→              if (!requireAuth(user, openAuth)) return;
+  1554→              setReportOpen(true);
+  1555→            }}
+  1556→            className="h-10 rounded-xl text-muted-foreground hover:text-danger"
+  1557→          >
+  1558→            <Flag className="size-4" aria-hidden />
+  1559→            Report
+  1560→          </Button>
+  1561→        </div>
+  1562→      </header>
+  1563→
+  1564→      {/* Owner / staff tools */}
+  1565→      {isOwner ? (
+  1566→        <section
+  1567→          aria-label="Owner tools"
+  1568→          className="mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-primary-100 bg-primary-50/50 p-4"
+  1569→        >
+  1570→          <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary-700">
+  1571→            <Pencil className="size-3.5" aria-hidden />
+  1572→            Owner tools
+  1573→          </span>
+  1574→          <Button
+  1575→            variant="outline"
+  1576→            onClick={() => navigate({ name: "create", editSlug: slug })}
+  1577→            className="h-9 rounded-lg bg-white font-semibold"
+  1578→          >
+  1579→            <Pencil className="size-4" aria-hidden />
+  1580→            Edit project
+  1581→          </Button>
+  1582→          <Button
+  1583→            variant="outline"
+  1584→            onClick={() => setTeamOpen(true)}
+  1585→            className="h-9 rounded-lg bg-white font-semibold"
+  1586→          >
+  1587→            <Users className="size-4" aria-hidden />
+  1588→            Manage team
+  1589→          </Button>
+  1590→          <Select value={project.status} onValueChange={onStatusChange}>
+  1591→            <SelectTrigger
+  1592→              aria-label="Project status"
+  1593→              className="h-9 w-[150px] rounded-lg border-up-border bg-white"
+  1594→            >
+  1595→              <SelectValue />
+  1596→            </SelectTrigger>
+  1597→            <SelectContent>
+  1598→              <SelectItem value="DRAFT">Draft — hidden</SelectItem>
+  1599→              <SelectItem value="PUBLISHED">Published</SelectItem>
+  1600→            </SelectContent>
+  1601→          </Select>
+  1602→          {project.verified ? (
+  1603→            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-3 py-1.5 text-xs font-semibold text-success">
+  1604→              <BadgeCheck className="size-3.5" aria-hidden />
+  1605→              Verified by faculty
+  1606→            </span>
+  1607→          ) : (
+  1608→            <Button
+  1609→              variant="outline"
+  1610→              onClick={onVerifyRequest}
+  1611→              className="h-9 rounded-lg bg-white font-semibold"
+  1612→            >
+  1613→              <BadgeCheck className="size-4" aria-hidden />
+  1614→              Request verification
+  1615→            </Button>
+  1616→          )}
+  1617→          <AlertDialog>
+  1618→            <AlertDialogTrigger asChild>
+  1619→              <Button
+  1620→                variant="outline"
+  1621→                className="ml-auto h-9 rounded-lg border-danger/30 bg-white font-semibold text-danger hover:bg-danger-soft hover:text-danger"
+  1622→              >
+  1623→                <Trash2 className="size-4" aria-hidden />
+  1624→                Delete
+  1625→              </Button>
+  1626→            </AlertDialogTrigger>
+  1627→            <AlertDialogContent>
+  1628→              <AlertDialogHeader>
+  1629→                <AlertDialogTitle>Delete “{project.title}”?</AlertDialogTitle>
+  1630→                <AlertDialogDescription>
+  1631→                  This permanently removes the project, its team, resources and discussion. This
+  1632→                  cannot be undone.
+  1633→                </AlertDialogDescription>
+  1634→              </AlertDialogHeader>
+  1635→              <AlertDialogFooter>
+  1636→                <AlertDialogCancel>Cancel</AlertDialogCancel>
+  1637→                <AlertDialogAction onClick={onDelete} className="bg-danger text-white hover:bg-danger/90">
+  1638→                  Delete project
+  1639→                </AlertDialogAction>
+  1640→              </AlertDialogFooter>
+  1641→            </AlertDialogContent>
+  1642→          </AlertDialog>
+  1643→        </section>
+  1644→      ) : null}
+  1645→
+  1646→      {/* Body */}
+  1647→      <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_320px]">
+  1648→        {/* Main column */}
+  1649→        <div className="min-w-0 space-y-6">
+  1650→          {/* About */}
+  1651→          <section className="rounded-2xl border border-up-border bg-card p-6 md:p-8">
+  1652→            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1653→              About the project
+  1654→            </h2>
+  1655→            <div className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-foreground/90">
+  1656→              {project.description}
+  1657→            </div>
+  1658→
+  1659→            {/* Built with — technologies used */}
+  1660→            {project.technologies.length > 0 ? (
+  1661→              <div className="mt-6">
+  1662→                <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1663→                  Built with
+  1664→                </h2>
+  1665→                <div className="mt-3 flex flex-wrap gap-2">
+  1666→                  {project.technologies.map((t) => (
+  1667→                    <span
+  1668→                      key={t.id}
+  1669→                      className="rounded-full border border-up-border bg-white px-3 py-1 text-xs font-medium text-foreground"
+  1670→                    >
+  1671→                      {t.name}
+  1672→                    </span>
+  1673→                  ))}
+  1674→                </div>
+  1675→              </div>
+  1676→            ) : null}
+  1677→
+  1678→            {project.tags.length > 0 ? (
+  1679→              <div className="mt-6 flex flex-wrap gap-2 border-t border-up-border pt-5">
+  1680→                {project.tags.map((t) => (
+  1681→                  <span
+  1682→                    key={t}
+  1683→                    className="rounded-full bg-surface-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+  1684→                  >
+  1685→                    #{t}
+  1686→                  </span>
+  1687→                ))}
+  1688→              </div>
+  1689→            ) : null}
+  1690→          </section>
+  1691→
+  1692→          {/* Gallery */}
+  1693→          {project.galleryImages.length > 0 ? <ProjectGallery images={project.galleryImages} /> : null}
+  1694→
+  1695→          {/* Resources */}
+  1696→          {project.resources.length > 0 || isOwner ? (
+  1697→            <section className="rounded-2xl border border-up-border bg-card p-6">
+  1698→              <div className="flex items-center justify-between gap-2">
+  1699→                <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1700→                  Resources
+  1701→                </h2>
+  1702→                {isOwner ? (
+  1703→                  <Button
+  1704→                    variant="outline"
+  1705→                    size="sm"
+  1706→                    onClick={() => setResourceOpen(true)}
+  1707→                    className="h-8 rounded-lg font-semibold"
+  1708→                  >
+  1709→                    <Plus className="size-3.5" aria-hidden />
+  1710→                    Add
+  1711→                  </Button>
+  1712→                ) : null}
+  1713→              </div>
+  1714→              {project.resources.length > 0 ? (
+  1715→                <ul className="mt-3.5 space-y-2">
+  1716→                  {project.resources.map((r) => (
+  1717→                    <ResourceRow key={r.id} resource={r} canDelete={isOwner} onDelete={() => onResourceDelete(r)} />
+  1718→                  ))}
+  1719→                </ul>
+  1720→              ) : (
+  1721→                <p className="mt-3 text-sm text-muted-foreground">
+  1722→                  No resources yet{isOwner ? " — add a demo, repo, docs or slides." : "."}
+  1723→                </p>
+  1724→              )}
+  1725→            </section>
+  1726→          ) : null}
+  1727→
+  1728→          {/* Timeline */}
+  1729→          {project.timeline.length > 0 || isOwner ? (
+  1730→            <section className="rounded-2xl border border-up-border bg-card p-6">
+  1731→              <div className="flex items-center justify-between gap-2">
+  1732→                <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1733→                  Timeline
+  1734→                </h2>
+  1735→                {isOwner ? (
+  1736→                  <Button
+  1737→                    variant="outline"
+  1738→                    size="sm"
+  1739→                    onClick={() => setMilestoneOpen(true)}
+  1740→                    className="h-8 rounded-lg font-semibold"
+  1741→                  >
+  1742→                    <Plus className="size-3.5" aria-hidden />
+  1743→                    Add milestone
+  1744→                  </Button>
+  1745→                ) : null}
+  1746→              </div>
+  1747→              {project.timeline.length > 0 ? (
+  1748→                <ol className="relative ml-1 mt-5 space-y-6 border-l-2 border-up-border pl-6">
+  1749→                  {project.timeline.map((t) => (
+  1750→                    <li key={t.id} className="relative">
+  1751→                      <span
+  1752→                        aria-hidden
+  1753→                        className="absolute -left-[31px] top-1 size-2.5 rounded-full bg-primary-500 ring-4 ring-white"
+  1754→                      />
+  1755→                      <div className="flex items-start justify-between gap-3">
+  1756→                        <div className="min-w-0">
+  1757→                          <p className="text-sm font-semibold text-foreground">{t.title}</p>
+  1758→                          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+  1759→                            {fmtDay(t.date)}
+  1760→                          </p>
+  1761→                          {t.note ? (
+  1762→                            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+  1763→                              {t.note}
+  1764→                            </p>
+  1765→                          ) : null}
+  1766→                        </div>
+  1767→                        {isOwner ? (
+  1768→                          <Button
+  1769→                            variant="ghost"
+  1770→                            size="icon"
+  1771→                            aria-label={`Delete milestone: ${t.title}`}
+  1772→                            onClick={() => onMilestoneDelete(t)}
+  1773→                            className="size-8 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+  1774→                          >
+  1775→                            <Trash2 className="size-3.5" aria-hidden />
+  1776→                          </Button>
+  1777→                        ) : null}
+  1778→                      </div>
+  1779→                    </li>
+  1780→                  ))}
+  1781→                </ol>
+  1782→              ) : (
+  1783→                <p className="mt-3 text-sm text-muted-foreground">
+  1784→                  No milestones yet{isOwner ? " — add the first one." : "."}
+  1785→                </p>
+  1786→              )}
+  1787→            </section>
+  1788→          ) : null}
+  1789→
+  1790→          {/* Discussion */}
+  1791→          <section className="rounded-2xl border border-up-border bg-card p-6">
+  1792→            <div className="flex items-center gap-2">
+  1793→              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1794→                Discussion
+  1795→              </h2>
+  1796→              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
+  1797→                {comments?.length ?? 0}
+  1798→              </span>
+  1799→            </div>
+  1800→
+  1801→            {user ? (
+  1802→              <form onSubmit={onCommentSubmit} className="mt-4">
+  1803→                <Textarea
+  1804→                  aria-label="Write a comment"
+  1805→                  rows={3}
+  1806→                  value={commentDraft}
+  1807→                  onChange={(e) => setCommentDraft(e.target.value)}
+  1808→                  placeholder="Share feedback or ask the team a question…"
+  1809→                  className="rounded-xl"
+  1810→                />
+  1811→                <div className="mt-2 flex justify-end">
+  1812→                  <Button
+  1813→                    type="submit"
+  1814→                    disabled={commentBusy || !commentDraft.trim()}
+  1815→                    className="h-9 rounded-xl font-semibold"
+  1816→                  >
+  1817→                    {commentBusy ? (
+  1818→                      <Loader2 className="size-4 animate-spin" aria-hidden />
+  1819→                    ) : (
+  1820→                      <Send className="size-4" aria-hidden />
+  1821→                    )}
+  1822→                    Post comment
+  1823→                  </Button>
+  1824→                </div>
+  1825→              </form>
+  1826→            ) : (
+  1827→              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-muted px-4 py-3.5">
+  1828→                <p className="text-sm text-muted-foreground">Sign in to join the discussion.</p>
+  1829→                <Button
+  1830→                  size="sm"
+  1831→                  onClick={() => openAuth("login")}
+  1832→                  className="h-9 rounded-lg px-4 font-semibold"
+  1833→                >
+  1834→                  Sign in
+  1835→                </Button>
+  1836→              </div>
+  1837→            )}
+  1838→
+  1839→            <ul className="mt-5 divide-y divide-up-border">
+  1840→              {(comments ?? []).map((c) => (
+  1841→                <li key={c.id} className="flex gap-3 py-4 first:pt-0">
+  1842→                  <UserAvatar name={c.user.displayName} avatarUrl={c.user.avatarUrl} ring={false} />
+  1843→                  <div className="min-w-0 flex-1">
+  1844→                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+  1845→                      <p className="text-sm font-semibold text-foreground">{c.user.displayName}</p>
+  1846→                      <StaffBadge role={c.user.role} />
+  1847→                      <span className="text-xs text-muted-foreground">{timeAgo(c.createdAt)}</span>
+  1848→                    </div>
+  1849→                    <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+  1850→                      {c.body}
+  1851→                    </p>
+  1852→                  </div>
+  1853→                </li>
+  1854→              ))}
+  1855→            </ul>
+  1856→            {comments !== null && comments.length === 0 ? (
+  1857→              <p className="mt-4 text-sm text-muted-foreground">
+  1858→                No comments yet — start the conversation.
+  1859→              </p>
+  1860→            ) : null}
+  1861→          </section>
+  1862→        </div>
+  1863→
+  1864→        {/* Sidebar */}
+  1865→        <aside className="flex flex-col gap-4">
+  1866→          <SidebarCard title={`Team · ${project.members.length}`}>
+  1867→            <div className="space-y-1">
+  1868→              {project.members.map((m) => (
+  1869→                <MemberRow key={m.id} member={m} onOpen={(username) => navigate({ name: "profile", username })} />
+  1870→              ))}
+  1871→            </div>
+  1872→          </SidebarCard>
+  1873→
+  1874→          {project.supervisor ? (
+  1875→            <SidebarCard title="Supervisor">
+  1876→              <div className="flex items-center gap-3">
+  1877→                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-700">
+  1878→                  <UserRound className="size-4" aria-hidden />
+  1879→                </span>
+  1880→                <div>
+  1881→                  <p className="text-sm font-medium text-foreground">{project.supervisor}</p>
+  1882→                  <p className="text-xs text-muted-foreground">Project supervisor</p>
+  1883→                </div>
+  1884→              </div>
+  1885→            </SidebarCard>
+  1886→          ) : null}
+  1887→
+  1888→          <SidebarCard title="Department">
+  1889→            <p className="text-sm font-medium text-foreground">{project.department.name}</p>
+  1890→            {project.department.tagline ? (
+  1891→              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+  1892→                {project.department.tagline}
+  1893→              </p>
+  1894→            ) : null}
+  1895→            <Button
+  1896→              variant="outline"
+  1897→              size="sm"
+  1898→              className="mt-3 h-8 w-full rounded-lg font-semibold"
+  1899→              onClick={() => navigate({ name: "projects", dept: project.department.code })}
+  1900→            >
+  1901→              View department projects
+  1902→            </Button>
+  1903→          </SidebarCard>
+  1904→        </aside>
+  1905→      </div>
+  1906→
+  1907→      {/* Related */}
+  1908→      <section className="mt-14">
+  1909→        {related === null ? (
+  1910→          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1911→            {[0, 1, 2].map((i) => (
+  1912→              <div key={i} className="h-60 animate-pulse rounded-2xl border border-up-border bg-surface-muted" />
+  1913→            ))}
+  1914→          </div>
+  1915→        ) : related.length > 0 ? (
+  1916→          <>
+  1917→            <h2 className="text-lg font-bold tracking-tight text-foreground md:text-xl">
+  1918→              More from {project.department.name}
+  1919→            </h2>
+  1920→            <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+  1921→              {related.map((p) => (
+  1922→                <ProjectCard key={p.id} project={p} onOpen={(s) => navigate({ name: "project", slug: s })} />
+  1923→              ))}
+  1924→            </div>
+  1925→          </>
+  1926→        ) : null}
+  1927→      </section>
+  1928→
+  1929→      {/* Dialogs */}
+  1930→      <JoinDialog
+  1931→        open={joinOpen}
+  1932→        onOpenChange={setJoinOpen}
+  1933→        slug={slug}
+  1934→        projectTitle={project.title}
+  1935→        onSent={refresh}
+  1936→      />
+  1937→      <ReportDialog open={reportOpen} onOpenChange={setReportOpen} targetId={project.id} />
+  1938→      <ManageTeamDialog
+  1939→        open={teamOpen}
+  1940→        onOpenChange={setTeamOpen}
+  1941→        slug={slug}
+  1942→        members={project.members}
+  1943→        viewerUsername={viewer.user?.username ?? ""}
+  1944→        onChanged={refresh}
+  1945→      />
+  1946→      <ResourceDialog open={resourceOpen} onOpenChange={setResourceOpen} slug={slug} onSaved={refresh} />
+  1947→      <MilestoneDialog open={milestoneOpen} onOpenChange={setMilestoneOpen} slug={slug} onSaved={refresh} />
+  1948→
+  1949→      {coverLbOpen && project.coverImage ? (
+  1950→        <Lightbox
+  1951→          src={project.coverImage}
+  1952→          alt={`Cover of ${project.title}`}
+  1953→          onClose={() => setCoverLbOpen(false)}
+  1954→        />
+  1955→      ) : null}
+  1956→    </article>
+  1957→  );
+  1958→}
+  1959→

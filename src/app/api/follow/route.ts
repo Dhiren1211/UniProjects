@@ -6,7 +6,7 @@ import { notify } from "../_utils/notify";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { targetType, targetId } — toggle follow ----------
+// ---------- POST { targetType, targetId } - toggle follow ----------
 
 const toggleSchema = z.object({
   targetType: z.enum(["USER", "PROJECT"]),

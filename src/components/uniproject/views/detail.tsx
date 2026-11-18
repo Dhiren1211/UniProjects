@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUpRight,
   BadgeCheck,
   Bell,
   BellRing,
@@ -93,6 +94,7 @@ import {
   requestVerification,
   searchUsers,
   setProjectStatus,
+  decideVerification,
   toggleBookmark,
   toggleFollow,
   toggleLike,
@@ -237,7 +239,7 @@ function ResourceRow({
   const Icon = meta.icon;
   const uploaded = resource.url.startsWith("/uploads/");
   return (
-    <li className="group flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5 transition-colors duration-200 hover:border-up-border-strong hover:bg-surface-muted/50">
+    <li className="group flex items-center gap-3 rounded-xl border border-up-border bg-card px-3.5 py-2.5 transition-colors duration-200 hover:border-up-border-strong hover:bg-surface-muted/50">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-foreground/70">
         <Icon className="size-4" aria-hidden />
       </span>
@@ -340,7 +342,7 @@ function ProjectGallery({ images }: { images: string[] }) {
               type="button"
               aria-label="Previous photo"
               onClick={() => emblaApi?.scrollPrev()}
-              className="absolute left-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-white/70 text-foreground shadow-md backdrop-blur transition-colors hover:bg-white/90 hover:text-primary-700"
+              className="absolute left-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-background/85 text-foreground shadow-md backdrop-blur transition-colors hover:bg-background/85 hover:text-primary-700"
             >
               <ChevronLeft className="size-4" aria-hidden />
             </button>
@@ -348,7 +350,7 @@ function ProjectGallery({ images }: { images: string[] }) {
               type="button"
               aria-label="Next photo"
               onClick={() => emblaApi?.scrollNext()}
-              className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-white/70 text-foreground shadow-md backdrop-blur transition-colors hover:bg-white/90 hover:text-primary-700"
+              className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full border border-up-border bg-background/85 text-foreground shadow-md backdrop-blur transition-colors hover:bg-background/85 hover:text-primary-700"
             >
               <ChevronRight className="size-4" aria-hidden />
             </button>
@@ -428,7 +430,7 @@ function JoinDialog({
     setBusy(true);
     requestToJoin(slug, message.trim() || undefined)
       .then(() => {
-        toast.success("Request sent — the team will review it");
+        toast.success("Request sent - the team will review it");
         onOpenChange(false);
         setMessage("");
         onSent();
@@ -493,7 +495,7 @@ function ReportDialog({
     setErr(null);
     fileReport({ targetType: "PROJECT", targetId, reason: reason.trim() })
       .then(() => {
-        toast.success("Report submitted — our moderators will take a look");
+        toast.success("Report submitted - our moderators will take a look");
         onOpenChange(false);
         setReason("");
       })
@@ -641,7 +643,7 @@ function ManageTeamDialog({
 
         <div className="nice-scroll max-h-[60vh] space-y-4 overflow-y-auto pr-1">
           {/* current members */}
-          <div className="divide-y divide-up-border rounded-xl border border-up-border bg-white px-3.5">
+          <div className="divide-y divide-up-border rounded-xl border border-up-border bg-card px-3.5">
             {members.map((m) => (
               <div key={m.id} className="flex items-center gap-3 py-2.5">
                 <UserAvatar name={m.name} avatarUrl={m.avatarUrl} ring={false} />
@@ -720,7 +722,7 @@ function ManageTeamDialog({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by name or username…"
-                className="h-10 rounded-xl bg-white pl-9"
+                className="h-10 rounded-xl bg-card pl-9"
                 autoComplete="off"
               />
             </div>
@@ -735,7 +737,7 @@ function ManageTeamDialog({
                 visible.map((u) => (
                   <div
                     key={u.id}
-                    className="flex items-center gap-2.5 rounded-xl border border-up-border bg-white px-3 py-2"
+                    className="flex items-center gap-2.5 rounded-xl border border-up-border bg-card px-3 py-2"
                   >
                     <UserAvatar name={u.displayName} avatarUrl={u.avatarUrl} ring={false} className="size-7" />
                     <div className="min-w-0 flex-1">
@@ -817,7 +819,7 @@ function ResourceDialog({
   const switchMode = (m: "link" | "upload") => {
     if (m === mode) return;
     setMode(m);
-    // a /uploads/… path is not a valid link — drop it on switch
+    // a /uploads/… path is not a valid link - drop it on switch
     if (m === "link" && url.startsWith("/uploads/")) setUrl("");
   };
 
@@ -899,7 +901,7 @@ function ResourceDialog({
                 onClick={() => switchMode("link")}
                 className={cn(
                   "rounded-[7px] px-3 py-1.5 text-xs font-semibold transition-colors duration-200",
-                  mode === "link" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  mode === "link" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 Link
@@ -912,7 +914,7 @@ function ResourceDialog({
                 onClick={() => switchMode("upload")}
                 className={cn(
                   "rounded-[7px] px-3 py-1.5 text-xs font-semibold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40",
-                  mode === "upload" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  mode === "upload" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 Upload
@@ -1302,7 +1304,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
 
   const onVerifyRequest = () => {
     requestVerification(slug)
-      .then(() => toast.success("Verification requested — faculty will review it"))
+      .then(() => toast.success("Verification requested - faculty will review it"))
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Request failed"));
   };
 
@@ -1353,7 +1355,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
       "inline-flex h-9 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       active
         ? "border-primary-200 bg-primary-50 text-primary-700"
-        : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+        : "border-up-border bg-card text-foreground hover:border-up-border-strong hover:shadow-sm"
     );
 
   const showJoin =
@@ -1396,7 +1398,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             {project.verified ? <VerifiedBadge /> : null}
             <span
               className={cn(
-                "rounded-full border bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm",
+                "rounded-full border bg-background/85 px-3 py-1 text-xs font-semibold shadow-sm",
                 accent.chip
               )}
             >
@@ -1417,7 +1419,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             accent.cover
           )}
         >
-          <span className="flex size-14 items-center justify-center rounded-2xl bg-white/70 text-foreground/60 shadow-sm">
+          <span className="flex size-14 items-center justify-center rounded-2xl bg-background/85 text-foreground/60 shadow-sm">
             <CategoryIcon category={project.category} className="size-7" />
           </span>
           {project.featured ? (
@@ -1429,7 +1431,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             {project.verified ? <VerifiedBadge /> : null}
             <span
               className={cn(
-                "rounded-full border bg-white/85 px-3 py-1 text-xs font-semibold shadow-sm",
+                "rounded-full border bg-background/85 px-3 py-1 text-xs font-semibold shadow-sm",
                 accent.chip
               )}
             >
@@ -1445,10 +1447,10 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <span className={cn("rounded-full border px-2.5 py-1", accent.chip)}>
             {project.department.name}
           </span>
-          <span className="rounded-full border border-up-border bg-white px-2.5 py-1 text-muted-foreground">
+          <span className="rounded-full border border-up-border bg-card px-2.5 py-1 text-muted-foreground">
             {project.category}
           </span>
-          <span className="rounded-full border border-up-border bg-white px-2.5 py-1 text-muted-foreground">
+          <span className="rounded-full border border-up-border bg-card px-2.5 py-1 text-muted-foreground">
             {project.year} · {project.semester}
           </span>
           {project.status === "DRAFT" ? <StatusBadge status={project.status} /> : null}
@@ -1463,7 +1465,22 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
 
         {/* Meta */}
         <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-          {project.supervisor ? <InfoRow icon={UserRound}>{project.supervisor}</InfoRow> : null}
+          {project.supervisor ? (
+            <InfoRow icon={UserRound}>
+              {project.supervisorUsername ? (
+                <button
+                  type="button"
+                  onClick={() => navigate({ name: "profile", username: project.supervisorUsername! })}
+                  className="font-medium text-foreground underline-offset-2 hover:text-primary-700 hover:underline"
+                  title="View the professor's profile"
+                >
+                  {project.supervisor}
+                </button>
+              ) : (
+                project.supervisor
+              )}
+            </InfoRow>
+          ) : null}
           <InfoRow icon={Users}>{project.members.length} members</InfoRow>
           <InfoRow icon={Eye}>{formatViews(project.views)} views</InfoRow>
           <InfoRow icon={Heart}>
@@ -1472,7 +1489,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <InfoRow icon={CalendarDays}>Added {formatMonthYear(project.createdAt)}</InfoRow>
         </div>
 
-        {/* Action rows — primary (open / join) + secondary (save · follow · like · share · report) */}
+        {/* Action rows - primary (open / join) + secondary (save · follow · like · share · report) */}
         <div className="mt-6 flex flex-col gap-2.5">
           {project.demoUrl || project.repoUrl || showJoin ? (
             <div className="flex flex-wrap items-center gap-2.5">
@@ -1543,7 +1560,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             <button type="button" onClick={onLike} aria-pressed={viewer.liked} className={cn(toggleBtn(viewer.liked), viewer.liked && "border-danger/30 bg-danger-soft text-danger")}>
               <Heart className={cn("size-4", viewer.liked && "fill-current")} aria-hidden />
               <span className="tabular-nums">{project.likeCount}</span>
-              <span className="sr-only">likes — {viewer.liked ? "liked" : "like this project"}</span>
+              <span className="sr-only">likes - {viewer.liked ? "liked" : "like this project"}</span>
             </button>
 
             <button type="button" onClick={onShare} className={toggleBtn(false)}>
@@ -1566,20 +1583,31 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
         </div>
       </header>
 
-      {/* Owner / staff tools */}
+      {/* Verification review: the project's own professor (or admin/moderator) decides here, on the project */}
+      {viewer.canVerify && viewer.pendingVerification ? (
+        <VerificationReview
+          request={viewer.pendingVerification}
+          onDecided={(decision) => {
+            patchViewer({ pendingVerification: null, canVerify: decision === "REJECTED" });
+            if (decision === "APPROVED") patchProject({ verified: true });
+          }}
+        />
+      ) : null}
+
+      {/* Owner tools: project leader, its professor, admin/moderator */}
       {isOwner ? (
         <section
           aria-label="Owner tools"
           className="mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-primary-100 bg-primary-50/50 p-4"
         >
-          <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary-700">
+          <span className="mr-1 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary-700">
             <Pencil className="size-3.5" aria-hidden />
             Owner tools
           </span>
           <Button
             variant="outline"
             onClick={() => navigate({ name: "create", editSlug: slug })}
-            className="h-9 rounded-lg bg-white font-semibold"
+            className="h-9 rounded-lg bg-card font-semibold"
           >
             <Pencil className="size-4" aria-hidden />
             Edit project
@@ -1587,7 +1615,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <Button
             variant="outline"
             onClick={() => setTeamOpen(true)}
-            className="h-9 rounded-lg bg-white font-semibold"
+            className="h-9 rounded-lg bg-card font-semibold"
           >
             <Users className="size-4" aria-hidden />
             Manage team
@@ -1595,12 +1623,12 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <Select value={project.status} onValueChange={onStatusChange}>
             <SelectTrigger
               aria-label="Project status"
-              className="h-9 w-[150px] rounded-lg border-up-border bg-white"
+              className="h-9 w-[150px] rounded-lg border-up-border bg-card"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="DRAFT">Draft — hidden</SelectItem>
+              <SelectItem value="DRAFT">Draft - hidden</SelectItem>
               <SelectItem value="PUBLISHED">Published</SelectItem>
             </SelectContent>
           </Select>
@@ -1613,7 +1641,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             <Button
               variant="outline"
               onClick={onVerifyRequest}
-              className="h-9 rounded-lg bg-white font-semibold"
+              className="h-9 rounded-lg bg-card font-semibold"
             >
               <BadgeCheck className="size-4" aria-hidden />
               Request verification
@@ -1623,7 +1651,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             <AlertDialogTrigger asChild>
               <Button
                 variant="outline"
-                className="ml-auto h-9 rounded-lg border-danger/30 bg-white font-semibold text-danger hover:bg-danger-soft hover:text-danger"
+                className="ml-auto h-9 rounded-lg border-danger/30 bg-card font-semibold text-danger hover:bg-danger-soft hover:text-danger"
               >
                 <Trash2 className="size-4" aria-hidden />
                 Delete
@@ -1661,7 +1689,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
               {project.description}
             </div>
 
-            {/* Built with — technologies used */}
+            {/* Built with - technologies used */}
             {project.technologies.length > 0 ? (
               <div className="mt-6">
                 <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -1671,7 +1699,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
                   {project.technologies.map((t) => (
                     <span
                       key={t.id}
-                      className="rounded-full border border-up-border bg-white px-3 py-1 text-xs font-medium text-foreground"
+                      className="rounded-full border border-up-border bg-card px-3 py-1 text-xs font-medium text-foreground"
                     >
                       {t.name}
                     </span>
@@ -1724,7 +1752,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
                 </ul>
               ) : (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  No resources yet{isOwner ? " — add a demo, repo, docs or slides." : "."}
+                  No resources yet{isOwner ? " - add a demo, repo, docs or slides." : "."}
                 </p>
               )}
             </section>
@@ -1786,7 +1814,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
                 </ol>
               ) : (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  No milestones yet{isOwner ? " — add the first one." : "."}
+                  No milestones yet{isOwner ? " - add the first one." : "."}
                 </p>
               )}
             </section>
@@ -1860,7 +1888,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             </ul>
             {comments !== null && comments.length === 0 ? (
               <p className="mt-4 text-sm text-muted-foreground">
-                No comments yet — start the conversation.
+                No comments yet - start the conversation.
               </p>
             ) : null}
           </section>
@@ -1878,15 +1906,34 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
 
           {project.supervisor ? (
             <SidebarCard title="Supervisor">
-              <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={!project.supervisorUsername}
+                onClick={() =>
+                  project.supervisorUsername &&
+                  navigate({ name: "profile", username: project.supervisorUsername })
+                }
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl text-left",
+                  project.supervisorUsername && "transition-colors hover:bg-surface-muted/60"
+                )}
+                title={project.supervisorUsername ? "View the professor's profile" : undefined}
+              >
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-700">
                   <UserRound className="size-4" aria-hidden />
                 </span>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{project.supervisor}</p>
-                  <p className="text-xs text-muted-foreground">Project supervisor</p>
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1 truncate text-sm font-medium text-foreground">
+                    {project.supervisor}
+                    {project.supervisorUsername ? (
+                      <ArrowUpRight className="size-3.5 shrink-0 text-primary-600" aria-hidden />
+                    ) : null}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {project.supervisorUsername ? "Project supervisor · view profile" : "Project supervisor"}
+                  </p>
                 </div>
-              </div>
+              </button>
             </SidebarCard>
           ) : null}
 
@@ -1896,6 +1943,18 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
               <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 {project.department.tagline}
               </p>
+            ) : null}
+            {project.department.website ? (
+              <a
+                href={project.department.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-up-border bg-card text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-50"
+                title={project.department.website}
+              >
+                <ExternalLink className="size-3.5" aria-hidden />
+                University website
+              </a>
             ) : null}
             <Button
               variant="outline"
@@ -1959,5 +2018,61 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
         />
       ) : null}
     </article>
+  );
+}
+
+// ---------- verification review (shown to the reviewer while a request is open) ----------
+
+function VerificationReview({
+  request,
+  onDecided,
+}: {
+  request: { id: string; requester: string; createdAt: string };
+  onDecided: (decision: "APPROVED" | "REJECTED") => void;
+}) {
+  const [busy, setBusy] = useState<"APPROVED" | "REJECTED" | null>(null);
+  const decide = async (decision: "APPROVED" | "REJECTED") => {
+    if (busy) return;
+    setBusy(decision);
+    try {
+      await decideVerification({ verificationId: request.id, decision });
+      toast.success(decision === "APPROVED" ? "Project verified" : "Verification request rejected");
+      onDecided(decision);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the decision");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section
+      aria-label="Verification request"
+      className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-warning/30 bg-warning-soft p-4"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-warning">
+        <BadgeCheck className="size-[18px]" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-medium text-foreground">Verification requested</p>
+        <p className="text-[13px] text-ink-700">
+          {request.requester} asked {timeAgo(request.createdAt)}. Review the project below, then approve or reject.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button onClick={() => decide("APPROVED")} disabled={busy !== null} className="h-9 gap-1.5 px-4">
+          {busy === "APPROVED" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
+          Approve
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => decide("REJECTED")}
+          disabled={busy !== null}
+          className="h-9 gap-1.5 bg-card px-4 text-danger hover:text-danger"
+        >
+          {busy === "REJECTED" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <X className="size-4" aria-hidden />}
+          Reject
+        </Button>
+      </div>
+    </section>
   );
 }

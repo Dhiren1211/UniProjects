@@ -1,18 +1,18 @@
 "use client";
 
 // ============================================================
-// Admin control-center console (ADMIN role only).
-// Two-column shell on ≥ lg: sticky sidebar (brand, grouped nav,
-// system status, back-to-site) + per-tab content with its own
-// header (title / description / "Updated" caption / refresh).
-// Below lg the sidebar collapses into a top bar with pills and
-// the system mini-card moves to the top of Overview.
-// Tabs: overview · projects · users · departments · events ·
-// moderation. All data flows through /api/admin/** via the
-// "admin panel" section of api-client.ts.
+// Admin control-center console (ADMIN full / MODERATOR limited).
+// Two-column shell on ≥ lg: sticky sidebar (grouped nav, system
+// status, back-to-site) + per-tab content with its own header.
+// Below lg the sidebar collapses into a top bar with pills.
+// Tabs - ADMIN: overview · approvals · users · projects ·
+// announcements · moderation · emails · settings · departments.
+// MODERATOR: overview · users (read-only) · projects ·
+// announcements · moderation. Data flows through /api/admin/**
+// and the staff endpoints via api-client.ts.
 // ============================================================
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { format } from "date-fns";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
@@ -22,35 +22,44 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Building2,
-  CalendarDays,
-  CalendarPlus,
+  Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Dices,
+  ExternalLink,
   Eye,
   EyeOff,
   Flag,
   FolderKanban,
+  GraduationCap,
   Handshake,
+  KeyRound,
   LayoutDashboard,
+  ListChecks,
   Loader2,
+  ImageUp,
   Lock,
-  MapPin,
+  Mail,
+  Megaphone,
   MessageCircle,
-  MessageSquare,
   Paperclip,
   Pencil,
+  Pin,
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   ShieldAlert,
   ShieldCheck,
   Star,
   Trash2,
   TrendingDown,
   TrendingUp,
+  UserCog,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -90,25 +99,39 @@ import { ACCENTS, UNIVERSITY, accentOf } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import {
   createAdminDepartment,
-  createAdminEvent,
   createAdminUser,
+  createAnnouncement,
+  decideAccountRequest,
+  decideVerification,
+  deleteAccountRequest,
   deleteAdminDepartment,
-  deleteAdminEvent,
   deleteAdminProject,
   deleteAdminUser,
+  deleteAnnouncement,
+  fetchAccountRequests,
   fetchAdminDepartments,
-  fetchAdminEvents,
+  fetchAdminEmails,
   fetchAdminOverview,
+  fetchAdminPasswordResets,
   fetchAdminProjects,
   fetchAdminUsers,
+  fetchAnnouncements,
+  fetchProfessorsPublic,
+  fetchReports,
+  fetchSettings,
+  fetchVerifications,
+  resolveReport,
   updateAdminDepartment,
-  updateAdminEvent,
   updateAdminProject,
-  updateAdminUserRole,
+  updateAdminUser,
+  updateAnnouncement,
+  updateSiteSettings,
+  uploadFile,
   type Navigate,
   type View,
 } from "../api-client";
 import { useAppStore } from "../store";
+import { ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import {
   CategoryIcon,
   DeptDot,
@@ -120,89 +143,119 @@ import {
   timeAgo,
 } from "../ui-bits";
 import type {
+  AccountRequestDTO,
   AdminActivityItem,
   AdminDepartmentDTO,
-  AdminEventDTO,
   AdminOverviewDTO,
   AdminProjectRow,
   AdminUserRow,
+  AnnouncementDTO,
+  ApprovalResultDTO,
+  EmailLogDTO,
+  PasswordResetRow,
   ProjectListItem,
   DepartmentDTO,
   SafeUserDTO,
+  SiteSettings,
 } from "@/lib/types";
 
-type TabKey = "overview" | "projects" | "users" | "departments" | "events" | "moderation";
+type TabKey =
+  | "overview"
+  | "approvals"
+  | "resets"
+  | "users"
+  | "projects"
+  | "announcements"
+  | "moderation"
+  | "emails"
+  | "settings"
+  | "departments";
 
-/** Sidebar nav — one flat minimal list, no counters. */
-const NAV_ITEMS: { key: TabKey; label: string; icon: LucideIcon }[] = [
+/** Every console tab in display order - adminOnly ones are hidden from moderators. */
+const ALL_TABS: { key: TabKey; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "projects", label: "Projects", icon: FolderKanban },
-  { key: "departments", label: "Departments", icon: Building2 },
-  { key: "events", label: "Events", icon: CalendarDays },
+  { key: "approvals", label: "Approvals", icon: ListChecks, adminOnly: true },
   { key: "users", label: "Users", icon: Users },
+  { key: "projects", label: "Projects", icon: FolderKanban },
+  { key: "announcements", label: "Announcements", icon: Megaphone },
   { key: "moderation", label: "Moderation", icon: ShieldCheck },
+  { key: "resets", label: "Resets", icon: KeyRound, adminOnly: true },
+  { key: "emails", label: "Emails", icon: Mail, adminOnly: true },
+  { key: "settings", label: "Settings", icon: Settings2, adminOnly: true },
+  { key: "departments", label: "Departments", icon: Building2, adminOnly: true },
 ];
 
-/** Flat pill order for the < lg top bar (same as the previous tab strip). */
-const TAB_PILLS: { key: TabKey; label: string; icon: LucideIcon }[] = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "projects", label: "Projects", icon: FolderKanban },
-  { key: "users", label: "Users", icon: Users },
-  { key: "departments", label: "Departments", icon: Building2 },
-  { key: "events", label: "Events", icon: CalendarDays },
-  { key: "moderation", label: "Moderation", icon: ShieldCheck },
-];
+function tabsForRole(role: string | undefined) {
+  return role === "ADMIN" ? ALL_TABS : ALL_TABS.filter((t) => !t.adminOnly);
+}
 
 /** Per-tab content header copy. */
 const TAB_META: Record<TabKey, { title: string; description: string }> = {
   overview: {
     title: "Overview",
-    description: "Live health of the showcase — traffic, content and safety queues at a glance.",
+    description: "Live health of the showcase - traffic, content and safety queues at a glance.",
+  },
+  approvals: {
+    title: "Account requests",
+    description:
+      "Approve or reject student intake - approval provisions the account and emails the credentials.",
+  },
+  resets: {
+    title: "Password resets",
+    description:
+      "Every public \u201cforgot password\u201d request - matched accounts received a temporary password by email.",
+  },
+  users: {
+    title: "Users",
+    description: "Roles, sections and team leaders across the university directory.",
   },
   projects: {
     title: "Projects",
     description: "Feature, publish or remove any project across the campus showcase.",
   },
-  users: {
-    title: "Users",
-    description: "Manage member roles and keep the university directory in good standing.",
-  },
-  departments: {
-    title: "Departments",
-    description: "Structure the catalogue — departments power filters and project grouping.",
-  },
-  events: {
-    title: "Events",
-    description: "Campus events shown on the homepage — schedule, edit or remove them here.",
+  announcements: {
+    title: "Announcements",
+    description: "Campus-wide news, published to the public Announcements page.",
   },
   moderation: {
     title: "Moderation",
     description: "Verification requests and open community reports awaiting review.",
   },
+  emails: {
+    title: "Email outbox",
+    description: "Every transactional email the platform has sent - credentials and system mail.",
+  },
+  settings: {
+    title: "Site settings",
+    description: "Feature toggles and hero copy - changes apply across the whole site.",
+  },
+  departments: {
+    title: "Departments",
+    description: "Structure the catalogue - departments power filters and project grouping.",
+  },
 };
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: "Student",
-  FACULTY: "Faculty",
+  PROFESSOR: "Professor",
+  MODERATOR: "Moderator",
   ADMIN: "Admin",
 };
 
 const ACTIVITY_ICONS: Record<AdminActivityItem["kind"], LucideIcon> = {
   PROJECT: FolderKanban,
   USER: UserPlus,
-  POST: MessageSquare,
   COMMENT: MessageCircle,
   REPORT: Flag,
   JOIN: Handshake,
-  EVENT: CalendarDays,
+  ACCOUNT_REQUEST: UserPlus,
   RESOURCE: Paperclip,
 };
 
-/** "/project/<slug>" / "/community" → internal view, anything else is not navigable. */
+/** "/project/<slug>" → internal view, anything else is not navigable. */
 function activityToView(href: string): View | null {
   const project = /^\/project\/([^/?#]+)/.exec(href);
   if (project) return { name: "project", slug: project[1] };
-  if (href.startsWith("/community")) return { name: "community" };
   return null;
 }
 
@@ -214,7 +267,7 @@ function monthLabel(key: string) {
   return format(new Date(Number(year), idx, 1), "MMM");
 }
 
-/** value → debounced value (300 ms) — keeps search/filters off the network until typing settles. */
+/** value → debounced value (300 ms) - keeps search/filters off the network until typing settles. */
 function useDebounced<T>(value: T, delay = 300): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -225,13 +278,14 @@ function useDebounced<T>(value: T, delay = 300): T {
 }
 
 // ============================================================
-// AdminView — guard + console shell + tab routing
+// AdminView - guard + console shell + tab routing
 // ============================================================
 
-export function AdminView({ navigate }: { navigate: Navigate }) {
+export function AdminView({ navigate, initialTab }: { navigate: Navigate; initialTab?: string }) {
   const { user, authLoaded, openAuth } = useAppStore();
   const reduceMotion = useReducedMotion();
-  const [tab, setTab] = useState<TabKey>("overview");
+  const isAdmin = user?.role === "ADMIN";
+  const isStaff = user?.role === "ADMIN" || user?.role === "MODERATOR";
   const [overview, setOverview] = useState<AdminOverviewDTO | null>(null);
   const [overviewError, setOverviewError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
@@ -239,7 +293,19 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
   const [loadedAt, setLoadedAt] = useState<Partial<Record<TabKey, number>>>({});
   const [arriveNew, setArriveNew] = useState(false);
 
-  const isAdmin = user?.role === "ADMIN";
+  // tabs this role may open - used to validate deep-links and render the nav
+  const navItems = useMemo(() => tabsForRole(user?.role), [user?.role]);
+  const initialTabValid = !!initialTab && navItems.some((t) => t.key === initialTab);
+
+  const [tab, setTab] = useState<TabKey>(initialTabValid ? (initialTab as TabKey) : "overview");
+
+  // honor a deep-linked tab ("Review account requests" → approvals, …) on arrival.
+  // Adjust-during-render pattern: resets state when the prop changes without an effect.
+  const [seenInitialTab, setSeenInitialTab] = useState(initialTab);
+  if (initialTab !== seenInitialTab) {
+    setSeenInitialTab(initialTab);
+    if (initialTabValid && initialTab) setTab(initialTab as TabKey);
+  }
 
   // Keep the "Updated …" captions honest without refetching anything.
   const [, setClock] = useState(0);
@@ -260,7 +326,7 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
     });
   }, []);
 
-  // Stable per-tab onLoaded callbacks — tabs include them in their fetch-effect
+  // Stable per-tab onLoaded callbacks - tabs include them in their fetch-effect
   // deps, so a fresh identity per render would trigger a refetch loop.
   const overviewLoaded = useCallback(
     (ok: boolean) => noteLoaded(["overview", "moderation"], ok),
@@ -268,13 +334,20 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
   );
   const projectsLoaded = useCallback((ok: boolean) => noteLoaded(["projects"], ok), [noteLoaded]);
   const usersLoaded = useCallback((ok: boolean) => noteLoaded(["users"], ok), [noteLoaded]);
+  const approvalsLoaded = useCallback((ok: boolean) => noteLoaded(["approvals"], ok), [noteLoaded]);
+  const resetsLoaded = useCallback((ok: boolean) => noteLoaded(["resets"], ok), [noteLoaded]);
+  const announcementsLoaded = useCallback(
+    (ok: boolean) => noteLoaded(["announcements"], ok),
+    [noteLoaded]
+  );
+  const emailsLoaded = useCallback((ok: boolean) => noteLoaded(["emails"], ok), [noteLoaded]);
+  const settingsLoaded = useCallback((ok: boolean) => noteLoaded(["settings"], ok), [noteLoaded]);
   const departmentsLoaded = useCallback(
     (ok: boolean) => noteLoaded(["departments"], ok),
     [noteLoaded]
   );
-  const eventsLoaded = useCallback((ok: boolean) => noteLoaded(["events"], ok), [noteLoaded]);
 
-  /** Explicit refresh from the content header — spins the button until data lands. */
+  /** Explicit refresh from the content header - spins the button until data lands. */
   const refresh = () => {
     setRefreshing(true);
     setRefreshTick((n) => n + 1);
@@ -291,7 +364,7 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
   };
 
   useEffect(() => {
-    if (!authLoaded || !isAdmin) return;
+    if (!authLoaded || !isStaff) return;
     let cancelled = false;
     fetchAdminOverview()
       .then((data) => {
@@ -309,7 +382,7 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshTick, authLoaded, isAdmin, overviewLoaded]);
+  }, [refreshTick, authLoaded, isStaff, overviewLoaded]);
 
   // ---------- gates ----------
 
@@ -329,13 +402,13 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
     );
   }
 
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !isStaff) {
     return (
       <Shell>
         <EmptyState
           icon={user ? ShieldAlert : Lock}
-          title="Admin access required"
-          hint="This console manages the whole showcase — projects, members, departments and events. It is limited to Kyungsung University administrators."
+          title="Staff only"
+          hint="This console manages the showcase - account requests, members, projects and site settings. It is limited to administrators and moderators."
           action={
             !user ? (
               <Button onClick={() => openAuth("login")} className="rounded-xl font-semibold">
@@ -349,13 +422,16 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
   }
 
   const moderationPending = (overview?.pendingVerifications ?? 0) + (overview?.openReports ?? 0);
+  const approvalsPending = isAdmin ? (overview?.pendingAccountRequests ?? 0) : 0;
   const meta = TAB_META[tab];
 
   return (
     <div className="lg:flex">
       <ConsoleSidebar
         tab={tab}
+        items={navItems}
         moderationPending={moderationPending}
+        approvalsPending={approvalsPending}
         onTab={goTab}
         navigate={navigate}
       />
@@ -364,7 +440,9 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
           {/* < lg: brand + scrollable pills replace the sidebar */}
           <ConsoleTopBar
             tab={tab}
+            items={navItems}
             moderationPending={moderationPending}
+            approvalsPending={approvalsPending}
             user={user}
             onTab={goTab}
           />
@@ -400,6 +478,14 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
                 onRetry={refresh}
                 navigate={navigate}
                 onQuickAction={goTab}
+                isAdmin={isAdmin}
+              />
+            ) : null}
+            {isAdmin && tab === "approvals" ? (
+              <ApprovalsTab
+                onChanged={syncOverview}
+                refreshTick={refreshTick}
+                onLoaded={approvalsLoaded}
               />
             ) : null}
             {tab === "projects" ? (
@@ -412,13 +498,32 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
             ) : null}
             {tab === "users" ? (
               <UsersTab
+                navigate={navigate}
                 onChanged={syncOverview}
                 refreshTick={refreshTick}
                 onLoaded={usersLoaded}
                 autoOpenNew={arriveNew}
+                readOnly={!isAdmin}
               />
             ) : null}
-            {tab === "departments" ? (
+            {tab === "announcements" ? (
+              <AnnouncementsTab
+                onChanged={syncOverview}
+                refreshTick={refreshTick}
+                onLoaded={announcementsLoaded}
+              />
+            ) : null}
+            {tab === "moderation" ? <ModerationTab overview={overview} navigate={navigate} /> : null}
+            {isAdmin && tab === "emails" ? (
+              <EmailsTab refreshTick={refreshTick} onLoaded={emailsLoaded} />
+            ) : null}
+            {isAdmin && tab === "resets" ? (
+              <ResetsTab refreshTick={refreshTick} onLoaded={resetsLoaded} />
+            ) : null}
+            {isAdmin && tab === "settings" ? (
+              <SettingsTab refreshTick={refreshTick} onLoaded={settingsLoaded} />
+            ) : null}
+            {isAdmin && tab === "departments" ? (
               <DepartmentsTab
                 onChanged={syncOverview}
                 refreshTick={refreshTick}
@@ -426,15 +531,6 @@ export function AdminView({ navigate }: { navigate: Navigate }) {
                 autoOpenNew={arriveNew}
               />
             ) : null}
-            {tab === "events" ? (
-              <EventsTab
-                onChanged={syncOverview}
-                refreshTick={refreshTick}
-                onLoaded={eventsLoaded}
-                autoOpenNew={arriveNew}
-              />
-            ) : null}
-            {tab === "moderation" ? <ModerationTab overview={overview} navigate={navigate} /> : null}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -449,17 +545,21 @@ function Shell({ children }: { children: ReactNode }) {
 }
 
 // ============================================================
-// Console chrome — sidebar (≥ lg), top bar (< lg), header, cards
+// Console chrome - sidebar (≥ lg), top bar (< lg), header, cards
 // ============================================================
 
 function ConsoleSidebar({
   tab,
+  items,
   moderationPending,
+  approvalsPending,
   onTab,
   navigate,
 }: {
   tab: TabKey;
+  items: typeof ALL_TABS;
   moderationPending: number;
+  approvalsPending: number;
   onTab: (key: TabKey, openNew?: boolean) => void;
   navigate: Navigate;
 }) {
@@ -470,24 +570,29 @@ function ConsoleSidebar({
       className="sticky top-[65px] hidden h-[calc(100vh-65px)] w-52 shrink-0 flex-col overflow-hidden border-r border-up-border bg-card lg:flex"
       aria-label="Admin console"
     >
-      {/* flat minimal nav — no brand header, no counters, no chrome */}
+      {/* flat minimal nav - no brand header, no counters, no chrome */}
       <nav
         aria-label="Admin sections"
         className="scrollbar-none relative min-h-0 flex-1 overflow-y-auto px-2.5 py-2.5"
         style={{ scrollbarWidth: "none" }}
       >
         <div className="space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const active = tab === item.key;
             const Icon = item.icon;
-            const pending = item.key === "moderation" ? moderationPending : 0;
+            const pending =
+              item.key === "moderation"
+                ? moderationPending
+                : item.key === "approvals"
+                  ? approvalsPending
+                  : 0;
             return (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => onTab(item.key)}
                 aria-current={active ? "page" : undefined}
-                aria-label={pending > 0 ? `${item.label} — ${pending} pending` : undefined}
+                aria-label={pending > 0 ? `${item.label} - ${pending} pending` : undefined}
                 className={cn(
                   "relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                   active
@@ -528,7 +633,7 @@ function ConsoleSidebar({
         </div>
       </nav>
 
-      {/* slim footer — exit only */}
+      {/* slim footer - exit only */}
       <div className="border-t border-up-border p-2">
         <button
           type="button"
@@ -545,12 +650,16 @@ function ConsoleSidebar({
 
 function ConsoleTopBar({
   tab,
+  items,
   moderationPending,
+  approvalsPending,
   user,
   onTab,
 }: {
   tab: TabKey;
+  items: typeof ALL_TABS;
   moderationPending: number;
+  approvalsPending: number;
   user: SafeUserDTO;
   onTab: (key: TabKey, openNew?: boolean) => void;
 }) {
@@ -571,9 +680,10 @@ function ConsoleTopBar({
       </div>
       <nav aria-label="Admin sections" className="nice-scroll mt-3 overflow-x-auto">
         <div className="flex min-w-max gap-1.5 pb-1">
-          {TAB_PILLS.map(({ key, label, icon: Icon }) => {
+          {items.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
-            const showCount = key === "moderation" && moderationPending > 0;
+            const pending = key === "moderation" ? moderationPending : key === "approvals" ? approvalsPending : 0;
+            const showCount = pending > 0;
             return (
               <button
                 key={key}
@@ -593,10 +703,10 @@ function ConsoleTopBar({
                   <span
                     className={cn(
                       "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold",
-                      active ? "bg-white text-danger" : "bg-danger-soft text-danger"
+                      active ? "bg-card text-danger" : "bg-danger-soft text-danger"
                     )}
                   >
-                    {moderationPending}
+                    {pending}
                   </span>
                 ) : null}
               </button>
@@ -679,16 +789,15 @@ function Panel({
 }
 
 // ============================================================
-// Pagination — shared minimal pager used by every listing tab
+// Pagination - shared minimal pager used by every listing tab
 // ============================================================
 
 const PROJECTS_PER_PAGE = 8;
 const USERS_PER_PAGE = 10;
 const DEPARTMENTS_PER_PAGE = 9;
-const EVENTS_PER_PAGE = 6;
 
 /**
- * Fixed-size page window — the pager always renders the same slots:
+ * Fixed-size page window - the pager always renders the same slots:
  *   edges:  `1 2 3 4 5 … N`  /  `1 … N-4 N-3 N-2 N-1 N`
  *   middle: `1 … p-1 p p+1 … N`
  * so its width never changes while navigating (e.g. `1 2 3 … 100`).
@@ -764,7 +873,7 @@ function Pagination({
                 className={cn(
                   btn,
                   p === page
-                    ? "bg-primary-600 text-white shadow-sm"
+                    ? "bg-primary-600 text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
                 )}
               >
@@ -791,7 +900,7 @@ function Pagination({
   );
 }
 
-/** Compact status card — sidebar footer on ≥ lg (dark), top of Overview below lg (light). */
+/** Compact status card - sidebar footer on ≥ lg (dark), top of Overview below lg (light). */
 function SystemMiniCard({
   storage,
   className,
@@ -889,12 +998,12 @@ function RoleChip({ role }: { role: string }) {
   return <StaffBadge role={role} />;
 }
 
-/** rAF count-up that respects reduced motion — gives every number a live "landing" feel. */
+/** rAF count-up that respects reduced motion - gives every number a live "landing" feel. */
 function useCountUp(target: number, duration = 900): number {
   const reduceMotion = useReducedMotion();
   const [value, setValue] = useState(0);
   useEffect(() => {
-    if (reduceMotion) return; // derived below — no animation needed
+    if (reduceMotion) return; // derived below - no animation needed
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
@@ -909,7 +1018,7 @@ function useCountUp(target: number, duration = 900): number {
   return reduceMotion ? target : value;
 }
 
-/** Large KPI tile for the primary metrics row — colored tile, animated number, optional trend chip. */
+/** Large KPI tile for the primary metrics row - colored tile, animated number, optional trend chip. */
 function HeroStatCard({
   label,
   value,
@@ -928,7 +1037,7 @@ function HeroStatCard({
   compactViews?: boolean;
   delay?: number;
   tone?: "primary" | "success" | "info";
-  /** real-data trend chip — either a % vs the previous month or a raw delta */
+  /** real-data trend chip - either a % vs the previous month or a raw delta */
   trend?: { pct?: number; delta?: number };
 }) {
   const reduceMotion = useReducedMotion();
@@ -980,7 +1089,7 @@ function HeroStatCard({
   );
 }
 
-/** "Needs attention" tile — the three review queues, each row jumps to the right place. */
+/** "Needs attention" tile - the three review queues, each row jumps to the right place. */
 function AttentionCard({
   overview,
   onAction,
@@ -1007,7 +1116,7 @@ function AttentionCard({
       count: overview.pendingVerifications,
       dot: "bg-warning",
       go: () => onAction("moderation"),
-      hint: "Verification requests — review in Moderation",
+      hint: "Verification requests - review in Moderation",
     },
     {
       label: "Reports",
@@ -1077,7 +1186,7 @@ function AttentionCard({
                   type="button"
                   onClick={q.go}
                   title={q.hint}
-                  className="group flex w-full items-center justify-between gap-2 rounded-lg bg-white/80 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-white"
+                  className="group flex w-full items-center justify-between gap-2 rounded-lg bg-background/85 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-card"
                 >
                   {body}
                 </button>
@@ -1097,7 +1206,7 @@ function AttentionCard({
   );
 }
 
-/** Dark brand band greeting the operator — mirrors the landing hero's night surface. */
+/** Dark brand band greeting the operator - mirrors the landing hero's night surface. */
 function WelcomeBand({
   overview,
   userName,
@@ -1136,8 +1245,8 @@ function WelcomeBand({
           </h2>
           <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
             {pending > 0
-              ? `${pending} ${pending === 1 ? "item needs" : "items need"} your review — the rest of the showcase is healthy and live.`
-              : "Everything is reviewed — the showcase is healthy and live."}
+              ? `${pending} ${pending === 1 ? "item needs" : "items need"} your review - the rest of the showcase is healthy and live.`
+              : "Everything is reviewed - the showcase is healthy and live."}
           </p>
         </div>
         {chips.length > 0 ? (
@@ -1161,7 +1270,7 @@ function WelcomeBand({
 }
 
 // ============================================================
-// Overview tab — mission control
+// Overview tab - mission control
 // ============================================================
 
 function OverviewTab({
@@ -1170,12 +1279,14 @@ function OverviewTab({
   onRetry,
   navigate,
   onQuickAction,
+  isAdmin,
 }: {
   overview: AdminOverviewDTO | null;
   error: boolean;
   onRetry: () => void;
   navigate: Navigate;
   onQuickAction: (target: TabKey, openNew?: boolean) => void;
+  isAdmin: boolean;
 }) {
   const { user } = useAppStore();
   const reduceMotion = useReducedMotion();
@@ -1235,7 +1346,7 @@ function OverviewTab({
         onQueues={() => onQuickAction("moderation")}
       />
 
-      {/* main grid — dashboard column + activity rail (reference console layout) */}
+      {/* main grid - dashboard column + activity rail (reference console layout) */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 space-y-4">
           {/* ---------- primary KPIs ---------- */}
@@ -1252,7 +1363,7 @@ function OverviewTab({
                     ? { delta: lastSignups }
                     : undefined
               }
-              sub={`${overview.students} students · ${overview.faculty} faculty & staff`}
+              sub={`${overview.students} students · ${overview.professors} professors · ${overview.moderators} moderators`}
               delay={0.05}
             />
             <HeroStatCard
@@ -1269,7 +1380,7 @@ function OverviewTab({
               icon={Eye}
               tone="info"
               compactViews
-              sub={`${overview.comments} comments · ${overview.posts} posts`}
+              sub={`${overview.comments} comments · ${overview.resources} resources`}
               delay={0.15}
             />
             <AttentionCard overview={overview} onAction={onQuickAction} delay={0.2} />
@@ -1287,12 +1398,15 @@ function OverviewTab({
             navigate={navigate}
             onViewAll={() => onQuickAction("projects")}
           />
+
+          {/* ---------- sections by classID ---------- */}
+          <SectionsCard byClass={overview.byClass} />
         </div>
 
         {/* ---------- right rail ---------- */}
         <div className="min-w-0 space-y-4">
           <ActivityCard items={overview.activity} navigate={navigate} />
-          <QuickActionsCard overview={overview} onAction={onQuickAction} />
+          <QuickActionsCard overview={overview} onAction={onQuickAction} isAdmin={isAdmin} />
           <SystemCard storage={overview.storage} />
         </div>
       </div>
@@ -1324,7 +1438,7 @@ function ActivityCard({
     >
       {items.length === 0 ? (
         <p className="mt-5 text-sm text-muted-foreground">
-          Nothing has happened yet — activity lands here as members work.
+          Nothing has happened yet - activity lands here as members work.
         </p>
       ) : (
         <ul className="nice-scroll mt-3 max-h-[22rem] space-y-0.5 overflow-y-auto pr-1">
@@ -1401,7 +1515,7 @@ function ActivityRow({
   );
 }
 
-/** "Member growth" — hand-rolled SVG area chart of monthly signups (reference dashboard style). */
+/** "Member growth" - hand-rolled SVG area chart of monthly signups (reference dashboard style). */
 function GrowthChartCard({
   data,
   className,
@@ -1537,7 +1651,7 @@ function GrowthChartCard({
   );
 }
 
-/** "Community make-up" — SVG donut of members by role with center total + legend. */
+/** "Community make-up" - SVG donut of members by role with center total + legend. */
 function RoleDonutCard({
   overview,
   className,
@@ -1545,10 +1659,13 @@ function RoleDonutCard({
   overview: AdminOverviewDTO;
   className?: string;
 }) {
-  const admins = Math.max(0, overview.users - overview.students - overview.faculty);
+  const students = Math.max(0, overview.students);
+  const staff = Math.max(0, overview.professors + overview.moderators);
+  const admins = Math.max(0, overview.users - students - staff);
   const slices = [
-    { label: "Students", value: overview.students, color: "var(--up-primary-500)" },
-    { label: "Faculty & staff", value: overview.faculty, color: "var(--up-info)" },
+    { label: "Students", value: students, color: "var(--up-primary-500)" },
+    { label: "Professors", value: overview.professors, color: "var(--up-info)" },
+    { label: "Moderators", value: overview.moderators, color: "var(--up-warning, #d7a70f)" },
     { label: "Admins", value: admins, color: "#fcaf17" },
   ].filter((s) => s.value > 0);
   const total = slices.reduce((sum, s) => sum + s.value, 0);
@@ -1610,7 +1727,7 @@ function RoleDonutCard({
   );
 }
 
-/** "Recent projects" — reference-style management table fed by the overview payload. */
+/** "Recent projects" - reference-style management table fed by the overview payload. */
 function RecentProjectsCard({
   projects,
   navigate,
@@ -1712,7 +1829,7 @@ function RecentProjectsCard({
                           </span>
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="hidden whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground md:table-cell">
@@ -1769,6 +1886,74 @@ function StatusChip({ project }: { project: ProjectListItem }) {
   );
 }
 
+/** "Sections" - compact classID table (students + projects per section). */
+function SectionsCard({ byClass, className }: { byClass: AdminOverviewDTO["byClass"]; className?: string }) {
+  const totalStudents = byClass.reduce((sum, c) => sum + c.students, 0);
+  return (
+    <section
+      className={cn("overflow-hidden rounded-2xl border border-up-border bg-card shadow-card", className)}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4 md:px-5">
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold tracking-tight text-foreground">Sections</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Students and projects grouped by classID - {byClass.length} section
+            {byClass.length === 1 ? "" : "s"} · {totalStudents} students
+          </p>
+        </div>
+      </div>
+      {byClass.length === 0 ? (
+        <p className="px-5 py-5 text-sm text-muted-foreground">
+          No sections yet - students join one when their accounts are provisioned.
+        </p>
+      ) : (
+        <div className="scrollbar-none mt-3 overflow-x-auto">
+          <table className="w-full min-w-[420px] text-sm">
+            <thead>
+              <tr className="border-y border-up-border bg-surface-muted/50 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <th scope="col" className="px-4 py-2 font-bold md:px-5">
+                  ClassID
+                </th>
+                <th scope="col" className="px-3 py-2 font-bold">
+                  Students
+                </th>
+                <th scope="col" className="px-3 py-2 font-bold">
+                  Projects
+                </th>
+                <th scope="col" className="px-4 py-2 text-right font-bold md:px-5">
+                  <span className="sr-only">Share</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-up-border">
+              {byClass.map((c) => (
+                <tr key={c.classId} className="transition-colors hover:bg-surface-muted/40">
+                  <td className="px-4 py-2.5 md:px-5">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+                      <Users className="size-3 text-primary-700" aria-hidden />
+                      {c.classId}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 font-semibold tabular-nums text-foreground">{c.students}</td>
+                  <td className="px-3 py-2.5 font-semibold tabular-nums text-foreground">{c.projects}</td>
+                  <td className="px-4 py-2.5 md:px-5">
+                    <span aria-hidden className="ml-auto block h-1.5 rounded-full bg-primary-100"
+                      style={{
+                        width: `${Math.round((c.students / Math.max(1, totalStudents)) * 100)}%`,
+                        maxWidth: "10rem",
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SystemCard({
   storage,
   className,
@@ -1817,10 +2002,12 @@ function SystemCard({
 function QuickActionsCard({
   overview,
   onAction,
+  isAdmin,
   className,
 }: {
   overview: AdminOverviewDTO;
   onAction: (target: TabKey, openNew?: boolean) => void;
+  isAdmin: boolean;
   className?: string;
 }) {
   const actions: {
@@ -1831,6 +2018,17 @@ function QuickActionsCard({
     count?: number;
     danger?: boolean;
   }[] = [
+    ...(isAdmin
+      ? [
+          {
+            label: "Review account requests",
+            hint: "Approve student intake & provision accounts",
+            icon: ListChecks,
+            go: () => onAction("approvals"),
+            count: overview.pendingAccountRequests,
+          },
+        ]
+      : []),
     {
       label: "Review verifications",
       hint: "Faculty-verified badge queue",
@@ -1846,24 +2044,22 @@ function QuickActionsCard({
       count: overview.openReports,
       danger: true,
     },
-    {
-      label: "Add member",
-      hint: "Create a student or faculty account",
-      icon: UserPlus,
-      go: () => onAction("users", true),
-    },
-    {
-      label: "Schedule event",
-      hint: "Publish a campus event",
-      icon: CalendarPlus,
-      go: () => onAction("events", true),
-    },
-    {
-      label: "Add department",
-      hint: "Extend the catalogue",
-      icon: Building2,
-      go: () => onAction("departments", true),
-    },
+    ...(isAdmin
+      ? [
+          {
+            label: "Add member",
+            hint: "Create a student or staff account",
+            icon: UserPlus,
+            go: () => onAction("users", true),
+          },
+          {
+            label: "Add department",
+            hint: "Extend the catalogue",
+            icon: Building2,
+            go: () => onAction("departments", true),
+          },
+        ]
+      : []),
   ];
   return (
     <Panel title="Quick actions" caption="Jump into the most common tasks" className={className}>
@@ -1905,7 +2101,7 @@ function QuickActionsCard({
 }
 
 // ============================================================
-// Projects tab — search / filter / feature / publish / delete
+// Projects tab - search / filter / feature / publish / delete
 // ============================================================
 
 function ProjectsTab({
@@ -1924,6 +2120,7 @@ function ProjectsTab({
   const [status, setStatus] = useState("ALL");
   const [dept, setDept] = useState("ALL");
   const [rows, setRows] = useState<AdminProjectRow[] | null>(null); // null = loading
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -1942,6 +2139,7 @@ function ProjectsTab({
 
   useEffect(() => {
     let cancelled = false;
+    setLoadError(null);
     fetchAdminProjects({
       query: debouncedQuery || undefined,
       status: status === "ALL" ? undefined : status,
@@ -1954,9 +2152,13 @@ function ProjectsTab({
       })
       .catch((e) => {
         if (cancelled) return;
+        const message = e instanceof Error ? e.message : "Could not load projects";
         setRows([]);
+        setLoadError(message);
         onLoaded(false);
-        toast.error(e instanceof Error ? e.message : "Could not load projects");
+        // moderators hit the server's admin-only gate - the inline notice explains it,
+        // no extra toast needed for that expected case
+        if (!/administrator/i.test(message)) toast.error(message);
       });
     return () => {
       cancelled = true;
@@ -2089,12 +2291,20 @@ function ProjectsTab({
         <p className="text-xs font-medium text-muted-foreground md:ml-auto">Newest first</p>
       </div>
 
-      {/* rows — paged, no inner scrolling */}
+      {/* rows - paged, no inner scrolling */}
       {rows === null ? (
         <div className="mt-3 space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
+        </div>
+      ) : loadError && /administrator/i.test(loadError) ? (
+        <div className="mt-3">
+          <EmptyState
+            icon={Lock}
+            title="Admin access required"
+            hint="Project management - featuring, publishing and deletion - is limited to administrators. Moderators can review projects from the public showcase."
+          />
         </div>
       ) : rows.length === 0 ? (
         <div className="mt-3">
@@ -2139,7 +2349,7 @@ function ProjectsTab({
                   <StatusBadge status={row.status} />
                   {!row.hasSourceLink ? (
                     <span
-                      title="No source link — this project has no demo or repository URL"
+                      title="No source link - this project has no demo or repository URL"
                       className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning"
                     >
                       <AlertTriangle className="size-3" aria-hidden />
@@ -2237,10 +2447,10 @@ function ProjectsTab({
 }
 
 // ============================================================
-// Users tab — search / filter / roles / create / delete
+// Users tab - search / filter / roles / create / delete
 // ============================================================
 
-/** Same rule the API enforces — 3–30 lowercase letters, numbers, dots or underscores. */
+/** Same rule the API enforces - 3–30 lowercase letters, numbers, dots or underscores. */
 const USERNAME_RE = /^[a-z0-9](?:[a-z0-9._]{1,28})[a-z0-9]$/;
 
 function RoleSelect({
@@ -2261,7 +2471,8 @@ function RoleSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="STUDENT">Student</SelectItem>
-        <SelectItem value="FACULTY">Faculty</SelectItem>
+        <SelectItem value="PROFESSOR">Professor</SelectItem>
+        <SelectItem value="MODERATOR">Moderator</SelectItem>
         <SelectItem value="ADMIN">Admin</SelectItem>
       </SelectContent>
     </Select>
@@ -2269,15 +2480,20 @@ function RoleSelect({
 }
 
 function UsersTab({
+  navigate,
   onChanged,
   refreshTick,
   onLoaded,
   autoOpenNew = false,
+  readOnly = false,
 }: {
+  navigate: Navigate;
   onChanged: () => void;
   refreshTick: number;
   onLoaded: (ok: boolean) => void;
   autoOpenNew?: boolean;
+  /** MODERATOR sees the directory read-only - no create / role / leader / class / delete controls. */
+  readOnly?: boolean;
 }) {
   const { user } = useAppStore();
   const [query, setQuery] = useState("");
@@ -2287,6 +2503,13 @@ function UsersTab({
   const [dialogOpen, setDialogOpen] = useState(autoOpenNew);
   const [deleting, setDeleting] = useState<AdminUserRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [editingClass, setEditingClass] = useState<AdminUserRow | null>(null);
+  // full "Edit member" dialog (requirement: admins can edit every user from the console)
+  const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  // professor university-profile-link editor (requirement: faculty links manageable from the console)
+  const [editingFacultyLink, setEditingFacultyLink] = useState<AdminUserRow | null>(null);
+  const [facultyLinkInput, setFacultyLinkInput] = useState("");
+  const [facultyLinkBusy, setFacultyLinkBusy] = useState(false);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -2311,21 +2534,82 @@ function UsersTab({
     };
   }, [debouncedQuery, role, refreshTick, onLoaded]);
 
+  const replaceRow = (updated: AdminUserRow) => {
+    setRows((prev) => (prev ? prev.map((r) => (r.id === updated.id ? updated : r)) : prev));
+  };
+
   const changeRole = async (row: AdminUserRow, nextRole: string) => {
     const prevRole = row.role;
     setRows((prev) =>
       prev ? prev.map((r) => (r.id === row.id ? { ...r, role: nextRole } : r)) : prev
     ); // optimistic
     try {
-      const updated = await updateAdminUserRole({ id: row.id, role: nextRole });
-      setRows((prev) => (prev ? prev.map((r) => (r.id === row.id ? updated : r)) : prev));
+      const updated = await updateAdminUser({ id: row.id, role: nextRole });
+      replaceRow(updated);
       toast.success(`@${row.username} is now ${ROLE_LABELS[nextRole] ?? nextRole}`);
-      onChanged(); // overview counts include role totals — keep them live
+      onChanged(); // overview counts include role totals - keep them live
     } catch (e) {
       setRows((prev) =>
         prev ? prev.map((r) => (r.id === row.id ? { ...r, role: prevRole } : r)) : prev
       ); // revert
       toast.error(e instanceof Error ? e.message : "Could not update the role");
+    }
+  };
+
+  const toggleLeader = async (row: AdminUserRow, next: boolean) => {
+    setRows((prev) =>
+      prev ? prev.map((r) => (r.id === row.id ? { ...r, isTeamLeader: next } : r)) : prev
+    ); // optimistic
+    try {
+      const updated = await updateAdminUser({ id: row.id, isTeamLeader: next });
+      replaceRow(updated);
+      toast.success(
+        next
+          ? `${row.displayName} can now submit for their team`
+          : `${row.displayName} is now a regular member`
+      );
+    } catch (e) {
+      setRows((prev) =>
+        prev ? prev.map((r) => (r.id === row.id ? { ...r, isTeamLeader: !next } : r)) : prev
+      ); // revert
+      toast.error(e instanceof Error ? e.message : "Could not update the team role");
+    }
+  };
+
+  const saveClass = async (row: AdminUserRow, classId: string) => {
+    try {
+      const updated = await updateAdminUser({ id: row.id, classId });
+      replaceRow(updated);
+      toast.success(
+        classId ? `@${row.username} moved to ${classId}` : `Section cleared for @${row.username}`
+      );
+      setEditingClass(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update the section");
+    }
+  };
+
+  const saveFacultyLink = async () => {
+    if (!editingFacultyLink || facultyLinkBusy) return;
+    const url = facultyLinkInput.trim();
+    if (url && !/^https?:\/\/\S+$/.test(url)) {
+      toast.error("Enter a full URL starting with http:// or https://");
+      return;
+    }
+    setFacultyLinkBusy(true);
+    try {
+      const updated = await updateAdminUser({ id: editingFacultyLink.id, universityProfileUrl: url });
+      replaceRow(updated);
+      toast.success(
+        url
+          ? `University profile link saved for @${updated.username}`
+          : `University profile link cleared for @${updated.username}`
+      );
+      setEditingFacultyLink(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the link");
+    } finally {
+      setFacultyLinkBusy(false);
     }
   };
 
@@ -2368,7 +2652,7 @@ function UsersTab({
               setPage(1);
               setRows(null);
             }}
-            placeholder="Search name, @username or email…"
+            placeholder="Search name, @username, student ID or section…"
             aria-label="Search users"
             className="pl-9"
           />
@@ -2387,20 +2671,28 @@ function UsersTab({
           <SelectContent>
             <SelectItem value="ALL">All roles</SelectItem>
             <SelectItem value="STUDENT">Students</SelectItem>
-            <SelectItem value="FACULTY">Faculty</SelectItem>
+            <SelectItem value="PROFESSOR">Professors</SelectItem>
+            <SelectItem value="MODERATOR">Moderators</SelectItem>
             <SelectItem value="ADMIN">Admins</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          onClick={() => setDialogOpen(true)}
-          className="rounded-xl font-semibold md:ml-auto"
-        >
-          <Plus className="size-4" aria-hidden />
-          New member
-        </Button>
+        {readOnly ? (
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground md:ml-auto">
+            <Lock className="size-3.5" aria-hidden />
+            Read-only - directory edits are an administrator task
+          </p>
+        ) : (
+          <Button
+            onClick={() => setDialogOpen(true)}
+            className="rounded-xl font-semibold md:ml-auto"
+          >
+            <Plus className="size-4" aria-hidden />
+            New member
+          </Button>
+        )}
       </div>
 
-      {/* rows — paged, no inner scrolling */}
+      {/* rows - paged, no inner scrolling */}
       {rows === null ? (
         <div className="mt-3 space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -2414,10 +2706,12 @@ function UsersTab({
             title="No members match"
             hint="Try a different search or role filter."
             action={
-              <Button onClick={() => setDialogOpen(true)} className="rounded-xl font-semibold">
-                <Plus className="size-4" aria-hidden />
-                New member
-              </Button>
+              !readOnly ? (
+                <Button onClick={() => setDialogOpen(true)} className="rounded-xl font-semibold">
+                  <Plus className="size-4" aria-hidden />
+                  New member
+                </Button>
+              ) : undefined
             }
           />
         </div>
@@ -2431,11 +2725,17 @@ function UsersTab({
               >
                 <UserAvatar name={row.displayName} avatarUrl={row.avatarUrl} className="size-9" />
               <div className="min-w-0 flex-1 basis-44">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {row.displayName}
+                <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                  <span className="truncate">{row.displayName}</span>
                   {row.id === user?.id ? (
-                    <span className="ml-1.5 rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                    <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
                       You
+                    </span>
+                  ) : null}
+                  {row.isTeamLeader ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                      <GraduationCap className="size-3" aria-hidden />
+                      Team Leader
                     </span>
                   ) : null}
                 </p>
@@ -2443,66 +2743,165 @@ function UsersTab({
                   @{row.username} · {row.email}
                 </p>
               </div>
-              {row.department ? (
-                <DeptChip code={row.department.code} accent={row.department.accent} />
-              ) : (
-                <span className="text-xs text-muted-foreground">No dept</span>
-              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <RoleChip role={row.role} />
+                {row.studentId ? (
+                  <span
+                    className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
+                    title="Student ID"
+                  >
+                    {row.studentId}
+                  </span>
+                ) : null}
+                {row.classId ? (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[10px] font-semibold text-foreground"
+                    title="Section"
+                  >
+                    <Users className="size-3 text-primary-700" aria-hidden />
+                    {row.classId}
+                  </span>
+                ) : null}
+                {row.role === "PROFESSOR" && row.universityProfileUrl ? (
+                  <a
+                    href={row.universityProfileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[10px] font-semibold text-primary-700 hover:underline"
+                    title={row.universityProfileUrl}
+                  >
+                    <ExternalLink className="size-3" aria-hidden />
+                    University profile
+                  </a>
+                ) : null}
+              </div>
               <span className="text-xs text-muted-foreground">
                 <span className="font-semibold text-foreground">{row.projectCount}</span> projects
-                · <span className="font-semibold text-foreground">{row.postCount}</span> posts
+                · <span className="font-semibold text-foreground">{row.classmateCount}</span>{" "}
+                classmates
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="hidden text-xs text-muted-foreground lg:inline">
                 Joined {format(new Date(row.createdAt), "MMM d, yyyy")}
               </span>
-              {row.id === user?.id ? (
+              <span className="flex items-center gap-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex cursor-not-allowed opacity-70">
-                      <RoleSelect
-                        value={row.role}
-                        disabled
-                        onChange={() => {}}
-                        label={`Role for ${row.displayName}`}
-                      />
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 rounded-lg text-muted-foreground hover:text-primary-700"
+                      onClick={() => navigate({ name: "profile", username: row.username })}
+                      aria-label={`View ${row.displayName}'s profile`}
+                      title="View profile"
+                    >
+                      <ArrowUpRight className="size-3.5" aria-hidden />
+                    </Button>
                   </TooltipTrigger>
-                  <TooltipContent>You cannot change your own role</TooltipContent>
+                  <TooltipContent>View public profile</TooltipContent>
                 </Tooltip>
-              ) : (
-                <RoleSelect
-                  value={row.role}
-                  onChange={(v) => changeRole(row, v)}
-                  label={`Role for ${row.displayName}`}
-                />
-              )}
-              {row.id === user?.id ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex cursor-not-allowed opacity-40">
+                {!readOnly && row.role === "PROFESSOR" ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-8 rounded-lg text-danger"
-                        disabled
-                        aria-label="Delete member"
+                        className={cn(
+                          "size-8 rounded-lg",
+                          row.universityProfileUrl
+                            ? "text-primary-700"
+                            : "text-muted-foreground hover:text-primary-700"
+                        )}
+                        onClick={() => {
+                          setEditingFacultyLink(row);
+                          setFacultyLinkInput(row.universityProfileUrl ?? "");
+                        }}
+                        aria-label={`University profile link for ${row.displayName}`}
+                        title="University profile link"
                       >
-                        <Trash2 className="size-3.5" aria-hidden />
+                        <GraduationCap className="size-3.5" aria-hidden />
                       </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>You cannot delete your own account</TooltipContent>
-                </Tooltip>
+                    </TooltipTrigger>
+                    <TooltipContent>University profile link</TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </span>
+              {readOnly ? null : row.id === user?.id ? (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex cursor-not-allowed opacity-70">
+                        <RoleSelect
+                          value={row.role}
+                          disabled
+                          onChange={() => {}}
+                          label={`Role for ${row.displayName}`}
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>You cannot change your own role</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex cursor-not-allowed opacity-40">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 rounded-lg text-danger"
+                          disabled
+                          aria-label="Delete member"
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>You cannot delete your own account</TooltipContent>
+                  </Tooltip>
+                </>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 rounded-lg text-danger hover:text-danger"
-                  onClick={() => setDeleting(row)}
-                  aria-label={`Delete ${row.displayName}`}
-                >
-                  <Trash2 className="size-3.5" aria-hidden />
-                </Button>
+                <>
+                  <RoleSelect
+                    value={row.role}
+                    onChange={(v) => changeRole(row, v)}
+                    label={`Role for ${row.displayName}`}
+                  />
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Switch
+                      checked={row.isTeamLeader}
+                      onCheckedChange={(v) => toggleLeader(row, v)}
+                      aria-label={`Team leader for ${row.displayName}`}
+                    />
+                    Leader
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-lg text-muted-foreground hover:text-primary-700"
+                    onClick={() => setEditing(row)}
+                    aria-label={`Edit ${row.displayName}`}
+                    title="Edit member"
+                  >
+                    <UserCog className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-lg text-muted-foreground hover:text-primary-700"
+                    onClick={() => setEditingClass(row)}
+                    aria-label={`Edit section for ${row.displayName}`}
+                    title="Edit section (classID)"
+                  >
+                    <Pencil className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-lg text-danger hover:text-danger"
+                    onClick={() => setDeleting(row)}
+                    aria-label={`Delete ${row.displayName}`}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </Button>
+                </>
               )}
             </li>
           ))}
@@ -2518,16 +2917,87 @@ function UsersTab({
         </>
       )}
 
-      <UserFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onCreated={(created) => {
-          setRows((prev) => (prev ? [created, ...prev] : prev));
-          onChanged();
+      {!readOnly ? (
+        <UserFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onCreated={(created) => {
+            setRows((prev) => (prev ? [created, ...prev] : prev));
+            onChanged();
+          }}
+        />
+      ) : null}
+
+      {/* full member editor - profile, role, section and optional password reset */}
+      <EditUserDialog
+        key={editing?.id ?? "edit-closed"}
+        row={editing}
+        isSelf={editing?.id === user?.id}
+        onOpenChange={(v) => !v && setEditing(null)}
+        onSaved={(updated) => {
+          replaceRow(updated);
+          onChanged(); // role changes move the overview counts
         }}
       />
 
-      {/* delete confirmation — 409s (last admin) surface the server message via toast */}
+      {/* section quick-edit - moves the member into another classID (or clears it) */}
+      <ClassEditDialog
+        key={editingClass?.id ?? "section-closed"}
+        row={editingClass}
+        onOpenChange={(v) => !v && setEditingClass(null)}
+        onSave={saveClass}
+      />
+
+      {/* professor university-profile link - managed from the console or by the professor */}
+      <Dialog
+        open={editingFacultyLink !== null}
+        onOpenChange={(v) => !v && setEditingFacultyLink(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>University profile link</DialogTitle>
+            <DialogDescription>
+              Paste the faculty member's official profile page on the university website. Students
+              see it as a redirect button on {editingFacultyLink?.displayName}'s profile.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveFacultyLink();
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="faculty-link-url">Profile URL</Label>
+              <Input
+                id="faculty-link-url"
+                type="url"
+                value={facultyLinkInput}
+                onChange={(e) => setFacultyLinkInput(e.target.value)}
+                maxLength={300}
+                placeholder="https://kscms.ks.ac.kr/gc/CMS/ProfessorMgr/…"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingFacultyLink(null)}
+                className="rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={facultyLinkBusy} className="rounded-xl font-semibold">
+                {facultyLinkBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                Save link
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* delete confirmation - 409s (last admin) surface the server message via toast */}
       <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -2554,7 +3024,515 @@ function UsersTab({
   );
 }
 
-/** "jiwoo han" → "jiwoo.han" — used to auto-suggest usernames in the new-member dialog. */
+/** Tiny dialog for the per-row section (classID) quick-edit. */
+function ClassEditDialog({
+  row,
+  onOpenChange,
+  onSave,
+}: {
+  row: AdminUserRow | null;
+  onOpenChange: (v: boolean) => void;
+  onSave: (row: AdminUserRow, classId: string) => void;
+}) {
+  // keyed by the row in the parent, so state re-seeds per member without an effect
+  const [classId, setClassId] = useState(row?.classId ?? "");
+
+  return (
+    <Dialog open={row !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Edit section</DialogTitle>
+          <DialogDescription>
+            {row
+              ? `Move @${row.username} into a classID (e.g. CD2-2025-KIM). Students share a section with their professor and teammates.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor="class-edit-input">ClassID</Label>
+          <Input
+            id="class-edit-input"
+            value={classId}
+            onChange={(e) => setClassId(e.target.value.toUpperCase())}
+            placeholder="CD2-2025-KIM"
+            maxLength={40}
+            className="uppercase"
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave empty to remove the member from any section.
+          </p>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="rounded-xl font-semibold"
+            onClick={() => row && onSave(row, classId.trim())}
+          >
+            Save section
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Full member editor - the admin console's "Edit member" dialog.
+ * Covers identity (name/username/email), role, department/program, the
+ * student section, the professor teaching section + faculty link, and an
+ * optional password reset (blank = keep the current password).
+ */
+function EditUserDialog({
+  row,
+  isSelf,
+  onOpenChange,
+  onSaved,
+}: {
+  row: AdminUserRow | null;
+  /** Editing the signed-in admin - the role selector is locked (no self-demote). */
+  isSelf: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSaved: (row: AdminUserRow) => void;
+}) {
+  // keyed by the row in the parent, so state re-seeds per member without an effect
+  const [displayName, setDisplayName] = useState(row?.displayName ?? "");
+  const [role, setRole] = useState(row?.role ?? "STUDENT");
+  const [username, setUsername] = useState(row?.username ?? "");
+  const [email, setEmail] = useState(row?.email ?? "");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [program, setProgram] = useState(row?.program ?? "");
+  const [dept, setDept] = useState(row?.department?.code ?? "NONE");
+  const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+  const [studentId, setStudentId] = useState(row?.studentId ?? "");
+  const [classId, setClassId] = useState(row?.classId ?? "");
+  const [capstone, setCapstone] = useState(row?.capstone ?? "NONE");
+  const [cohortYear, setCohortYear] = useState(row?.cohortYear ? String(row.cohortYear) : "");
+  const [professorName, setProfessorName] = useState(row?.professorName ?? "");
+  const [isTeamLeader, setIsTeamLeader] = useState(row?.isTeamLeader ?? false);
+  const [universityProfileUrl, setUniversityProfileUrl] = useState(row?.universityProfileUrl ?? "");
+  const [busy, setBusy] = useState(false);
+
+  const isStudent = role === "STUDENT";
+  const isProfessor = role === "PROFESSOR";
+  // What the chosen faculty calls its capstone course - Global IT's
+  // "Capstone Design" is the default for every department.
+  const capstoneTerm = departments.find((d) => d.code === dept)?.capstoneLabel ?? "Capstone Design";
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminDepartments()
+      .then((d) => {
+        if (!cancelled) setDepartments(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const nameOk = displayName.trim().length >= 2;
+  const usernameOk = USERNAME_RE.test(username);
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const studentIdOk = studentId === "" || /^\d{6,10}$/.test(studentId);
+  const pwOk = password === "" || password.length >= 8;
+  const canSubmit =
+    !!row && nameOk && usernameOk && emailOk && studentIdOk && pwOk && !busy;
+
+  const save = async () => {
+    if (!row || !canSubmit) return;
+    setBusy(true);
+    try {
+      const updated = await updateAdminUser({
+        id: row.id,
+        displayName: displayName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        // optional password reset - blank keeps the current one
+        ...(password ? { password } : {}),
+        role,
+        dept: dept === "NONE" ? "" : dept,
+        program: program.trim(),
+        // section data follows the (possibly new) role - the server strips
+        // student-only fields when the role moves off STUDENT
+        studentId: isStudent ? studentId.trim() : "",
+        classId: isStudent || isProfessor ? classId.trim() : "",
+        capstone: isStudent && capstone !== "NONE" ? capstone : "",
+        cohortYear: isStudent && cohortYear ? cohortYear : "",
+        professorName: isStudent ? professorName.trim() : "",
+        isTeamLeader: isStudent ? isTeamLeader : false,
+        universityProfileUrl: isProfessor ? universityProfileUrl.trim() : undefined,
+      });
+      toast.success(`@${updated.username} updated`);
+      onOpenChange(false);
+      onSaved(updated);
+    } catch (e) {
+      // 409s ("already taken") and validation errors surface the server message
+      toast.error(e instanceof Error ? e.message : "Could not update the member");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={row !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+              <UserCog className="size-4" aria-hidden />
+            </span>
+            Edit member
+          </DialogTitle>
+          <DialogDescription>
+            {row
+              ? `Editing @${row.username} - changes apply immediately. Leave the password blank to keep the current one.`
+              : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="eu-name">Full name</Label>
+              <Input
+                id="eu-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Jane Doe"
+                required
+                minLength={2}
+                maxLength={80}
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="eu-role">Role</Label>
+              <Select value={role} onValueChange={setRole} disabled={isSelf}>
+                <SelectTrigger id="eu-role" aria-label="Role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="STUDENT">Student</SelectItem>
+                  <SelectItem value="PROFESSOR">Professor</SelectItem>
+                  <SelectItem value="MODERATOR">Moderator</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {isSelf
+                  ? "You cannot change your own role."
+                  : isStudent
+                    ? "Section data follows the role - moving off Student clears it."
+                    : "Moving off Student strips section data automatically."}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Identity
+            </p>
+            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="eu-username">Username</Label>
+                <Input
+                  id="eu-username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, "."))}
+                  placeholder="jane.doe"
+                  autoComplete="off"
+                  aria-invalid={!usernameOk}
+                  className={cn(!usernameOk && "border-danger")}
+                />
+                {!usernameOk ? (
+                  <p className="text-xs font-medium text-danger" aria-live="polite">
+                    3–30 lowercase letters, numbers, dots or underscores
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">The sign-in userID for staff.</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="eu-email">Email</Label>
+                <Input
+                  id="eu-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={isStudent ? `a${studentId || "········"}@ks.ac.kr` : "jane.doe@ks.ac.kr"}
+                  autoComplete="off"
+                  aria-invalid={!emailOk}
+                  className={cn(!emailOk && "border-danger")}
+                />
+                {!emailOk ? (
+                  <p className="text-xs font-medium text-danger" aria-live="polite">
+                    Enter a valid email address
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {isStudent ? "Students sign in with their student number." : "University mailbox."}
+                  </p>
+                )}
+              </div>
+              <div className={cn("space-y-1.5", !isStudent && "sm:col-span-2")}>
+                <Label htmlFor="eu-password">
+                  New password{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="eu-password"
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Leave blank to keep the current password"
+                    autoComplete="new-password"
+                    aria-invalid={password.length > 0 && !pwOk}
+                    className={cn(
+                      "font-mono text-sm",
+                      password.length > 0 && !pwOk && "border-danger"
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 rounded-xl"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                  >
+                    {showPw ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 rounded-xl"
+                    onClick={() => {
+                      setPassword(generatePassword());
+                      setShowPw(true);
+                    }}
+                    aria-label="Generate a strong password"
+                    title="Generate a strong password"
+                  >
+                    <Dices className="size-4" aria-hidden />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {pwOk
+                    ? password
+                      ? "Saved on update - share it privately with the member."
+                      : "Keep the current password."
+                    : "At least 8 characters."}
+                </p>
+              </div>
+              {isStudent ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-student-id">
+                    Student ID <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="eu-student-id"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ""))}
+                    placeholder="2025307111"
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="off"
+                    aria-invalid={!studentIdOk}
+                    className={cn(!studentIdOk && "border-danger")}
+                  />
+                  {studentIdOk ? (
+                    <p className="text-xs text-muted-foreground">6–10 digits - unique campus-wide.</p>
+                  ) : (
+                    <p className="text-xs font-medium text-danger" aria-live="polite">
+                      Student ID must be 6–10 digits
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {isStudent ? (
+            <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Section
+              </p>
+              <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-class">ClassID</Label>
+                  <Input
+                    id="eu-class"
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value.toUpperCase())}
+                    placeholder="CD2-2025-KIM"
+                    maxLength={40}
+                    className="uppercase"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Students share a section with their professor and teammates.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Team role</Label>
+                  <div className="flex h-9 items-center gap-2">
+                    <Switch
+                      id="eu-leader"
+                      checked={isTeamLeader}
+                      onCheckedChange={setIsTeamLeader}
+                      aria-label="Team leader"
+                    />
+                    <Label htmlFor="eu-leader" className="text-xs font-medium text-muted-foreground">
+                      {isTeamLeader ? "Team Leader - submits the project" : "Member"}
+                    </Label>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-capstone">{capstoneTerm}</Label>
+                  <Select value={capstone} onValueChange={setCapstone}>
+                    <SelectTrigger id="eu-capstone" aria-label={capstoneTerm} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Not set</SelectItem>
+                      <SelectItem value="I">{capstoneTerm} I</SelectItem>
+                      <SelectItem value="II">{capstoneTerm} II</SelectItem>
+                      <SelectItem value="III">{capstoneTerm} III</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-year">Cohort year</Label>
+                  <Input
+                    id="eu-year"
+                    value={cohortYear}
+                    onChange={(e) => setCohortYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="2025"
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="eu-professor">Professor</Label>
+                  <Input
+                    id="eu-professor"
+                    value={professorName}
+                    onChange={(e) => setProfessorName(e.target.value)}
+                    placeholder="Dana Kim"
+                    maxLength={80}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {isProfessor ? (
+            <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Teaching section
+              </p>
+              <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-prof-class">ClassID</Label>
+                  <Input
+                    id="eu-prof-class"
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value.toUpperCase())}
+                    placeholder="CD2-2026-KIM"
+                    maxLength={40}
+                    className="uppercase"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Students who pick this professor are enrolled into this classID.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="eu-prof-link">
+                    University profile{" "}
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="eu-prof-link"
+                    type="url"
+                    value={universityProfileUrl}
+                    onChange={(e) => setUniversityProfileUrl(e.target.value)}
+                    placeholder="https://kscms.ks.ac.kr/…"
+                    maxLength={300}
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Official faculty page - shown as a redirect on their profile.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="eu-dept">Department</Label>
+              <Select value={dept} onValueChange={setDept}>
+                <SelectTrigger id="eu-dept" aria-label="Department" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">No department</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.code}>
+                      {d.code} · {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="eu-program">
+                Program <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                id="eu-program"
+                value={program}
+                onChange={(e) => setProgram(e.target.value)}
+                placeholder="B.S. Computer Science"
+                maxLength={80}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="rounded-xl"
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!canSubmit} className="rounded-xl font-semibold">
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** "jiwoo han" → "jiwoo.han" - used to auto-suggest usernames in the new-member dialog. */
 function slugifyUsername(name: string): string {
   return name
     .toLowerCase()
@@ -2563,6 +3541,15 @@ function slugifyUsername(name: string): string {
     .replace(/[^a-z0-9]+/g, ".")
     .replace(/^\.+|\.+$/g, "")
     .slice(0, 30);
+}
+
+/** "Prof. Dana Kim" → "dana kim" - matches a typed name against registered professors. */
+function normalizeProfessorName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/^(prof\.?|dr\.?|professor)\s+/i, "")
+    .replace(/\./g, "")
+    .trim();
 }
 
 /** Memorable 12-char password guaranteed to mix upper, lower and digits. */
@@ -2591,26 +3578,48 @@ function UserFormDialog({
   onCreated: (row: AdminUserRow) => void;
 }) {
   const [displayName, setDisplayName] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [username, setUsername] = useState("");
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [email, setEmail] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
   const [program, setProgram] = useState("");
   const [dept, setDept] = useState("NONE");
+  const [classId, setClassId] = useState("");
+  const [capstone, setCapstone] = useState("NONE");
+  const [cohortYear, setCohortYear] = useState("");
+  const [professorName, setProfessorName] = useState("");
+  const [teamRole, setTeamRole] = useState<"LEADER" | "MEMBER">("MEMBER");
   const [role, setRole] = useState("STUDENT");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(true);
   const [busy, setBusy] = useState(false);
   const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+  // registered professors - students who pick one inherit their teaching section
+  const [professors, setProfessors] = useState<SafeUserDTO[]>([]);
+  const [classIdTouched, setClassIdTouched] = useState(false);
+
+  // What the chosen faculty calls its capstone course - Global IT's
+  // "Capstone Design" is the default for every department.
+  const capstoneTerm = departments.find((d) => d.code === dept)?.capstoneLabel ?? "Capstone Design";
 
   // reset every time the dialog opens
   useEffect(() => {
     if (!open) return;
     setDisplayName("");
+    setStudentId("");
     setUsername("");
     setUsernameTouched(false);
     setEmail("");
+    setEmailTouched(false);
     setProgram("");
     setDept("NONE");
+    setClassId("");
+    setClassIdTouched(false);
+    setCapstone("NONE");
+    setCohortYear("");
+    setProfessorName("");
+    setTeamRole("MEMBER");
     setRole("STUDENT");
     setPassword(generatePassword());
     setShowPw(true);
@@ -2624,40 +3633,101 @@ function UserFormDialog({
         if (!cancelled) setDepartments(d);
       })
       .catch(() => {});
+    fetchProfessorsPublic()
+      .then((ps) => {
+        if (!cancelled) setProfessors(ps);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [open]);
+
+  const isStudent = role === "STUDENT";
 
   // auto-suggest a username from the display name until the admin edits it manually
   useEffect(() => {
     if (!usernameTouched) setUsername(slugifyUsername(displayName));
   }, [displayName, usernameTouched]);
 
-  const usernameOk = USERNAME_RE.test(username);
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // default the university address until the admin types an explicit email:
+  // students key off their student number (a<id>@ks.ac.kr), staff off the username
+  useEffect(() => {
+    if (emailTouched) return;
+    if (isStudent && studentId) {
+      setEmail(`a${studentId}@ks.ac.kr`);
+      return;
+    }
+    setEmail(username ? `${username}@ks.ac.kr` : "");
+  }, [username, studentId, isStudent, emailTouched]);
+
+  // students inherit the teaching section of the registered professor they
+  // pick - same professor ⇒ same classID (explicit admin input still wins)
+  useEffect(() => {
+    if (!isStudent || classIdTouched) return;
+    const key = normalizeProfessorName(professorName);
+    if (!key) return;
+    const prof = professors.find((p) => normalizeProfessorName(p.displayName) === key);
+    if (prof?.classId) setClassId(prof.classId);
+  }, [professorName, professors, isStudent, classIdTouched]);
+
+  const studentIdOk = studentId === "" || /^\d{6,10}$/.test(studentId);
+  // staff always need an explicit username - there is no student number fallback
+  const usernameOk = isStudent
+    ? username === "" || USERNAME_RE.test(username)
+    : USERNAME_RE.test(username);
+  const emailOk = email === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const pwOk = password.length >= 8;
+  // students sign in with their student number and receive a<id>@ks.ac.kr -
+  // without a student ID both a username and an email are required;
+  // staff sign in with a username backed by a university email address
+  const identityOk = isStudent
+    ? studentId !== "" || (username !== "" && email !== "")
+    : username !== "" && email !== "";
   const canSubmit =
-    displayName.trim().length >= 2 && usernameOk && emailOk && pwOk && !busy;
+    displayName.trim().length >= 2 &&
+    pwOk &&
+    studentIdOk &&
+    usernameOk &&
+    emailOk &&
+    identityOk &&
+    !busy;
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit) return;
     setBusy(true);
     try {
+      // when the student number drives identity, let the server derive
+      // a<studentId>@ks.ac.kr with the student number as the login userID
+      const studentIdDrivesIdentity =
+        isStudent && studentId !== "" && !usernameTouched && !emailTouched;
       const created = await createAdminUser({
-        username,
+        username: studentIdDrivesIdentity ? undefined : username || undefined,
         displayName: displayName.trim(),
-        email: email.trim(),
+        email: studentIdDrivesIdentity ? undefined : email.trim() || undefined,
         password,
         role,
         dept: dept === "NONE" ? undefined : dept,
         program: program.trim() || undefined,
+        // section fields are student-only (requirement 6) - staff never inherit them;
+        // professors carry their own teaching-section classID
+        studentId: isStudent ? studentId || undefined : undefined,
+        classId: isStudent || role === "PROFESSOR" ? classId.trim() || undefined : undefined,
+        capstone: isStudent && capstone !== "NONE" ? capstone : undefined,
+        cohortYear: isStudent && cohortYear ? Number(cohortYear) : undefined,
+        professorName: isStudent ? professorName.trim() || undefined : undefined,
+        isTeamLeader: isStudent ? teamRole === "LEADER" : false,
       });
-      toast.success(`@${created.username} joined the showcase`);
+      toast.success(
+        isStudent
+          ? `@${created.username} joined the showcase`
+          : `@${created.username} provisioned - credentials emailed`
+      );
       onOpenChange(false);
       onCreated(created);
     } catch (err) {
+      // 409s ("already taken") and validation errors surface the server message
       toast.error(err instanceof Error ? err.message : "Could not create the member");
     } finally {
       setBusy(false);
@@ -2666,7 +3736,7 @@ function UserFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="flex size-8 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
@@ -2675,8 +3745,8 @@ function UserFormDialog({
             New member
           </DialogTitle>
           <DialogDescription>
-            Create an account on behalf of a student or faculty member — share the password with
-            them privately.
+            Provision an account on behalf of a student or staff member - credentials are copied to
+            the email outbox and the password is shown once.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
@@ -2695,65 +3765,281 @@ function UserFormDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nu-program">
-                Program <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="nu-program"
-                value={program}
-                onChange={(e) => setProgram(e.target.value)}
-                placeholder="B.S. Computer Science"
-                maxLength={80}
-                autoComplete="off"
-              />
+              <Label htmlFor="nu-role">Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger id="nu-role" aria-label="Role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="STUDENT">Student</SelectItem>
+                  <SelectItem value="PROFESSOR">Professor</SelectItem>
+                  <SelectItem value="MODERATOR">Moderator</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {role === "ADMIN"
+                  ? "Admins get this console - grant sparingly."
+                  : role === "MODERATOR"
+                    ? "Moderators help manage accounts and content."
+                    : role === "PROFESSOR"
+                      ? "Professors supervise sections and verify projects."
+                      : "Students browse, submit and team up."}
+              </p>
             </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="nu-username">Username</Label>
-              <Input
-                id="nu-username"
-                value={username}
-                onChange={(e) => {
-                  setUsernameTouched(true);
-                  setUsername(e.target.value.toLowerCase().replace(/\s+/g, "."));
-                }}
-                placeholder="jane.doe"
-                required
-                autoComplete="off"
-                aria-invalid={username.length > 0 && !usernameOk}
-                className={cn(username.length > 0 && !usernameOk && "border-danger")}
-              />
-              {username.length > 0 && !usernameOk ? (
-                <p className="text-xs font-medium text-danger" aria-live="polite">
-                  3–30 lowercase letters, numbers, dots or underscores
+
+          <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              Credentials
+            </p>
+            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+              {isStudent ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="nu-student-id">
+                    Student ID <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input
+                    id="nu-student-id"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value.replace(/\D/g, ""))}
+                    placeholder="2025307111"
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="off"
+                    aria-invalid={!studentIdOk}
+                    className={cn(!studentIdOk && "border-danger")}
+                  />
+                  {studentId ? (
+                    <p className="text-xs text-muted-foreground">
+                      Leave username/email empty to auto-derive{" "}
+                      <span className="font-semibold text-foreground">a{studentId}@ks.ac.kr</span> -
+                      the student number becomes the userID.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      6–10 digits. Without it, username + email are required below.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-username">
+                  Username{" "}
+                  <span className="font-normal text-muted-foreground">
+                    {isStudent ? (studentId ? "(optional)" : "(or student ID)") : "(required)"}
+                  </span>
+                </Label>
+                <Input
+                  id="nu-username"
+                  value={username}
+                  onChange={(e) => {
+                    setUsernameTouched(true);
+                    setUsername(e.target.value.toLowerCase().replace(/\s+/g, "."));
+                  }}
+                  placeholder={isStudent && studentId ? studentId : "jane.doe"}
+                  autoComplete="off"
+                  aria-invalid={!usernameOk}
+                  className={cn(!usernameOk && "border-danger")}
+                />
+                {!usernameOk ? (
+                  <p className="text-xs font-medium text-danger" aria-live="polite">
+                    {username
+                      ? "3–30 lowercase letters, numbers, dots or underscores"
+                      : "Required for staff accounts - 3–30 lowercase letters, numbers, dots or underscores"}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {isStudent ? "Members sign in with this name." : "Staff sign in with this username."}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-email">
+                  Email{" "}
+                  <span className="font-normal text-muted-foreground">
+                    {isStudent ? (studentId ? "(optional)" : "(or student ID)") : "(auto-filled)"}
+                  </span>
+                </Label>
+                <Input
+                  id="nu-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmailTouched(true);
+                    setEmail(e.target.value);
+                  }}
+                  placeholder={isStudent && studentId ? `a${studentId}@ks.ac.kr` : "jane.doe@ks.ac.kr"}
+                  autoComplete="off"
+                  aria-invalid={!!email && !emailOk}
+                  className={cn(!!email && !emailOk && "border-danger")}
+                />
+                {!!email && !emailOk ? (
+                  <p className="text-xs font-medium text-danger" aria-live="polite">
+                    Enter a valid email address
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {isStudent
+                      ? "Must be unique across the campus."
+                      : "Defaults to the university address - edit it if the staff mailbox differs."}
+                  </p>
+                )}
+              </div>
+              <div className={cn("space-y-1.5", !isStudent && "sm:col-span-2")}>
+                <Label htmlFor="nu-password">Temporary password</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="nu-password"
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    aria-invalid={password.length > 0 && !pwOk}
+                    className={cn("font-mono text-sm", password.length > 0 && !pwOk && "border-danger")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 rounded-xl"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                  >
+                    {showPw ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0 rounded-xl"
+                    onClick={() => setPassword(generatePassword())}
+                    aria-label="Generate a strong password"
+                    title="Generate a strong password"
+                  >
+                    <Dices className="size-4" aria-hidden />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {pwOk ? "Good - copy it now; it is also sent to the email outbox." : "At least 8 characters."}
                 </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Members sign in with this name.</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="nu-email">Email</Label>
-              <Input
-                id="nu-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="jane.doe@ks.ac.kr"
-                required
-                autoComplete="off"
-                aria-invalid={email.length > 0 && !emailOk}
-                className={cn(email.length > 0 && !emailOk && "border-danger")}
-              />
-              {email.length > 0 && !emailOk ? (
-                <p className="text-xs font-medium text-danger" aria-live="polite">
-                  Enter a valid email address
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Must be unique across the campus.</p>
-              )}
+              </div>
             </div>
           </div>
+
+          {isStudent ? (
+            <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Section (requirement 6)
+              </p>
+            <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-class">ClassID</Label>
+                <Input
+                  id="nu-class"
+                  value={classId}
+                  onChange={(e) => {
+                    setClassIdTouched(true);
+                    setClassId(e.target.value.toUpperCase());
+                  }}
+                  placeholder="CD2-2025-KIM"
+                  maxLength={40}
+                  className="uppercase"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Auto-filled from the professor's registered class - edit to override.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-team-role">Team role</Label>
+                <Select
+                  value={teamRole}
+                  onValueChange={(v) => setTeamRole(v as "LEADER" | "MEMBER")}
+                >
+                  <SelectTrigger id="nu-team-role" aria-label="Team role" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MEMBER">Member</SelectItem>
+                    <SelectItem value="LEADER">Team Leader</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {teamRole === "LEADER"
+                    ? "Team leaders submit the capstone project."
+                    : "Members join projects their leader submits."}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-capstone">{capstoneTerm}</Label>
+                <Select value={capstone} onValueChange={setCapstone}>
+                  <SelectTrigger id="nu-capstone" aria-label={capstoneTerm} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">Not set</SelectItem>
+                    <SelectItem value="I">{capstoneTerm} I</SelectItem>
+                    <SelectItem value="II">{capstoneTerm} II</SelectItem>
+                    <SelectItem value="III">{capstoneTerm} III</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-year">Cohort year</Label>
+                <Input
+                  id="nu-year"
+                  value={cohortYear}
+                  onChange={(e) => setCohortYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="2025"
+                  inputMode="numeric"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="nu-professor">Professor</Label>
+                <Input
+                  id="nu-professor"
+                  value={professorName}
+                  onChange={(e) => setProfessorName(e.target.value)}
+                  placeholder="Dana Kim"
+                  maxLength={80}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            </div>
+          ) : null}
+
+          {role === "PROFESSOR" ? (
+            <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Teaching section
+              </p>
+              <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="nu-prof-class">ClassID</Label>
+                  <Input
+                    id="nu-prof-class"
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value.toUpperCase())}
+                    placeholder="CD2-2026-KIM"
+                    maxLength={40}
+                    className="uppercase"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Students who pick this professor are enrolled into this classID.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="nu-dept">Department</Label>
@@ -2772,68 +4058,28 @@ function UserFormDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nu-role">Role</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="nu-role" aria-label="Role" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="STUDENT">Student</SelectItem>
-                  <SelectItem value="FACULTY">Faculty</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {role === "ADMIN"
-                  ? "Admins get this console — grant sparingly."
-                  : role === "FACULTY"
-                    ? "Faculty can verify projects and moderate."
-                    : "Students browse, submit and team up."}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="nu-password">Temporary password</Label>
-            <div className="flex gap-2">
+              <Label htmlFor="nu-program">
+                Program <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
               <Input
-                id="nu-password"
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                autoComplete="new-password"
-                aria-invalid={password.length > 0 && !pwOk}
-                className={cn("font-mono text-sm", password.length > 0 && !pwOk && "border-danger")}
+                id="nu-program"
+                value={program}
+                onChange={(e) => setProgram(e.target.value)}
+                placeholder="B.S. Computer Science"
+                maxLength={80}
+                autoComplete="off"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="size-9 shrink-0 rounded-xl"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? "Hide password" : "Show password"}
-              >
-                {showPw ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="size-9 shrink-0 rounded-xl"
-                onClick={() => setPassword(generatePassword())}
-                aria-label="Generate a strong password"
-                title="Generate a strong password"
-              >
-                <Dices className="size-4" aria-hidden />
-              </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {pwOk
-                ? "Good — at least 8 characters. Copy it now; it is only shown here."
-                : "At least 8 characters — roll the dice for a strong one."}
-            </p>
           </div>
+
+          {!identityOk ? (
+            <p className="text-xs font-medium text-warning" aria-live="polite">
+              {isStudent
+                ? "Provide a student ID, or both a username and an email - one of them must identify the account."
+                : "Staff accounts need a username and a university email address."}
+            </p>
+          ) : null}
+
           <DialogFooter className="gap-2">
             <Button
               type="button"
@@ -2855,7 +4101,7 @@ function UserFormDialog({
 }
 
 // ============================================================
-// Departments tab — grid + create / edit / delete
+// Departments tab - grid + create / edit / delete
 // ============================================================
 
 function DepartmentsTab({
@@ -3013,8 +4259,25 @@ function DepartmentsTab({
                     {d.tagline}
                   </p>
                 ) : null}
+                {d.website ? (
+                  <a
+                    href={d.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex max-w-full items-center gap-1 text-xs font-medium text-primary-700 hover:underline"
+                    title={d.website}
+                  >
+                    <ExternalLink className="size-3 shrink-0" aria-hidden />
+                    <span className="truncate">University website</span>
+                  </a>
+                ) : null}
                 <p className="mt-auto pt-2.5 text-xs font-medium text-muted-foreground">
                   {d.projectCount ?? 0} {(d.projectCount ?? 0) === 1 ? "project" : "projects"}
+                  {d.capstoneLabel ? (
+                    <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      {d.capstoneLabel}
+                    </span>
+                  ) : null}
                 </p>
               </article>
             ))}
@@ -3040,7 +4303,7 @@ function DepartmentsTab({
         }}
       />
 
-      {/* delete confirmation — 409 errors surface the server message via toast */}
+      {/* delete confirmation - 409 errors surface the server message via toast */}
       <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3081,6 +4344,8 @@ function DeptFormDialog({
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [tagline, setTagline] = useState("");
+  const [website, setWebsite] = useState("");
+  const [capstoneLabel, setCapstoneLabel] = useState("Capstone Design");
   const [accent, setAccent] = useState("teal");
   const [sortOrder, setSortOrder] = useState("0");
   const [busy, setBusy] = useState(false);
@@ -3091,6 +4356,8 @@ function DeptFormDialog({
     setName(editing?.name ?? "");
     setCode(editing?.code ?? "");
     setTagline(editing?.tagline ?? "");
+    setWebsite(editing?.website ?? "");
+    setCapstoneLabel(editing?.capstoneLabel ?? "Capstone Design");
     setAccent(editing?.accent ?? "teal");
     setSortOrder(String(editing?.sortOrder ?? 0));
   }, [open, editing]);
@@ -3103,6 +4370,8 @@ function DeptFormDialog({
       name: name.trim(),
       code: code.trim().toUpperCase(),
       tagline: tagline.trim(),
+      website: website.trim(),
+      capstoneLabel: capstoneLabel.trim() || "Capstone Design",
       accent,
       sortOrder: Math.max(0, Math.floor(Number(sortOrder) || 0)),
     };
@@ -3181,6 +4450,35 @@ function DeptFormDialog({
             />
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="dept-website">
+              University website <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="dept-website"
+              type="url"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              maxLength={300}
+              placeholder="https://kscms.ks.ac.kr/computer/"
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown as a redirect button on the department's showcase pages.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dept-capstone-label">Capstone term</Label>
+            <Input
+              id="dept-capstone-label"
+              value={capstoneLabel}
+              onChange={(e) => setCapstoneLabel(e.target.value)}
+              maxLength={40}
+              placeholder="Capstone Design"
+            />
+            <p className="text-xs text-muted-foreground">
+              What this faculty calls its capstone course - Global IT uses “Capstone Design”; other faculties can rename it (e.g. “Graduation Work”).
+            </p>
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="dept-accent">Accent</Label>
             <Select value={accent} onValueChange={setAccent}>
               <SelectTrigger id="dept-accent" className="w-full">
@@ -3218,350 +4516,9 @@ function DeptFormDialog({
   );
 }
 
-// ============================================================
-// Events tab — list + create / edit / delete
-// ============================================================
-
-function EventsTab({
-  onChanged,
-  refreshTick,
-  onLoaded,
-  autoOpenNew = false,
-}: {
-  onChanged: () => void;
-  refreshTick: number;
-  onLoaded: (ok: boolean) => void;
-  autoOpenNew?: boolean;
-}) {
-  const [rows, setRows] = useState<AdminEventDTO[] | null>(null); // null = loading
-  const [tick, setTick] = useState(0);
-  const [dialogOpen, setDialogOpen] = useState(autoOpenNew);
-  const [editing, setEditing] = useState<AdminEventDTO | null>(null);
-  const [deleting, setDeleting] = useState<AdminEventDTO | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchAdminEvents()
-      .then((d) => {
-        if (cancelled) return;
-        setRows(d);
-        onLoaded(true);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setRows([]);
-        onLoaded(false);
-        toast.error(e instanceof Error ? e.message : "Could not load events");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [tick, refreshTick, onLoaded]);
-
-  const reload = () => setTick((n) => n + 1);
-
-  const removeEvent = async () => {
-    if (!deleting || busy) return;
-    setBusy(true);
-    try {
-      await deleteAdminEvent(deleting.id);
-      setRows((prev) => (prev ? prev.filter((ev) => ev.id !== deleting.id) : prev));
-      toast.success(`Deleted “${deleting.title}”`);
-      setDeleting(null);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the event");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const total = rows?.length ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / EVENTS_PER_PAGE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = rows
-    ? rows.slice((safePage - 1) * EVENTS_PER_PAGE, safePage * EVENTS_PER_PAGE)
-    : [];
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs font-medium text-muted-foreground">
-          {rows ? "Soonest first" : "Loading…"}
-        </p>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setDialogOpen(true);
-          }}
-          className="rounded-xl font-semibold"
-        >
-          <Plus className="size-4" aria-hidden />
-          New event
-        </Button>
-      </div>
-
-      {rows === null ? (
-        <div className="mt-3 space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="mt-3">
-          <EmptyState
-            icon={CalendarDays}
-            title="No events scheduled"
-            hint="Add hackathons, showcases and career fairs so students know what is coming."
-            action={
-              <Button
-                onClick={() => {
-                  setEditing(null);
-                  setDialogOpen(true);
-                }}
-                className="rounded-xl font-semibold"
-              >
-                <Plus className="size-4" aria-hidden />
-                New event
-              </Button>
-            }
-          />
-        </div>
-      ) : (
-        <>
-          <ul className="mt-3 space-y-2">
-            {pageRows.map((ev) => (
-              <li
-                key={ev.id}
-                className="flex gap-3 rounded-xl border border-up-border bg-card p-3 shadow-sm"
-              >
-                <div className="flex size-12 shrink-0 flex-col items-center justify-center rounded-xl bg-primary-50 text-primary-700">
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    {format(new Date(ev.date), "MMM")}
-                  </span>
-                  <span className="text-base font-bold leading-none">{format(new Date(ev.date), "d")}</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground">{ev.title}</p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-                    <CalendarDays className="size-3.5" aria-hidden />
-                    {format(new Date(ev.date), "EEE, MMM d, yyyy")}
-                    {ev.location ? (
-                      <>
-                        <span aria-hidden>·</span>
-                        <MapPin className="size-3.5" aria-hidden />
-                        {ev.location}
-                      </>
-                    ) : null}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-                    {ev.description}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 rounded-lg"
-                    onClick={() => {
-                      setEditing(ev);
-                      setDialogOpen(true);
-                    }}
-                    aria-label={`Edit ${ev.title}`}
-                  >
-                    <Pencil className="size-3.5" aria-hidden />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 rounded-lg text-danger hover:text-danger"
-                    onClick={() => setDeleting(ev)}
-                    aria-label={`Delete ${ev.title}`}
-                  >
-                    <Trash2 className="size-3.5" aria-hidden />
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            page={safePage}
-            totalPages={totalPages}
-            total={total}
-            perPage={EVENTS_PER_PAGE}
-            unit="events"
-            onPage={setPage}
-          />
-        </>
-      )}
-
-      <EventFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        editing={editing}
-        onSaved={() => {
-          reload();
-          onChanged();
-        }}
-      />
-
-      <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{deleting?.title}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The event disappears from the campus homepage and event listings.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={removeEvent}
-              className="bg-danger text-white hover:bg-danger/90"
-            >
-              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              Delete event
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
-}
-
-function EventFormDialog({
-  open,
-  onOpenChange,
-  editing,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  editing: AdminEventDTO | null;
-  onSaved: () => void;
-}) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
-  const [date, setDate] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  // Hydrate when the dialog opens (edit) or reset (create).
-  useEffect(() => {
-    if (!open) return;
-    setTitle(editing?.title ?? "");
-    setDescription(editing?.description ?? "");
-    setLocation(editing?.location ?? "");
-    setDate(editing ? format(new Date(editing.date), "yyyy-MM-dd") : "");
-  }, [open, editing]);
-
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    const payload = {
-      title: title.trim(),
-      description: description.trim(),
-      location: location.trim(),
-      date,
-    };
-    try {
-      if (editing) {
-        await updateAdminEvent({ id: editing.id, ...payload });
-        toast.success("Event updated");
-      } else {
-        await createAdminEvent(payload);
-        toast.success(`Added “${payload.title}”`);
-      }
-      onOpenChange(false);
-      onSaved();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the event");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit event" : "New event"}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="event-title">Title</Label>
-            <Input
-              id="event-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="KSU Capstone Showcase 2026"
-              required
-              minLength={3}
-              maxLength={120}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="event-description">Description</Label>
-            <Textarea
-              id="event-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What happens, who should join, and why it matters."
-              required
-              minLength={3}
-              maxLength={1000}
-              rows={4}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="event-date">Date</Label>
-              <Input
-                id="event-date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="event-location">
-                Location <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="event-location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Student Hall B"
-                maxLength={120}
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="rounded-xl"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy} className="rounded-xl font-semibold">
-              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {editing ? "Save changes" : "Create event"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ============================================================
-// Moderation tab — queue summaries + hand-off to the console
+// Moderation tab - actionable verification queue + reports
 // ============================================================
 
 function ModerationTab({
@@ -3574,67 +4531,1462 @@ function ModerationTab({
   if (!overview) {
     return (
       <div className="grid gap-4 lg:grid-cols-2">
-        <Skeleton className="h-48 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      <div className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5">
-        <span
-          className={cn(
-            "flex size-9 items-center justify-center rounded-xl",
-            overview.pendingVerifications > 0
-              ? "bg-warning-soft text-warning"
-              : "bg-primary-50 text-primary-700"
-          )}
-        >
-          <ShieldAlert className="size-4" aria-hidden />
-        </span>
-        <p className="mt-2.5 text-2xl font-bold tabular-nums tracking-tight text-foreground">
-          {overview.pendingVerifications}
-        </p>
-        <p className="font-semibold text-foreground">Pending verifications</p>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          Student requests for the faculty-verified badge wait here until a staff member decides.
-        </p>
+    <div className="space-y-4">
+      {/* actionable queues - self-fetching, so they stay fresh after every decision */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <VerificationQueueCard onReview={(slug) => navigate({ name: "project", slug })} />
+        <ReportsQueueCard />
       </div>
 
-      <div className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5">
-        <span
-          className={cn(
-            "flex size-9 items-center justify-center rounded-xl",
-            overview.openReports > 0 ? "bg-danger-soft text-danger" : "bg-primary-50 text-primary-700"
-          )}
-        >
-          <Flag className="size-4" aria-hidden />
-        </span>
-        <p className="mt-2.5 text-2xl font-bold tabular-nums tracking-tight text-foreground">
-          {overview.openReports}
-        </p>
-        <p className="font-semibold text-foreground">Open reports</p>
-        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          Flagged projects, posts and members stay open until reviewed and resolved.
-        </p>
-      </div>
-
-      <section className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5 lg:col-span-2">
+      <section className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5">
         <h2 className="text-sm font-bold tracking-tight text-foreground">How moderation works</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Verifications and reports are handled in the staff moderation console — the same queues
-          faculty see. Approving a verification marks a project as faculty-verified; resolving a
-          report closes it for review. Everything applies to the live campus data.
+          Approving a verification marks a project as verified; resolving a report closes it for
+          review. Professors also handle verifications for their own sections from their dashboard.
+          Everything applies to the live campus data.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+// ============================================================
+// Approvals tab - account-request inbox (requirement 3)
+// ============================================================
+
+/** Client replica of rbac.deriveClassId - prefills the review dialog's classID. */
+function deriveClassIdClient(capstone: string, year: number, professor: string): string {
+  const round = capstone.replace(/^CD/i, "").toUpperCase(); // I | II | III
+  const surname =
+    professor
+      .trim()
+      .split(/\s+/)
+      .pop()
+      ?.replace(/[^a-zA-Z가-힣]/g, "")
+      .toUpperCase() || "STAFF";
+  return `CD${round}-${year}-${surname}`;
+}
+
+function RequestStatusBadge({ status }: { status: string }) {
+  const tone =
+    status === "PENDING"
+      ? "bg-warning-soft text-warning"
+      : status === "APPROVED"
+        ? "bg-success-soft text-success"
+        : "bg-danger-soft text-danger";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        tone
+      )}
+    >
+      {status.toLowerCase()}
+    </span>
+  );
+}
+
+async function copyText(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copied to clipboard`);
+  } catch {
+    toast.error("Couldn't copy - select the text and copy manually");
+  }
+}
+
+type ReqFilter = "PENDING" | "APPROVED" | "REJECTED" | "ALL";
+
+function ApprovalsTab({
+  onChanged,
+  refreshTick,
+  onLoaded,
+}: {
+  onChanged: () => void;
+  refreshTick: number;
+  onLoaded: (ok: boolean) => void;
+}) {
+  const [filter, setFilter] = useState<ReqFilter>("PENDING");
+  const [rows, setRows] = useState<AccountRequestDTO[] | null>(null); // null = loading
+  const [reviewing, setReviewing] = useState<AccountRequestDTO | null>(null);
+  const [deleting, setDeleting] = useState<AccountRequestDTO | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAccountRequests(filter)
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        onLoaded(true);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRows([]);
+        onLoaded(false);
+        toast.error(e instanceof Error ? e.message : "Could not load account requests");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, refreshTick, onLoaded]);
+
+  const removeRequest = async () => {
+    if (!deleting || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      await deleteAccountRequest(deleting.id);
+      setRows((prev) => (prev ? prev.filter((r) => r.id !== deleting.id) : prev));
+      toast.success(`Removed ${deleting.name}'s request`);
+      setDeleting(null);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete the request");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const chips: { key: ReqFilter; label: string }[] = [
+    { key: "PENDING", label: "Pending" },
+    { key: "APPROVED", label: "Approved" },
+    { key: "REJECTED", label: "Rejected" },
+    { key: "ALL", label: "All" },
+  ];
+
+  return (
+    <div>
+      {/* status filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => {
+              setFilter(c.key);
+              setRows(null);
+            }}
+            aria-pressed={filter === c.key}
+            className={cn(
+              "inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              filter === c.key
+                ? "border-primary-100 bg-primary-50 text-primary-700"
+                : "border-up-border bg-card text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+        <p className="ml-auto hidden text-xs text-muted-foreground sm:block">
+          Approval provisions the account and emails the credentials
+        </p>
+      </div>
+
+      {/* rows */}
+      {rows === null ? (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState
+            icon={ListChecks}
+            title={filter === "PENDING" ? "No pending requests" : "No requests here"}
+            hint={
+              filter === "PENDING"
+                ? "New intake from the public request form will appear here for review."
+                : "Try a different status filter."
+            }
+          />
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-up-border bg-card p-2.5 shadow-sm"
+            >
+              <UserAvatar name={r.name} className="size-9" />
+              <div className="min-w-0 flex-1 basis-52">
+                <p className="truncate text-sm font-semibold text-foreground">{r.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">{r.studentId}</span>
+                  {" · "}
+                  Capstone {r.capstone} · {r.year} · {r.professor}
+                </p>
+                {r.decisionNote ? (
+                  <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground">
+                    “{r.decisionNote}”
+                  </p>
+                ) : null}
+              </div>
+              <RequestStatusBadge status={r.status} />
+              <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:inline">
+                {timeAgo(r.createdAt)}
+              </span>
+              {r.status === "PENDING" ? (
+                <Button
+                  size="sm"
+                  className="h-8 rounded-lg px-3 text-xs font-semibold"
+                  onClick={() => setReviewing(r)}
+                >
+                  Review
+                </Button>
+              ) : (
+                <>
+                  <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground md:inline">
+                    {r.decidedBy ? `by ${r.decidedBy}` : ""}
+                    {r.decidedAt ? ` · ${timeAgo(r.decidedAt)}` : ""}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-lg text-muted-foreground hover:text-danger"
+                    onClick={() => setDeleting(r)}
+                    aria-label={`Delete ${r.name}'s request`}
+                    title="Delete this request row"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </Button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <ReviewRequestDialog
+        request={reviewing}
+        onOpenChange={(v) => {
+          if (!v) setReviewing(null);
+        }}
+        onDecided={() => {
+          setRows(null); // refetch the list under the current filter
+          onChanged();
+        }}
+      />
+
+      {/* housekeeping confirmation for decided rows */}
+      <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleting?.name}'s request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting
+                ? `This removes the ${deleting.status.toLowerCase()} request row for ${deleting.studentId}. If the student should re-apply, they can submit the public form again.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={removeRequest}
+              className="bg-danger text-white hover:bg-danger/90"
+            >
+              {deleteBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Delete request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** The heart of requirement 3: review → derive classID → pick team role → approve & provision. */
+function ReviewRequestDialog({
+  request,
+  onOpenChange,
+  onDecided,
+}: {
+  request: AccountRequestDTO | null;
+  onOpenChange: (v: boolean) => void;
+  onDecided: () => void;
+}) {
+  const [classId, setClassId] = useState("");
+  const [teamRole, setTeamRole] = useState<"LEADER" | "MEMBER">("MEMBER");
+  const [note, setNote] = useState("");
+  const [rejectMode, setRejectMode] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<ApprovalResultDTO | null>(null);
+  // registered professors - the classID prefills from their teaching section
+  const [professors, setProfessors] = useState<SafeUserDTO[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProfessorsPublic()
+      .then((ps) => {
+        if (!cancelled) setProfessors(ps);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // hydrate on every open - the classID prefills from the named professor's
+  // registered teaching section (same professor ⇒ same classID), falling
+  // back to the deterministic capstone · year · professor derivation
+  useEffect(() => {
+    if (!request) return;
+    const key = normalizeProfessorName(request.professor);
+    const prof = professors.find((p) => normalizeProfessorName(p.displayName) === key);
+    setClassId(
+      prof?.classId || deriveClassIdClient(request.capstone, request.year, request.professor)
+    );
+    setTeamRole("MEMBER");
+    setNote("");
+    setRejectMode(false);
+    setConfirmOpen(false);
+    setResult(null);
+  }, [request, professors]);
+
+  const decide = async (decision: "APPROVED" | "REJECTED") => {
+    if (!request || busy) return;
+    setBusy(true);
+    try {
+      if (decision === "APPROVED") {
+        const res = await decideAccountRequest(request.id, {
+          decision: "APPROVED",
+          classId: classId.trim(),
+          teamRole,
+          note: note.trim() || undefined,
+        });
+        setResult(res);
+        toast.success(`Account created for ${res.account.displayName}`);
+      } else {
+        await decideAccountRequest(request.id, {
+          decision: "REJECTED",
+          teamRole: "MEMBER",
+          note: note.trim() || undefined,
+        });
+        toast.success(`Rejected ${request.name}'s request`);
+      }
+      onDecided();
+      if (decision === "REJECTED") onOpenChange(false);
+    } catch (e) {
+      // 409s surface the server's message (e.g. "User ID already taken")
+      toast.error(e instanceof Error ? e.message : "Could not save the decision");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Dialog
+        open={request !== null}
+        onOpenChange={(v) => {
+          if (!busy) onOpenChange(v);
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+          {result ? (
+            /* ---------- success view: credentials + copy ---------- */
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="flex size-8 items-center justify-center rounded-full bg-success-soft text-success">
+                    <Check className="size-4" aria-hidden />
+                  </span>
+                  Account created
+                </DialogTitle>
+                <DialogDescription>
+                  {result.account.displayName} can sign in with the credentials below - share them
+                  privately if the email doesn't arrive.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-up-border bg-surface-muted/40 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      User ID
+                    </p>
+                    <p className="truncate font-mono text-sm font-semibold text-foreground">
+                      {result.account.userId}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5 rounded-lg text-xs font-semibold"
+                    onClick={() => copyText(result.account.userId, "User ID")}
+                  >
+                    <Copy className="size-3.5" aria-hidden />
+                    Copy
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-up-border bg-surface-muted/40 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Temporary password
+                    </p>
+                    <p className="truncate font-mono text-sm font-semibold text-foreground">
+                      {result.account.temporaryPassword}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5 rounded-lg text-xs font-semibold"
+                    onClick={() => copyText(result.account.temporaryPassword, "Temporary password")}
+                  >
+                    <Copy className="size-3.5" aria-hidden />
+                    Copy
+                  </Button>
+                </div>
+
+                <p className="flex items-start gap-2 rounded-xl bg-info-soft/60 px-3 py-2.5 text-xs leading-relaxed text-info">
+                  <Mail className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                  Email sent to {result.account.email} - saved in the email outbox.
+                </p>
+
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  Section
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                    <Users className="size-3 text-primary-700" aria-hidden />
+                    {result.account.classId}
+                  </span>
+                </p>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={() => onOpenChange(false)}
+                  className="w-full rounded-xl font-semibold"
+                >
+                  Done
+                </Button>
+              </DialogFooter>
+            </>
+          ) : request ? (
+            /* ---------- review view ---------- */
+            <>
+              <DialogHeader>
+                <DialogTitle>Review request</DialogTitle>
+                <DialogDescription>
+                  Approving provisions the student account immediately.
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* read-only summary */}
+              <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-up-border bg-surface-muted/40 p-3.5 text-sm">
+                <dt className="text-xs font-semibold text-muted-foreground">Student ID</dt>
+                <dd className="font-medium tabular-nums text-foreground">{request.studentId}</dd>
+                <dt className="text-xs font-semibold text-muted-foreground">Name</dt>
+                <dd className="font-medium text-foreground">{request.name}</dd>
+                <dt className="text-xs font-semibold text-muted-foreground">Capstone</dt>
+                <dd className="font-medium text-foreground">
+                  Capstone {request.capstone} · {request.year}
+                </dd>
+                <dt className="text-xs font-semibold text-muted-foreground">Professor</dt>
+                <dd className="font-medium text-foreground">{request.professor}</dd>
+                <dt className="text-xs font-semibold text-muted-foreground">Email</dt>
+                <dd className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                  <Mail className="size-3.5 shrink-0" aria-hidden />
+                  a{request.studentId}@ks.ac.kr
+                </dd>
+              </dl>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="review-class">ClassID</Label>
+                  <Input
+                    id="review-class"
+                    value={classId}
+                    onChange={(e) => setClassId(e.target.value.toUpperCase())}
+                    placeholder="CD2-2025-KIM"
+                    maxLength={40}
+                    className="uppercase"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Prefilled from the professor's registered class - or capstone · year ·
+                    professor when they have none. Edit if the section differs.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Team role</Label>
+                  <div
+                    role="radiogroup"
+                    aria-label="Team role"
+                    className="grid grid-cols-2 gap-2"
+                  >
+                    {(
+                      [
+                        { value: "MEMBER", label: "Member", hint: "Joins their leader's project" },
+                        { value: "LEADER", label: "Team Leader", hint: "Submits the project" },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={teamRole === opt.value}
+                        onClick={() => setTeamRole(opt.value)}
+                        className={cn(
+                          "rounded-xl border p-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                          teamRole === opt.value
+                            ? "border-primary-500 bg-primary-50"
+                            : "border-up-border bg-card hover:border-up-border-strong"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "block text-sm font-semibold",
+                            teamRole === opt.value ? "text-primary-700" : "text-foreground"
+                          )}
+                        >
+                          {opt.label}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                          {opt.hint}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="review-note">
+                    {rejectMode ? "Rejection reason (optional)" : "Note (optional)"}
+                  </Label>
+                  <Textarea
+                    id="review-note"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder={
+                      rejectMode ? "e.g. Capstone II roster is full this semester" : "Internal note"
+                    }
+                    rows={2}
+                    maxLength={300}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2">
+                {rejectMode ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => setRejectMode(false)}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl font-semibold text-danger hover:text-danger"
+                      onClick={() => setConfirmOpen(true)}
+                    >
+                      <X className="size-4" aria-hidden />
+                      Reject request
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl font-semibold text-danger hover:text-danger"
+                      onClick={() => setRejectMode(true)}
+                    >
+                      <X className="size-4" aria-hidden />
+                      Reject…
+                    </Button>
+                    <Button
+                      className="rounded-xl font-semibold"
+                      onClick={() => decide("APPROVED")}
+                      disabled={busy || !classId.trim()}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
+                      Approve &amp; provision
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* reject confirmation */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject {request?.name}'s request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The request is marked rejected with your note on record. The student is not notified
+              automatically - coordinate with {request?.professor ?? "the professor"} if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => decide("REJECTED")}
+              className="bg-danger text-white hover:bg-danger/90"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Reject request
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+// ============================================================
+// Announcements tab - campus news CRUD (admin + moderator)
+// ============================================================
+
+function AnnouncementsTab({
+  onChanged,
+  refreshTick,
+  onLoaded,
+}: {
+  onChanged: () => void;
+  refreshTick: number;
+  onLoaded: (ok: boolean) => void;
+}) {
+  const [rows, setRows] = useState<AnnouncementDTO[] | null>(null); // null = loading
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<AnnouncementDTO | null>(null);
+  const [deleting, setDeleting] = useState<AnnouncementDTO | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAnnouncements()
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        onLoaded(true);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRows([]);
+        onLoaded(false);
+        toast.error(e instanceof Error ? e.message : "Could not load announcements");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick, onLoaded]);
+
+  const removeAnnouncement = async () => {
+    if (!deleting || busy) return;
+    setBusy(true);
+    try {
+      await deleteAnnouncement(deleting.id);
+      setRows((prev) => (prev ? prev.filter((r) => r.id !== deleting.id) : prev));
+      toast.success("Announcement removed");
+      setDeleting(null);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete the announcement");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs font-medium text-muted-foreground">
+          Published to the public Announcements page - pinned items appear first
         </p>
         <Button
-          onClick={() => navigate({ name: "moderation" })}
-          className="mt-4 rounded-xl font-semibold"
+          onClick={() => {
+            setEditing(null);
+            setDialogOpen(true);
+          }}
+          className="rounded-xl font-semibold"
         >
-          <ShieldCheck className="size-4" aria-hidden />
-          Open moderation console
+          <Plus className="size-4" aria-hidden />
+          New announcement
         </Button>
+      </div>
+
+      {rows === null ? (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState
+            icon={Megaphone}
+            title="No announcements yet"
+            hint="Post campus-wide news - maintenance windows, deadlines, events."
+            action={
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  setDialogOpen(true);
+                }}
+                className="rounded-xl font-semibold"
+              >
+                <Plus className="size-4" aria-hidden />
+                New announcement
+              </Button>
+            }
+          />
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {rows.map((a) => (
+            <li
+              key={a.id}
+              className="flex flex-wrap items-start gap-x-3 gap-y-2 rounded-xl border border-up-border bg-card p-3.5 shadow-sm"
+            >
+              <span
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-xl",
+                  a.pinned ? "bg-warning-soft text-warning" : "bg-surface-muted text-muted-foreground"
+                )}
+              >
+                <Pin className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1 basis-56">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                  <span className="truncate">{a.title}</span>
+                  {a.pinned ? (
+                    <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-bold text-warning">
+                      Pinned
+                    </span>
+                  ) : null}
+                </p>
+                <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+                  {a.body}
+                </p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Posted {format(new Date(a.createdAt), "MMM d, yyyy")}
+                  {a.updatedAt !== a.createdAt
+                    ? ` · edited ${format(new Date(a.updatedAt), "MMM d, yyyy")}`
+                    : ""}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 rounded-lg"
+                  onClick={() => {
+                    setEditing(a);
+                    setDialogOpen(true);
+                  }}
+                  aria-label={`Edit ${a.title}`}
+                >
+                  <Pencil className="size-3.5" aria-hidden />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 rounded-lg text-danger hover:text-danger"
+                  onClick={() => setDeleting(a)}
+                  aria-label={`Delete ${a.title}`}
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <AnnouncementFormDialog
+        open={dialogOpen}
+        editing={editing}
+        onOpenChange={(v) => {
+          setDialogOpen(v);
+          if (!v) setEditing(null);
+        }}
+        onSaved={(saved) => {
+          setRows((prev) =>
+            prev
+              ? prev.some((r) => r.id === saved.id)
+                ? prev.map((r) => (r.id === saved.id ? saved : r))
+                : [saved, ...prev]
+              : [saved]
+          );
+          onChanged();
+        }}
+      />
+
+      <AlertDialog open={deleting !== null} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleting?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The announcement disappears from the public page immediately. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={removeAnnouncement}
+              className="bg-danger text-white hover:bg-danger/90"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Delete announcement
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function AnnouncementFormDialog({
+  open,
+  editing,
+  onOpenChange,
+  onSaved,
+}: {
+  open: boolean;
+  editing: AnnouncementDTO | null;
+  onOpenChange: (v: boolean) => void;
+  onSaved: (row: AnnouncementDTO) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [pinned, setPinned] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(editing?.title ?? "");
+    setBody(editing?.body ?? "");
+    setPinned(editing?.pinned ?? false);
+  }, [open, editing]);
+
+  const valid = title.trim().length >= 4 && body.trim().length >= 10 && !busy;
+
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!valid) return;
+    setBusy(true);
+    try {
+      const saved = editing
+        ? await updateAnnouncement(editing.id, {
+            title: title.trim(),
+            body: body.trim(),
+            pinned,
+          })
+        : await createAnnouncement({ title: title.trim(), body: body.trim(), pinned });
+      toast.success(editing ? "Announcement updated" : "Announcement published");
+      onOpenChange(false);
+      onSaved(saved);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save the announcement");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{editing ? "Edit announcement" : "New announcement"}</DialogTitle>
+          <DialogDescription>
+            Shown on the public Announcements page - keep it short and dated.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="ann-title">Title</Label>
+            <Input
+              id="ann-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Maintenance window - Friday 18:00"
+              required
+              minLength={4}
+              maxLength={120}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ann-body">Body</Label>
+            <Textarea
+              id="ann-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="What is changing, who is affected and when it will be back."
+              required
+              minLength={10}
+              maxLength={4000}
+              rows={6}
+            />
+          </div>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-up-border bg-surface-muted/40 p-3">
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">Pinned</span>
+              <span className="block text-xs text-muted-foreground">
+                Stays at the top of the public page
+              </span>
+            </span>
+            <Switch checked={pinned} onCheckedChange={setPinned} aria-label="Pin announcement" />
+          </label>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!valid} className="rounded-xl font-semibold">
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              {editing ? "Save changes" : "Publish"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// Emails tab - transactional outbox (ADMIN)
+// ============================================================
+
+function EmailsTab({
+  refreshTick,
+  onLoaded,
+}: {
+  refreshTick: number;
+  onLoaded: (ok: boolean) => void;
+}) {
+  const [kind, setKind] = useState<"ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM">("ALL");
+  const [rows, setRows] = useState<EmailLogDTO[] | null>(null); // null = loading
+  const [open, setOpen] = useState<EmailLogDTO | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminEmails(kind)
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        onLoaded(true);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRows([]);
+        onLoaded(false);
+        toast.error(e instanceof Error ? e.message : "Could not load the outbox");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, refreshTick, onLoaded]);
+
+  const chips: { key: "ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM"; label: string }[] = [
+    { key: "ALL", label: "All" },
+    { key: "CREDENTIALS", label: "Credentials" },
+    { key: "PASSWORD_RESET", label: "Password resets" },
+    { key: "SYSTEM", label: "System" },
+  ];
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by kind">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => {
+              setKind(c.key);
+              setRows(null);
+            }}
+            aria-pressed={kind === c.key}
+            className={cn(
+              "inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              kind === c.key
+                ? "border-primary-100 bg-primary-50 text-primary-700"
+                : "border-up-border bg-card text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+        <p className="ml-auto hidden text-xs text-muted-foreground sm:block">
+          In this sandbox emails are logged to the console - nothing leaves the server
+        </p>
+      </div>
+
+      {rows === null ? (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState
+            icon={Mail}
+            title="No email has been sent yet"
+            hint="Credential emails appear here after you approve an account request."
+          />
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {rows.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => setOpen(m)}
+                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-up-border bg-card p-3 text-left shadow-sm outline-none transition-colors hover:border-up-border-strong hover:bg-surface-muted/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-700">
+                  <Mail className="size-4" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1 basis-56">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {m.subject}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    to {m.to} · {timeAgo(m.createdAt)}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    m.kind === "CREDENTIALS"
+                      ? "bg-info-soft text-info"
+                      : m.kind === "PASSWORD_RESET"
+                        ? "bg-primary-50 text-primary-700"
+                        : "bg-surface-muted text-muted-foreground"
+                  )}
+                >
+                  {m.kind.toLowerCase()}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    m.status === "SENT" ? "bg-success-soft text-success" : "bg-surface-muted text-muted-foreground"
+                  )}
+                  title={m.status === "SENT" ? "Sent" : "Logged to the server console"}
+                >
+                  {m.status === "SENT" ? "sent" : "logged"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog open={open !== null} onOpenChange={(v) => !v && setOpen(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="break-words text-base">{open?.subject}</DialogTitle>
+            <DialogDescription>
+              {open ? (
+                <>
+                  To {open.to} · {format(new Date(open.createdAt), "MMM d, yyyy HH:mm")} ·{" "}
+                  {open.kind.toLowerCase()} · {open.status === "SENT" ? "sent" : "logged"}
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-up-border bg-surface-muted/40 p-4 font-mono text-[13px] leading-relaxed text-foreground">
+            {open?.body}
+          </pre>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Resets tab - public "forgot password" audit log (ADMIN)
+// ============================================================
+
+/**
+ * Every public "forgot password" attempt: the university email that was
+ * asked for, whether it matched a registered account, and when. Matched
+ * requests received a temporary password by email (see the Emails tab).
+ */
+function ResetsTab({
+  refreshTick,
+  onLoaded,
+}: {
+  refreshTick: number;
+  onLoaded: (ok: boolean) => void;
+}) {
+  const [rows, setRows] = useState<PasswordResetRow[] | null>(null); // null = loading
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminPasswordResets()
+      .then((data) => {
+        if (cancelled) return;
+        setRows(data);
+        onLoaded(true);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRows([]);
+        onLoaded(false);
+        toast.error(e instanceof Error ? e.message : "Could not load password reset requests");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick, onLoaded]);
+
+  return (
+    <div>
+      {rows === null ? (
+        <div className="mt-3 space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState
+            icon={KeyRound}
+            title="No reset requests yet"
+            hint='When someone uses "Forgot password?" on the sign-in dialog, the attempt is registered here.'
+          />
+        </div>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-up-border bg-card p-3 shadow-sm"
+            >
+              <span
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-xl",
+                  r.status === "SENT"
+                    ? "bg-success-soft text-success"
+                    : "bg-surface-muted text-muted-foreground"
+                )}
+              >
+                <KeyRound className="size-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1 basis-56">
+                <span className="block truncate text-sm font-semibold text-foreground">
+                  {r.email}
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {r.user
+                    ? `${r.user.displayName} · @${r.user.username} · ${ROLE_LABELS[r.user.role] ?? r.user.role}`
+                    : "No account uses this address"}
+                  {" · "}
+                  {timeAgo(r.createdAt)}
+                </span>
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  r.status === "SENT"
+                    ? "bg-success-soft text-success"
+                    : "bg-surface-muted text-muted-foreground"
+                )}
+                title={
+                  r.status === "SENT"
+                    ? "A temporary password was generated and emailed to this address"
+                    : "Nothing was sent - no registered account uses this email"
+                }
+              >
+                {r.status === "SENT" ? "Temp password emailed" : "No match"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Settings tab - feature toggles + hero copy (ADMIN)
+// ============================================================
+
+function SettingsTab({
+  refreshTick,
+  onLoaded,
+}: {
+  refreshTick: number;
+  onLoaded: (ok: boolean) => void;
+}) {
+  const setGlobalSettings = useAppStore((s) => s.setSettings);
+  const [loaded, setLoaded] = useState<SiteSettings | null>(null); // last saved state
+  const [form, setForm] = useState<SiteSettings | null>(null); // editable copy
+  const [saving, setSaving] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const [heroPct, setHeroPct] = useState<number | null>(null); // null = not uploading
+  const heroInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadHero = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file (JPG, PNG or WebP)");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("The image is too large - the limit is 8 MB");
+      return;
+    }
+    setHeroPct(0);
+    try {
+      const url = await uploadFile(file, "hero", setHeroPct);
+      setImgFailed(false);
+      setForm((f) => (f ? { ...f, heroImage: url } : f));
+      toast.success("Image uploaded - press Save changes to use it");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setHeroPct(null);
+      if (heroInputRef.current) heroInputRef.current.value = "";
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchSettings()
+      .then((s) => {
+        if (cancelled) return;
+        setLoaded(s);
+        setForm(s);
+        setImgFailed(false);
+        onLoaded(true);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        onLoaded(false);
+        toast.error(e instanceof Error ? e.message : "Could not load the settings");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick, onLoaded]);
+
+  const dirty =
+    loaded !== null &&
+    form !== null &&
+    (form.searchEnabled !== loaded.searchEnabled ||
+      form.accountRequestsOpen !== loaded.accountRequestsOpen ||
+      form.siteName !== loaded.siteName ||
+      form.heroTitle !== loaded.heroTitle ||
+      form.heroSubtitle !== loaded.heroSubtitle ||
+      form.heroImage !== loaded.heroImage);
+
+  const save = async () => {
+    if (!form || saving) return;
+    setSaving(true);
+    try {
+      const saved = await updateSiteSettings({
+        searchEnabled: form.searchEnabled,
+        accountRequestsOpen: form.accountRequestsOpen,
+        siteName: form.siteName,
+        heroTitle: form.heroTitle,
+        heroSubtitle: form.heroSubtitle,
+        heroImage: form.heroImage,
+      });
+      setLoaded(saved);
+      setForm(saved);
+      setGlobalSettings(saved); // toggles apply instantly across the SPA
+      toast.success("Settings applied across the site");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!form || !loaded) {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-64 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  const toggles: { key: "searchEnabled" | "accountRequestsOpen"; label: string; hint: string }[] = [
+    {
+      key: "searchEnabled",
+      label: "Search bar",
+      hint: "Shows search on the projects page and the ⌘K palette",
+    },
+    {
+      key: "accountRequestsOpen",
+      label: "Account requests",
+      hint: "Public request form accepts new submissions",
+    },
+  ];
+
+  return (
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      {/* feature toggles */}
+      <section
+        aria-label="Feature toggles"
+        className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5"
+      >
+        <h2 className="text-sm font-bold tracking-tight text-foreground">Features</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Switch site behaviour on or off - applied everywhere the moment you save
+        </p>
+        <div className="mt-3 space-y-2">
+          {toggles.map((t) => (
+            <label
+              key={t.key}
+              className="flex items-center justify-between gap-3 rounded-xl border border-up-border bg-surface-muted/40 p-3"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">{t.label}</span>
+                <span className="block text-xs leading-snug text-muted-foreground">{t.hint}</span>
+              </span>
+              <Switch
+                checked={form[t.key]}
+                onCheckedChange={(v) => setForm({ ...form, [t.key]: v })}
+                aria-label={t.label}
+              />
+            </label>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Tip: closing account requests keeps the public page online with a “requests are closed”
+          notice instead of the form.
+        </p>
       </section>
+
+      {/* hero + branding */}
+      <section
+        aria-label="Hero and branding"
+        className="rounded-2xl border border-up-border bg-card p-4 shadow-card md:p-5"
+      >
+        <h2 className="text-sm font-bold tracking-tight text-foreground">Hero &amp; branding</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">Landing page copy and artwork</p>
+        <div className="mt-3 space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="set-site-name">Site name</Label>
+            <Input
+              id="set-site-name"
+              value={form.siteName}
+              onChange={(e) => setForm({ ...form, siteName: e.target.value })}
+              maxLength={60}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="set-hero-title">Hero title</Label>
+            <Input
+              id="set-hero-title"
+              value={form.heroTitle}
+              onChange={(e) => setForm({ ...form, heroTitle: e.target.value })}
+              maxLength={120}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="set-hero-sub">Hero subtitle</Label>
+            <Textarea
+              id="set-hero-sub"
+              value={form.heroSubtitle}
+              onChange={(e) => setForm({ ...form, heroSubtitle: e.target.value })}
+              maxLength={300}
+              rows={3}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="set-hero-img">Hero background image</Label>
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Input
+                  id="set-hero-img"
+                  value={form.heroImage}
+                  onChange={(e) => {
+                    setImgFailed(false);
+                    setForm({ ...form, heroImage: e.target.value });
+                  }}
+                  placeholder="/hero/campus.jpg or https://…"
+                  maxLength={300}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={heroInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadHero(f);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={heroPct !== null}
+                    onClick={() => heroInputRef.current?.click()}
+                    className="gap-1.5"
+                  >
+                    {heroPct !== null ? (
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                    ) : (
+                      <ImageUp className="size-4" aria-hidden />
+                    )}
+                    {heroPct !== null ? `Uploading ${heroPct}%` : "Upload image"}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">JPG, PNG or WebP, up to 8 MB. Wide photos work best.</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Or paste an in-app path (/…) or a full https:// link.
+                </p>
+              </div>
+              {form.heroImage && !imgFailed ? (
+                <img
+                  src={form.heroImage}
+                  alt="Hero preview"
+                  className="h-20 w-32 shrink-0 rounded-xl border border-up-border object-cover"
+                  onError={() => setImgFailed(true)}
+                />
+              ) : (
+                <span
+                  aria-hidden
+                  className="flex h-20 w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-up-border-strong bg-surface-muted/50 text-[10px] font-semibold text-muted-foreground"
+                >
+                  {form.heroImage ? "broken link" : "no image"}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* save bar */}
+      <div className="flex flex-wrap items-center gap-2 lg:col-span-2">
+        <Button onClick={save} disabled={!dirty || saving} className="rounded-xl font-semibold">
+          {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          Save changes
+        </Button>
+        <Button
+          variant="outline"
+          className="rounded-xl"
+          disabled={!dirty || saving}
+          onClick={() => setForm(loaded)}
+        >
+          Reset
+        </Button>
+        {dirty ? (
+          <p className="text-xs font-medium text-warning">Unsaved changes</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">All changes saved</p>
+        )}
+      </div>
     </div>
   );
 }

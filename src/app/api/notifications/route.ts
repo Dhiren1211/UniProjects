@@ -6,7 +6,7 @@ import type { NotificationDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET — the viewer's notifications, newest first, limit 50 ----------
+// ---------- GET - the viewer's notifications, newest first, limit 50 ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---------- PATCH { ids } | { all: true } — mark read ----------
+// ---------- PATCH { ids } | { all: true } - mark read ----------
 
 const patchSchema = z
   .object({

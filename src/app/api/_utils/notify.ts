@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 /**
- * Fire-and-forget notification. Never throws — a notification failure
+ * Fire-and-forget notification. Never throws - a notification failure
  * must never break the main request flow.
  */
 export function notify(

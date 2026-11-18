@@ -1,0 +1,507 @@
+     1→import { PrismaClient } from "@prisma/client";
+     2→import { hashPassword } from "../src/lib/auth";
+     3→
+     4→const db = new PrismaClient();
+     5→
+     6→function slugify(s: string) {
+     7→  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+     8→}
+     9→
+    10→const departments = [
+    11→  { name: "Computer Science & Engineering", code: "CSE", tagline: "Software, intelligence, and systems.", accent: "teal", sortOrder: 1 },
+    12→  { name: "Electrical & Computer Engineering", code: "ECE", tagline: "From circuits to signals.", accent: "sky", sortOrder: 2 },
+    13→  { name: "Design & Media", code: "DME", tagline: "Where engineering meets craft.", accent: "orange", sortOrder: 3 },
+    14→  { name: "Business Administration", code: "BUS", tagline: "Ventures built on campus.", accent: "lime", sortOrder: 4 },
+    15→  { name: "Mechatronics & Robotics", code: "MRE", tagline: "Machines that move.", accent: "rose", sortOrder: 5 },
+    16→  { name: "Data Science", code: "DSC", tagline: "Decisions from data.", accent: "cyan", sortOrder: 6 },
+    17→];
+    18→
+    19→type SeedProject = {
+    20→  title: string; summary: string; description: string; category: string;
+    21→  year: number; semester: string; dept: string; supervisor: string; program: string;
+    22→  tags: string[]; demoUrl?: string; repoUrl?: string; featured?: boolean; views: number;
+    23→  techs: string[]; looking?: boolean;
+    24→  members: { name: string; role: string }[];
+    25→};
+    26→
+    27→const projects: SeedProject[] = [
+    28→  {
+    29→    title: "CampusNav AR", summary: "Augmented-reality wayfinding that guides freshmen to any lecture hall through their phone camera.",
+    30→    description: "CampusNav AR overlays turn-by-turn directions on a live camera feed, making the campus legible on day one.\n\nThe system combines visual markers placed at building entrances with a lightweight AR engine running fully on-device, so it works even when the campus Wi-Fi is congested. Building routes are imported from the registrar's room database every night.\n\nIn a two-week pilot with 180 freshmen, first-visit navigation time to unfamiliar rooms dropped by 43%.",
+    31→    category: "Web & App", year: 2025, semester: "Spring", dept: "CSE", supervisor: "Prof. Dana Kim", program: "B.S. Computer Science",
+    32→    tags: ["ar", "mobile", "wayfinding"], demoUrl: "https://campusnav.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-cse/campusnav-ar",
+    33→    featured: true, views: 1284, techs: ["React", "TypeScript", "Figma", "Next.js"],
+    34→    members: [
+    35→      { name: "Jisoo Park", role: "OWNER" }, { name: "Minho Kang", role: "LEAD" },
+    36→      { name: "Aera Choi", role: "MEMBER" }, { name: "Tae Yang", role: "MEMBER" },
+    37→    ],
+    38→  },
+    39→  {
+    40→    title: "SignBridge", summary: "Real-time Korean Sign Language to speech translation powered by an on-device vision model.",
+    41→    description: "SignBridge watches a webcam feed and converts Korean Sign Language into natural spoken sentences with sub-second latency.\n\nA custom transformer trained on 92 hours of annotated KSL video handles continuous signing, not just isolated gestures. Everything runs locally — no video ever leaves the device, which mattered a lot to our testers in the accessibility office.\n\nThe team is now working with the university's disability services center on a semester-long deployment.",
+    42→    category: "AI & ML", year: 2025, semester: "Fall", dept: "CSE", supervisor: "Prof. Dana Kim", program: "B.S. Computer Science",
+    43→    tags: ["accessibility", "computer-vision", "on-device"], demoUrl: "https://signbridge.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-cse/signbridge",
+    44→    featured: true, views: 2011, techs: ["Python", "PyTorch", "OpenCV"],
+    45→    members: [
+    46→      { name: "Sora Lee", role: "OWNER" }, { name: "Hyun Woo", role: "LEAD" },
+    47→      { name: "Jae Min", role: "MEMBER" }, { name: "Eun Bi", role: "MEMBER" }, { name: "Daniel Seo", role: "MEMBER" },
+    48→    ],
+    49→  },
+    50→  {
+    51→    title: "StudyMate", summary: "A peer-matching PWA that groups students into focused study sessions by course and habit.",
+    52→    description: "StudyMate matches students taking the same courses and with similar study rhythms into small, accountable groups.\n\nThe matching algorithm blends course enrolment data with a short habit questionnaire, then schedules recurring sessions in campus libraries with real-time seat availability.\n\nOver one semester it hosted 640 sessions with a 71% weekly retention rate.",
+    53→    category: "Web & App", year: 2024, semester: "Spring", dept: "CSE", supervisor: "Dr. Hana Song", program: "B.S. Computer Science",
+    54→    tags: ["pwa", "matching"], demoUrl: "https://studymate.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-cse/studymate",
+    55→    views: 642, techs: ["Next.js", "PostgreSQL", "Node.js"], looking: true,
+    56→    members: [
+    57→      { name: "Kevin Ha", role: "OWNER" }, { name: "Yuna Ri", role: "LEAD" }, { name: "Bo Kyung", role: "MEMBER" },
+    58→    ],
+    59→  },
+    60→  {
+    61→    title: "GradAudit", summary: "A retrieval-augmented chatbot that answers graduation-check questions from the official handbook.",
+    62→    description: "GradAudit lets students ask questions like “do I still need a second-level foreign language credit?” and get grounded answers with citations to the exact handbook page.\n\nA RAG pipeline indexes the 140-page graduation handbook and department FAQ pages, refreshed whenever the registrar publishes updates.\n\nHallucination is kept in check with strict citation requirements — the bot refuses to answer anything it cannot source.",
+    63→    category: "AI & ML", year: 2026, semester: "Spring", dept: "CSE", supervisor: "Prof. Dana Kim", program: "B.S. Computer Science",
+    64→    tags: ["rag", "llm", "chatbot"], demoUrl: "https://gradaudit.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-cse/gradaudit",
+    65→    views: 318, techs: ["Python", "FastAPI", "PostgreSQL"],
+    66→    members: [
+    67→      { name: "Soo Ahn", role: "OWNER" }, { name: "Joon Ha", role: "MEMBER" },
+    68→    ],
+    69→  },
+    70→  {
+    71→    title: "SolarBench", summary: "A solar-powered smart campus bench that charges devices and reports seat usage to facilities.",
+    72→    description: "SolarBench is a campus bench with an integrated 60W solar panel, four USB-C ports, and a small e-ink status display.\n\nAn ESP32 monitors battery health, ambient temperature, and occupancy via capacitive sensing, streaming telemetry over LoRaWAN to a facilities dashboard.\n\nThree benches ran across campus for a full semester; the industrial design team from Design & Media built the weatherproof enclosure.",
+    73→    category: "IoT & Hardware", year: 2025, semester: "Year-long", dept: "ECE", supervisor: "Prof. Luis Marín", program: "B.Eng. Electrical Engineering",
+    74→    tags: ["solar", "esp32", "lorawan"], demoUrl: "https://solarbench.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-ece/solarbench",
+    75→    featured: true, views: 1547, techs: ["ESP32", "Arduino", "LoRaWAN"],
+    76→    members: [
+    77→      { name: "Chan Park", role: "OWNER" }, { name: "Da In", role: "LEAD" },
+    78→      { name: "Marcus Oh", role: "MEMBER" }, { name: "Nari Kim", role: "MEMBER" },
+    79→    ],
+    80→  },
+    81→  {
+    82→    title: "AirMesh", summary: "A 40-node air-quality mesh giving the campus a live, block-by-block pollution map.",
+    83→    description: "AirMesh deploys palm-sized PM2.5 / CO₂ sensor nodes on lampposts across campus, forming a self-healing mesh network.\n\nEach node costs under $30 to build, calibrates against a reference station weekly, and pushes readings to a public dashboard with 5-minute granularity.\n\nThe map caught two hotspots near loading docks and led facilities to reroute delivery vehicles.",
+    84→    category: "IoT & Hardware", year: 2024, semester: "Fall", dept: "ECE", supervisor: "Dr. Hana Song", program: "B.Eng. Electrical Engineering",
+    85→    tags: ["sensors", "mesh-network", "dashboard"], demoUrl: "https://airmesh.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-ece/airmesh",
+    86→    views: 893, techs: ["ESP32", "LoRaWAN", "Node.js"],
+    87→    members: [
+    88→      { name: "Woo Jin", role: "OWNER" }, { name: "Seo Yeon", role: "LEAD" }, { name: "In Ho", role: "MEMBER" },
+    89→    ],
+    90→  },
+    91→  {
+    92→    title: "SoundCheck", summary: "A dongle that measures real headphone exposure and nudges users before hearing damage accrues.",
+    93→    description: "SoundCheck is a USB-C audio dongle that measures actual output levels at the ear and computes a cumulative daily exposure score.\n\nA companion app visualizes exposure like a fitness tracker — daily budget, streaks, and gentle nudges when you cross 80%.\n\nAudiology students in the medical campus helped validate the acoustic measurements against clinical equipment.",
+    94→    category: "IoT & Hardware", year: 2023, semester: "Spring", dept: "ECE", supervisor: "Prof. Luis Marín", program: "B.Eng. Electrical Engineering",
+    95→    tags: ["audio", "health", "embedded"], views: 476, techs: ["Arduino", "Python"], demoUrl: "https://soundcheck.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-ece/soundcheck",
+    96→    members: [
+    97→      { name: "Ji Hoon", role: "OWNER" }, { name: "Hye Mi", role: "MEMBER" },
+    98→    ],
+    99→  },
+   100→  {
+   101→    title: "HAN-ROLL", summary: "A kinetic identity system and festival microsite for the university's spring arts week.",
+   102→    description: "HAN-ROLL is a rolling, physics-driven logotype that responds to scroll, tilt, and sound — built as the identity for spring arts week.\n\nThe microsite renders the identity in real time via WebGL, so every visitor's session produces a slightly different poster. Posters printed for campus halls were generated from the same engine.\n\nThe system shipped with an open toolkit so next year's committee can rebuild it without touching code.",
+   103→    category: "Design & Media", year: 2025, semester: "Spring", dept: "DME", supervisor: "Prof. Mina Verdier", program: "B.F.A. Communication Design",
+   104→    tags: ["webgl", "branding", "generative"], demoUrl: "https://hanroll.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dme/han-roll",
+   105→    views: 1024, techs: ["Blender", "TypeScript", "React"],
+   106→    members: [
+   107→      { name: "Ga Eul", role: "OWNER" }, { name: "Tomas Ri", role: "LEAD" }, { name: "Bin Na", role: "MEMBER" },
+   108→    ],
+   109→  },
+   110→  {
+   111→    title: "TypeFlow", summary: "An open kinetic-typography toolkit that turns lecture recordings into animated captions.",
+   112→    description: "TypeFlow takes a transcript plus audio and renders kinetic-typography videos that emphasize the rhythm of speech — designed for lecture highlights and campus media.\n\nThe editor is timeline-based with motion presets, and exports straight to social-ready vertical video.\n\nThe campus media center adopted it for the official recap series.",
+   113→    category: "Design & Media", year: 2024, semester: "Fall", dept: "DME", supervisor: "Prof. Mina Verdier", program: "B.F.A. Communication Design",
+   114→    tags: ["typography", "video", "editor"], demoUrl: "https://typeflow.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dme/typeflow",
+   115→    views: 731, techs: ["TypeScript", "React", "Figma"], looking: true,
+   116→    members: [
+   117→      { name: "Yu Jin", role: "OWNER" }, { name: "Oscar Han", role: "LEAD" },
+   118→      { name: "Sol Yi", role: "MEMBER" }, { name: "Rae Kim", role: "MEMBER" },
+   119→    ],
+   120→  },
+   121→  {
+   122→    title: "Campus Re:Frame", summary: "A crowdsourced photo archive preserving the campus as it was — building by building, decade by decade.",
+   123→    description: "Re:Frame invites students, alumni, and staff to submit photos tagged by building and year, then aligns them into a slider-based time machine.\n\nA moderation workflow keeps the archive respectful and rights-cleared, with donor consent captured at upload.\n\nThe archive launched with 2,300 photos dating back to 1968, contributed by 400+ people.",
+   124→    category: "Design & Media", year: 2023, semester: "Year-long", dept: "DME", supervisor: "Prof. Mina Verdier", program: "B.F.A. Photography",
+   125→    tags: ["archive", "photography"], demoUrl: "https://reframe.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dme/campus-reframe",
+   126→    views: 588, techs: ["Next.js", "PostgreSQL"],
+   127→    members: [
+   128→      { name: "Na Rae", role: "OWNER" }, { name: "Jun Seok", role: "LEAD" }, { name: "Hee Jin", role: "MEMBER" },
+   129→    ],
+   130→  },
+   131→  {
+   132→    title: "VentureTrack", summary: "A live portfolio simulator where student teams manage mock startup investments across a semester.",
+   133→    description: "VentureTrack gamifies early-stage investing: student teams get a mock fund, pitch decks from real campus startups, and a market that reprices weekly based on milestone events.\n\nThe pricing engine was calibrated on three years of campus demo-day outcomes.\n\nUsed as the core of the Venture Lab elective, with 96 teams enrolled in its first run.",
+   134→    category: "Data & Analytics", year: 2025, semester: "Fall", dept: "BUS", supervisor: "Prof. Adam Benali", program: "B.B.A. Finance",
+   135→    tags: ["simulation", "fintech", "education"], demoUrl: "https://venturetrack.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-bus/venturetrack",
+   136→    views: 812, techs: ["React", "Node.js", "MongoDB"],
+   137→    members: [
+   138→      { name: "Ha Neul", role: "OWNER" }, { name: "Dae Hyun", role: "LEAD" },
+   139→      { name: "Su Min", role: "MEMBER" }, { name: "Clara Jo", role: "MEMBER" },
+   140→    ],
+   141→  },
+   142→  {
+   143→    title: "CaféPulse", summary: "Demand forecasting for the five campus cafés that cut average queue time by a third.",
+   144→    description: "CaféPulse forecasts hourly demand per café from POS history, class schedules, weather, and events on the campus calendar.\n\nForecasts drive a simple staffing suggestion sheet that managers receive every morning, plus a public “best time to go” widget.\n\nOver six weeks, average queue time dropped from 9 to 6 minutes during the 12–1 PM peak.",
+   145→    category: "Data & Analytics", year: 2024, semester: "Spring", dept: "BUS", supervisor: "Prof. Adam Benali", program: "B.B.A. Business Analytics",
+   146→    tags: ["forecasting", "time-series"], views: 655, techs: ["Python", "PostgreSQL"], demoUrl: "https://cafepulse.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dsc/cafepulse",
+   147→    members: [
+   148→      { name: "Mi Sol", role: "OWNER" }, { name: "Tae Gyun", role: "MEMBER" },
+   149→    ],
+   150→  },
+   151→  {
+   152→    title: "TerraBot", summary: "A slope-mapping rover that surveys the hillside behind the engineering quad for erosion risk.",
+   153→    description: "TerraBot is a four-wheeled rover with articulated suspension that climbs the wooded slope behind the engineering quad and produces centimeter-grade elevation maps.\n\nAn onboard IMU-fused SLAM stack maps terrain while a moisture probe logs soil conditions — the combination flags erosion-prone zones for grounds keeping.\n\nThe chassis is fully 3D-printed and repairable with parts from the campus makerspace.",
+   154→    category: "IoT & Hardware", year: 2026, semester: "Year-long", dept: "MRE", supervisor: "Dr. Elena Petrova", program: "B.Eng. Mechatronics",
+   155→    tags: ["robotics", "slam", "3d-printing"], demoUrl: "https://terrabot.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-mre/terrabot",
+   156→    featured: true, views: 1770, techs: ["Raspberry Pi", "Python", "SolidWorks", "OpenCV"],
+   157→    members: [
+   158→      { name: "Gun Woo", role: "OWNER" }, { name: "Ha Eun", role: "LEAD" },
+   159→      { name: "Leon Kim", role: "MEMBER" }, { name: "Bo Ram", role: "MEMBER" }, { name: "Si Woo", role: "MEMBER" },
+   160→    ],
+   161→  },
+   162→  {
+   163→    title: "GripAssist", summary: "A soft robotic glove that supports hand rehabilitation exercises for stroke recovery patients.",
+   164→    description: "GripAssist is a lightweight fabric glove with tendon-driven soft actuators that assist finger flexion during rehab exercises.\n\nA pressure-sensitive grip tracker scores each repetition and streams session summaries to a therapist dashboard, so progress is measured instead of guessed.\n\nThe team ran a supervised pilot with the rehabilitation clinic at the affiliated hospital.",
+   165→    category: "IoT & Hardware", year: 2024, semester: "Fall", dept: "MRE", supervisor: "Dr. Elena Petrova", program: "B.Eng. Mechatronics",
+   166→    tags: ["soft-robotics", "healthcare"], demoUrl: "https://gripassist.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-mre/gripassist",
+   167→    views: 1102, techs: ["Arduino", "SolidWorks"],
+   168→    members: [
+   169→      { name: "Yeon Su", role: "OWNER" }, { name: "Ji Min", role: "LEAD" }, { name: "Pablo Seo", role: "MEMBER" },
+   170→    ],
+   171→  },
+   172→  {
+   173→    title: "DelayRadar", summary: "Shuttle delay prediction that tells you whether to walk or wait — before you get to the stop.",
+   174→    description: "DelayRadar fuses shuttle GPS traces, class schedule peaks, and weather into a per-stop delay forecast for the campus shuttle loop.\n\nA public dashboard and a lightweight widget show a confidence band for the next three departures at every stop.\n\nWaiting-time at the busiest stop fell 22% during the pilot month.",
+   175→    category: "Data & Analytics", year: 2025, semester: "Spring", dept: "DSC", supervisor: "Prof. Priya Nair", program: "B.S. Data Science",
+   176→    tags: ["prediction", "viz"], demoUrl: "https://delayradar.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dsc/delayradar",
+   177→    views: 934, techs: ["Python", "PostgreSQL", "React"],
+   178→    members: [
+   179→      { name: "Seung Min", role: "OWNER" }, { name: "Ae Ra", role: "LEAD" }, { name: "Nathan Ko", role: "MEMBER" },
+   180→    ],
+   181→  },
+   182→  {
+   183→    title: "MenuLens", summary: "Nutrition analytics for the dining halls — what's actually being eaten, and what's wasted.",
+   184→    description: "MenuLens combines tray-return photography with POS data to estimate what dishes get finished and what gets binned, per dining hall and per daypart.\n\nThe dashboard gives dining services a weekly menu-planning brief: which dishes to keep, shrink, or retire.\n\nPlate waste fell 14% in the two months after the first brief.",
+   185→    category: "Data & Analytics", year: 2024, semester: "Year-long", dept: "DSC", supervisor: "Prof. Priya Nair", program: "B.S. Data Science",
+   186→    tags: ["computer-vision", "sustainability", "dashboard"], views: 720, techs: ["Python", "OpenCV", "Docker"], demoUrl: "https://menulens.demo.ks.ac.kr", repoUrl: "https://github.com/kyungsung-dsc/menulens",
+   187→    members: [
+   188→      { name: "Cho Rin", role: "OWNER" }, { name: "Min Jae", role: "LEAD" },
+   189→      { name: "Hana Bae", role: "MEMBER" }, { name: "Leo Jung", role: "MEMBER" },
+   190→    ],
+   191→  },
+   192→];
+   193→
+   194→const technologies = [
+   195→  { name: "React", category: "Frontend" }, { name: "Next.js", category: "Frontend" },
+   196→  { name: "TypeScript", category: "Frontend" }, { name: "Node.js", category: "Backend" },
+   197→  { name: "FastAPI", category: "Backend" }, { name: "PostgreSQL", category: "Data" },
+   198→  { name: "MongoDB", category: "Data" }, { name: "Python", category: "AI" },
+   199→  { name: "PyTorch", category: "AI" }, { name: "OpenCV", category: "AI" },
+   200→  { name: "Arduino", category: "Hardware" }, { name: "ESP32", category: "Hardware" },
+   201→  { name: "Raspberry Pi", category: "Hardware" }, { name: "LoRaWAN", category: "Hardware" },
+   202→  { name: "SolidWorks", category: "Hardware" }, { name: "Figma", category: "Design" },
+   203→  { name: "Blender", category: "Design" }, { name: "Docker", category: "DevOps" },
+   204→];
+   205→
+   206→const programs = [
+   207→  "B.S. Computer Science", "B.Eng. Electrical Engineering", "B.F.A. Communication Design",
+   208→  "B.B.A. Business Analytics", "B.Eng. Mechatronics", "B.S. Data Science",
+   209→];
+   210→
+   211→const deptProgram: Record<string, string> = {
+   212→  CSE: "B.S. Computer Science",
+   213→  ECE: "B.Eng. Electrical Engineering",
+   214→  DME: "B.F.A. Communication Design",
+   215→  BUS: "B.B.A. Business Analytics",
+   216→  MRE: "B.Eng. Mechatronics",
+   217→  DSC: "B.S. Data Science",
+   218→};
+   219→
+   220→const bios = [
+   221→  "Builder of small useful things. Coffee-powered.",
+   222→  "Design-minded engineer. I like problems with edges and corners.",
+   223→  "Ask me about sensors, soldering, or the makerspace.",
+   224→  "Data person. I make charts people actually read.",
+   225→  "Second-year student exploring robotics and HCI.",
+   226→  "I ship on Fridays and regret nothing.",
+   227→];
+   228→
+   229→async function main() {
+   230→  console.log("Resetting UniProjects data…");
+   231→  await db.notification.deleteMany();
+   232→  await db.report.deleteMany();
+   233→  await db.verification.deleteMany();
+   234→  await db.joinRequest.deleteMany();
+   235→  await db.follow.deleteMany();
+   236→  await db.bookmark.deleteMany();
+   237→  await db.like.deleteMany();
+   238→  await db.comment.deleteMany();
+   239→  await db.post.deleteMany();
+   240→  await db.projectTimeline.deleteMany();
+   241→  await db.projectResource.deleteMany();
+   242→  await db.projectTechnology.deleteMany();
+   243→  await db.technology.deleteMany();
+   244→  await db.projectMember.deleteMany();
+   245→  await db.project.deleteMany();
+   246→  await db.session.deleteMany();
+   247→  await db.user.deleteMany();
+   248→  await db.event.deleteMany();
+   249→  await db.department.deleteMany();
+   250→
+   251→  // departments
+   252→  const deptMap = new Map<string, string>();
+   253→  for (const d of departments) {
+   254→    const created = await db.department.create({ data: d });
+   255→    deptMap.set(d.code, created.id);
+   256→  }
+   257→  console.log(`✓ ${departments.length} departments`);
+   258→
+   259→  // technologies
+   260→  const techMap = new Map<string, string>();
+   261→  for (const t of technologies) {
+   262→    const created = await db.technology.create({
+   263→      data: { name: t.name, slug: slugify(t.name), category: t.category },
+   264→    });
+   265→    techMap.set(t.name, created.id);
+   266→  }
+   267→  console.log(`✓ ${technologies.length} technologies`);
+   268→
+   269→  // faculty + admin
+   270→  const pwd = hashPassword("demo1234");
+   271→  const faculty = [
+   272→    { username: "dana.kim", displayName: "Prof. Dana Kim", email: "dana.kim@ks.ac.kr", dept: "CSE", bio: "Associate professor. Human-computer interaction and accessibility. Supervisor of the SignBridge and GradAudit teams.", avatarUrl: "/avatars/av5.webp" },
+   273→    { username: "luis.marin", displayName: "Prof. Luis Marín", email: "luis.marin@ks.ac.kr", dept: "ECE", bio: "Embedded systems and renewable energy. I run the campus IoT lab on Fridays.", avatarUrl: "/avatars/av6.webp" },
+   274→    { username: "mina.verdier", displayName: "Prof. Mina Verdier", email: "mina.verdier@ks.ac.kr", dept: "DME", bio: "Motion design, generative identity systems, and typography that moves.", avatarUrl: "/avatars/av11.webp" },
+   275→    { username: "adam.benali", displayName: "Prof. Adam Benali", email: "adam.benali@ks.ac.kr", dept: "BUS", bio: "Venture lab lead. Former founder, now teaching the next ones.", avatarUrl: "/avatars/av12.webp" },
+   276→    { username: "elena.petrova", displayName: "Dr. Elena Petrova", email: "elena.petrova@ks.ac.kr", dept: "MRE", bio: "Field robotics and soft actuation. TerraBot's supervisor.", avatarUrl: "/avatars/av2.webp" },
+   277→    { username: "priya.nair", displayName: "Prof. Priya Nair", email: "priya.nair@ks.ac.kr", dept: "DSC", bio: "Applied statistics for campus operations. If it can be forecast, we will forecast it.", avatarUrl: "/avatars/av9.webp" },
+   278→    { username: "jiwoo.han", displayName: "Jiwoo Han", email: "jiwoo.han@ks.ac.kr", dept: "CSE", bio: "Showcase curator & platform admin. Ping me about verification or reports.", role: "ADMIN", avatarUrl: "/avatars/av4.webp" },
+   279→  ];
+   280→  const userMap = new Map<string, string>();
+   281→  for (const f of faculty) {
+   282→    const u = await db.user.create({
+   283→      data: {
+   284→        username: f.username, displayName: f.displayName, email: f.email,
+   285→        passwordHash: pwd, role: f.role ?? "FACULTY", bio: f.bio, avatarUrl: f.avatarUrl ?? null,
+   286→        program: null, skills: "Mentoring,Research", departmentId: deptMap.get(f.dept),
+   287→        emailVerified: true, emailVerifiedAt: new Date(),
+   288→      },
+   289→    });
+   290→    userMap.set(f.displayName.replace(/^(Prof\.|Dr\.)\s*/, ""), u.id);
+   291→  }
+   292→
+   293→  // students derived from project members
+   294→  const seen = new Map<string, { username: string; dept: string }>();
+   295→  let i = 0;
+   296→  for (const p of projects) {
+   297→    for (const m of p.members) {
+   298→      if (seen.has(m.name)) continue;
+   299→      const username = m.name.toLowerCase().replace(/[^a-z]+/g, ".");
+   300→      const u = await db.user.create({
+   301→        data: {
+   302→          username,
+   303→          displayName: m.name,
+   304→          email: `${username}@student.ks.ac.kr`,
+   305→          passwordHash: pwd,
+   306→          role: "STUDENT",
+   307→          bio: bios[i % bios.length],
+   308→          avatarUrl: `/avatars/av${(i % 10) + 1}.webp`,
+   309→          program: deptProgram[p.dept] ?? programs[i % programs.length],
+   310→          skills: p.techs.slice(0, 3).join(","),
+   311→          lookingForTeammates: i % 4 === 0,
+   312→          departmentId: deptMap.get(p.dept),
+   313→          emailVerified: true, emailVerifiedAt: new Date(),
+   314→        },
+   315→      });
+   316→      userMap.set(m.name, u.id);
+   317→      seen.set(m.name, { username, dept: p.dept });
+   318→      i++;
+   319→    }
+   320→  }
+   321→  console.log(`✓ ${userMap.size} users (7 staff + ${userMap.size - 7} students)`);
+   322→
+   323→  // projects with memberships + techs + timeline + resources
+   324→  const slugMap = new Map<string, { id: string; dept: string; ownerId: string }>();
+   325→  let slugIndex = 0;
+   326→  for (const p of projects) {
+   327→    const ownerUser = userMap.get(p.members[0].name)!;
+   328→    const created = await db.project.create({
+   329→      data: {
+   330→        slug: slugify(p.title),
+   331→        title: p.title,
+   332→        summary: p.summary,
+   333→        description: p.description,
+   334→        coverImage: `/covers/${slugify(p.title)}.webp`,
+   335→        category: p.category,
+   336→        year: p.year,
+   337→        semester: p.semester,
+   338→        program: p.program,
+   339→        supervisor: p.supervisor,
+   340→        departmentId: deptMap.get(p.dept)!,
+   341→        ownerId: ownerUser,
+   342→        status: "PUBLISHED",
+   343→        lookingForTeammates: p.looking ?? false,
+   344→        tags: p.tags.join(","),
+   345→        demoUrl: p.demoUrl ?? null,
+   346→        repoUrl: p.repoUrl ?? null,
+   347→        featured: p.featured ?? false,
+   348→        views: p.views,
+   349→        members: { create: p.members.map((m) => ({ userId: userMap.get(m.name)!, role: m.role })) },
+   350→        technologies: { create: p.techs.map((t) => ({ technologyId: techMap.get(t)! })) },
+   351→      },
+   352→    });
+   353→    slugMap.set(created.slug, { id: created.id, dept: p.dept, ownerId: ownerUser });
+   354→
+   355→    // every project ships its source code + demo + report as resources
+   356→    if (p.repoUrl || p.demoUrl) {
+   357→      await db.projectResource.createMany({
+   358→        data: [
+   359→          ...(p.repoUrl ? [{ projectId: created.id, type: "GITHUB", label: "Source code", url: p.repoUrl }] : []),
+   360→          ...(p.demoUrl ? [{ projectId: created.id, type: "DEMO", label: "Live demo", url: p.demoUrl }] : []),
+   361→          { projectId: created.id, type: "DOCUMENT", label: "Final report (PDF)", url: `https://reports.ks.ac.kr/showcase/${created.slug}.pdf` },
+   362→        ],
+   363→      });
+   364→    }
+   365→
+   366→    // timeline: kickoff / milestone / demo for a few
+   367→    if (["campusnav-ar", "signbridge", "terrabot", "solarbench"].includes(created.slug)) {
+   368→      const y = p.year;
+   369→      await db.projectTimeline.createMany({
+   370→        data: [
+   371→          { projectId: created.id, title: "Kickoff & team formation", date: new Date(`${y - 1}-09-12`), note: "Team formed at the department project fair." },
+   372→          { projectId: created.id, title: "Midterm prototype review", date: new Date(`${y - 1}-12-05`), note: "First working prototype demoed to the supervisor." },
+   373→          { projectId: created.id, title: "Final demo day", date: new Date(`${y}-06-10`), note: "Presented at the department showcase." },
+   374→        ],
+   375→      });
+   376→    }
+   377→
+   378→    // photo gallery: 2–3 shots per project, drawn deterministically from the pool
+   379→    const pool = ["/gallery/g1.webp", "/gallery/g2.webp", "/gallery/g3.webp", "/gallery/g4.webp", "/gallery/g5.webp", "/gallery/g6.webp"];
+   380→    const count = 2 + (slugIndex % 2); // alternate 2 / 3
+   381→    const picks = Array.from({ length: count }, (_, k) => pool[(slugIndex * 2 + k) % pool.length]);
+   382→    await db.projectImage.createMany({
+   383→      data: [...new Set(picks)].map((url, k) => ({ projectId: created.id, url, sortOrder: k })),
+   384→    });
+   385→    slugIndex++;
+   386→  }
+   387→  console.log(`✓ ${projects.length} projects`);
+   388→
+   389→  // community posts
+   390→  const postSeeds = [
+   391→    { by: "Jisoo Park", body: "CampusNav AR just crossed 1,000 views on the showcase — thanks everyone who tested it during orientation week! AR markers refresh tonight, report anything weird. 🧭", tags: "" },
+   392→    { by: "Gun Woo", body: "TerraBot climbed the muddy slope after the rain and still mapped it at 3cm resolution. The new tread pattern works. Ask me anything about the chassis — files are in the makerspace folder.", tags: "" },
+   393→    { by: "Ga Eul", body: "Looking for one developer with WebGL experience for HAN-ROLL's spring festival build. It's a rolling physics logotype — weird in the best way. DM me or use the join button on the project page.", tags: "" },
+   394→    { by: "Priya Nair", body: "Reminder: verification requests for this semester's capstones close in two weeks. Approved projects get a verified badge and priority slots at demo day. Faculty, keep the queue clear!", tags: "" },
+   395→    { by: "Mi Sol", body: "CaféPulse update: the west café queue model now factors in exam-week patterns. Forecast error is down to 4 minutes. Shoutout to the DSC study group for the feature ideas.", tags: "" },
+   396→    { by: "Kevin Ha", body: "StudyMate is looking for a backend person who enjoys scheduling algorithms (said nobody ever — but seriously, it's fun). The project page has the full description.", tags: "" },
+   397→    { by: "Yeon Su", body: "GripAssist pilot session #12 done at the rehab clinic. Small win today: the grip sensor false-positive rate dropped below 2%. The therapists are finally smiling at us.", tags: "" },
+   398→  ];
+   399→  const postIds: string[] = [];
+   400→  for (const p of postSeeds) {
+   401→    const post = await db.post.create({
+   402→      data: { userId: userMap.get(p.by)!, body: p.body },
+   403→    });
+   404→    postIds.push(post.id);
+   405→  }
+   406→  // comments + likes on posts
+   407→  await db.comment.createMany({
+   408→    data: [
+   409→      { postId: postIds[0], userId: userMap.get("Minho Kang")!, body: "Congrats! The new library route is so much smoother now." },
+   410→      { postId: postIds[0], userId: userMap.get("Aera Choi")!, body: "Orientation feedback was overwhelmingly positive — well deserved." },
+   411→      { postId: postIds[2], userId: userMap.get("Tomas Ri")!, body: "Can confirm the physics logotype is extremely fun. Join them." },
+   412→      { postId: postIds[4], userId: userMap.get("Tae Gyun")!, body: "The exam-week feature saved my morning routine twice this week." },
+   413→    ],
+   414→  });
+   415→  await db.like.createMany({
+   416→    data: [
+   417→      { userId: userMap.get("Sora Lee")!, targetType: "POST", targetId: postIds[0] },
+   418→      { userId: userMap.get("Hyun Woo")!, targetType: "POST", targetId: postIds[0] },
+   419→      { userId: userMap.get("Chan Park")!, targetType: "POST", targetId: postIds[1] },
+   420→      { userId: userMap.get("Da In")!, targetType: "POST", targetId: postIds[1] },
+   421→      { userId: userMap.get("Marcus Oh")!, targetType: "POST", targetId: postIds[1] },
+   422→      { userId: userMap.get("Jisoo Park")!, targetType: "POST", targetId: postIds[2] },
+   423→      { userId: userMap.get("Kevin Ha")!, targetType: "POST", targetId: postIds[4] },
+   424→      { userId: userMap.get("Cho Rin")!, targetType: "POST", targetId: postIds[4] },
+   425→    ],
+   426→  });
+   427→  console.log(`✓ ${postSeeds.length} posts + comments + likes`);
+   428→
+   429→  // project likes & follows & bookmarks
+   430→  const signbridge = slugMap.get("signbridge")!;
+   431→  const terrabot = slugMap.get("terrabot")!;
+   432→  await db.like.createMany({
+   433→    data: [
+   434→      { userId: userMap.get("Jisoo Park")!, targetType: "PROJECT", targetId: signbridge.id },
+   435→      { userId: userMap.get("Kevin Ha")!, targetType: "PROJECT", targetId: signbridge.id },
+   436→      { userId: userMap.get("Mi Sol")!, targetType: "PROJECT", targetId: terrabot.id },
+   437→    ],
+   438→  });
+   439→  await db.follow.createMany({
+   440→    data: [
+   441→      { followerId: userMap.get("Kevin Ha")!, targetType: "PROJECT", targetId: terrabot.id },
+   442→      { followerId: userMap.get("Aera Choi")!, targetType: "PROJECT", targetId: signbridge.id },
+   443→      { followerId: userMap.get("Yuna Ri")!, targetType: "USER", targetId: userMap.get("Sora Lee")! },
+   444→      { followerId: userMap.get("Minho Kang")!, targetType: "USER", targetId: userMap.get("Jisoo Park")! },
+   445→    ],
+   446→  });
+   447→  await db.bookmark.createMany({
+   448→    data: [
+   449→      { userId: userMap.get("Kevin Ha")!, targetType: "PROJECT", targetId: signbridge.id },
+   450→      { userId: userMap.get("Sora Lee")!, targetType: "PROJECT", targetId: terrabot.id },
+   451→    ],
+   452→  });
+   453→
+   454→  // a pending join request + a pending verification + an open report
+   455→  await db.joinRequest.create({
+   456→    data: {
+   457→      projectId: terrabot.id,
+   458→      userId: userMap.get("Ji Hoon")!,
+   459→      message: "Hi! I worked on SoundCheck's firmware — I'd love to help with TerraBot's sensor logging.",
+   460→    },
+   461→  });
+   462→  await db.verification.create({
+   463→    data: { projectId: terrabot.id, requesterId: terrabot.ownerId },
+   464→  });
+   465→  await db.report.create({
+   466→    data: {
+   467→      reporterId: userMap.get("Cho Rin")!,
+   468→      targetType: "POST",
+   469→      targetId: postIds[5],
+   470→      reason: "Recruitment post — might belong in the projects board instead of the feed.",
+   471→    },
+   472→  });
+   473→  console.log("✓ join request, verification, report seeded");
+   474→
+   475→  // notifications for the demo user (gun.woo owns TerraBot)
+   476→  await db.notification.createMany({
+   477→    data: [
+   478→      { userId: terrabot.ownerId, type: "JOIN_REQUEST", body: "Ji Hoon requested to join TerraBot.", link: "/project/terrabot" },
+   479→      { userId: terrabot.ownerId, type: "VERIFICATION", body: "Verification request for TerraBot is pending faculty review.", link: "/project/terrabot" },
+   480→      { userId: terrabot.ownerId, type: "FOLLOW", body: "Kevin Ha started following TerraBot.", link: "/project/terrabot" },
+   481→      { userId: userMap.get("Jisoo Park")!, type: "LIKE", body: "Sora Lee liked CampusNav AR.", link: "/project/campusnav-ar" },
+   482→      { userId: userMap.get("Jisoo Park")!, type: "COMMENT", body: "Minho Kang commented on your post.", link: "/community" },
+   483→    ],
+   484→  });
+   485→
+   486→  // campus events
+   487→  await db.event.createMany({
+   488→    data: [
+   489→      { title: "Fall Demo Day 2026", description: "Forty teams, five departments, one auditorium. Watch this semester's capstones demo live and vote for the audience award.", location: "Engineering Hall, Daeyeon Campus", date: new Date("2026-12-04T13:00:00+09:00") },
+   490→      { title: "Makerspace Open Lab", description: "Monthly open lab — free filament, soldering help, and the laser cutter with a staff badge. Bring a project or find one.", location: "Makerspace, Central Library B1", date: new Date("2026-11-20T16:00:00+09:00") },
+   491→      { title: "Verification Clinic", description: "Drop-in session where faculty review verification requests and help teams tidy their showcase pages before demo day.", location: "CSE Common Lounge, Creative Hall", date: new Date("2026-11-12T14:00:00+09:00") },
+   492→    ],
+   493→  });
+   494→  console.log("✓ 3 events");
+   495→
+   496→  console.log("\nDemo accounts: any seeded user · password: demo1234");
+   497→  console.log("e.g. jisoo.park (student), gun.woo (TerraBot owner), jiwoo.han (admin)");
+   498→}
+   499→
+   500→main()
+   501→  .then(() => db.$disconnect())
+   502→  .catch(async (e) => {
+   503→    console.error(e);
+   504→    await db.$disconnect();
+   505→    process.exit(1);
+   506→  });
+   507→

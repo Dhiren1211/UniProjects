@@ -1,169 +1,147 @@
-# UniProjects — Kyungsung University Student Project Showcase
+# UniProjects - Kyungsung University Capstone Showcase
 
-> **One campus. Every idea.** — the official platform where Kyungsung University (경성대학교, Busan) students publish capstones, research builds, and prototypes; discover work from every department; and find teammates.
+A minimal, role-based capstone project showcase for a single university. Students are
+provisioned by the capstone coordinator (no public signup), team leaders submit projects,
+professors verify work in their own sections, and staff manage the platform through a
+simple admin console.
 
-UniProjects is a full-stack, single-university platform: a public showcase for student projects plus a private community layer (projects, teams, events, moderation, and admin) behind sign-in. The university itself is **app-level config** — point `src/lib/config.ts` at another school and the whole system rebrands.
-
----
-
-## ✨ Features
-
-### Public (no sign-in required)
-- **Landing overview** — animated hero with ambient aurora, live platform stats, featured projects, department cards with a signature color-flood hover, event cards with full details and a live countdown, closing CTA.
-- **Explore all projects** — search, department / category / year filters, sorting (newest, A–Z, most viewed).
-- **Project detail pages** — rich description, tech stack, team, resources (demo / repo / docs), timeline, image gallery, comments, view counts.
-- **Student directory & profiles** — portfolios of published work, skills, links, follow counts.
-
-### Community (sign-in required)
-- **Projects** — publish or keep drafts, edit full details, allow join requests, mark "looking for teammates"; like 🔥, bookmark, follow, comment.
-- **Join requests** — request to join a team with a message; owners approve/reject (automatic notifications).
-- **Community board** — campus-wide posts with comments and likes.
-- **Notifications** — in-app center for join requests, approvals, comments, follows, likes, and system messages.
-- **Settings** — display name, bio, program, skills, links, avatar (curated presets or upload).
-
-### Verification & moderation
-- **Email-verified registration** — education emails only (see below).
-- **Project verification** — owners request faculty verification; staff review in the moderation queue; approved projects earn a verified badge.
-- **Reports** — flag projects or posts for staff review.
-- **Admin** — platform overview plus management of departments, events, and users (FACULTY / ADMIN roles).
-
-### Authentication
-- Custom session auth: **scrypt** password hashing, httpOnly `up_session` cookie, DB-backed `Session` table (30-day expiry).
-- **Email verification flow (required to register):**
-  1. The email field validates live — **only education addresses** (`*.edu`, `*.edu.xx`, `*.ac.xx` chains such as `@ks.ac.kr` / `@student.ks.ac.kr`, plus an allowlist) are accepted.
-  2. **"Verify email"** sends a **6-digit code** (valid 10 minutes, max 5 attempts, 60-second resend cooldown, codes stored only as SHA-256 hashes).
-  3. Entering the code mints a **single-use token** bound to that email — `POST /api/auth/register` requires it, then the account is created with `emailVerified: true`.
-- **Google OAuth** route (`/api/auth/google`) — real OAuth when credentials exist, demo sign-in otherwise.
-- Sign-in for existing accounts never expires their access (verification gates registration only).
-
-> **📧 Mail delivery:** this sandbox has no SMTP provider, so `src/lib/mailer.ts` writes a formatted email (including the code) to the server console and — outside production — the UI shows a "Demo mode" notice with the code and a **Fill** shortcut. To go live, replace the body of `sendVerificationEmail()` with any provider (SendGrid, SES, Nodemailer…); nothing else changes.
+Stack: **Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · shadcn/ui · Prisma (SQLite) · Bun**
 
 ---
 
-## 🛠 Tech stack
-
-| Layer | Choice |
-|---|---|
-| Framework | **Next.js 16** (App Router) + **TypeScript 5** |
-| UI | **Tailwind CSS 4**, **shadcn/ui** (New York), Lucide icons, Framer Motion |
-| State | Zustand (client) + TanStack Query (server) |
-| Database | **Prisma ORM + SQLite** (file `db/custom.db`) |
-| Validation | zod (all API payloads) |
-| Auth | Custom cookie sessions + scrypt + OAuth route |
-| Runtime | Bun |
-
-**Architecture notes**
-- One visible route (`/`) — the app is a **hash-based SPA**: `#/explore`, `#/projects/<slug>`, `#/u/<username>`, `#/community`, … switched via a Zustand store, with all data fetched from `/api/**` route handlers (no server actions).
-- Shared API contract types live in `src/lib/types.ts`; the typed fetch client is `src/components/uniproject/api-client.ts`.
-- Design tokens live in `src/app/globals.css` (teal primary, `--up-night: #062530` dark canvas for hero/CTA/footer).
-
----
-
-## 🚀 Getting started
+## Getting started
 
 ```bash
-# 1. install
 bun install
-
-# 2. environment (.env)
-DATABASE_URL=file:./db/custom.db
-
-# 3. create the schema
-bun run db:push
-
-# 4. seed departments, 16 projects, 54+ users, events (optional but recommended)
-bun prisma/seed.ts
-
-# 5. run
-bun run dev        # → http://localhost:3000 (logs tee'd to dev.log)
+bun run db:push        # push the Prisma schema to the Postgres DATABASE_URL
+bun prisma/seed.ts     # WIPES all data, then creates departments, technologies, settings + one admin
+bun run dev            # http://localhost:3001
 ```
 
-**Demo accounts** (password `demo1234` for all seeded users):
-| Username | Role |
-|---|---|
-| `jisoo.park` | Student |
-| `gun.woo` | Faculty (can moderate) |
-| `jiwoo.han` | Admin |
+Other scripts: `bun run lint`, `bun run db:generate`, `bun run db:reset`.
 
-Or register fresh with any education-style email (e.g. `jane.doe@student.ks.ac.kr`) and complete the verification code.
+## First admin
 
----
+The seed creates a single `ADMIN` account and nothing else - no demo users or projects.
+Configure it with `ADMIN_USERNAME`, `ADMIN_NAME`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` in
+`.env`. If `ADMIN_PASSWORD` is not set, a strong random password is generated and printed
+once. Everyone else is provisioned through account requests in the admin console.
 
-## 📁 Project structure
+Students log in with their **student number** (the userID) or their university email
+(`a<studentNumber>@ks.ac.kr`).
+
+## Feature map
+
+- **Intake**: public *Request an account* form (Student ID, name, capstone I–III, year,
+  professor - **no email field**; the address `a<studentNumber>@ks.ac.kr` is derived).
+  Admin approves → backend generates userID + temporary password, provisions the
+  account with its `classID` section, and files a credentials email in the outbox
+  (`EmailLog`, surfaced in **Admin → Emails**; swap `src/lib/mailer.ts` for SMTP in
+  production).
+- **Roles**: `ADMIN > MODERATOR > PROFESSOR > STUDENT` (+ unauthenticated VISITOR) -
+  see `src/lib/rbac.ts`. Navigation, dashboard, admin tabs and every API gate respect it.
+- **Submissions**: only team leaders (or staff) can submit - enforced in the UI *and*
+  by `POST /api/projects` returning 403 for members.
+- **Sections**: students sharing a `classID` (e.g. `CD2-2026-KIM`) form one section
+  under one professor; the admin overview groups projects/students per section and
+  professors may only verify inside their own sections.
+- **Professor class sections**: every registered professor can carry a **teaching
+  section `classID`** (Admin → Users → Edit member → *Teaching section*, or the
+  New-member dialog when creating a professor). Students who name that professor -
+  on the public request form or in the admin New-member dialog - are enrolled into
+  the professor's `classID`, so **all students of the same professor share one
+  class ID** regardless of capstone round/year. Resolution order: admin override →
+  the registered professor's classID → deterministic `CD{round}-{year}-{SURNAME}`
+  fallback. The public request form's Professor picker lists every registered
+  professor account (static fallback list when the directory is unreachable).
+- **Site settings** (Admin → Settings): global search-bar toggle (header, ⌘K palette
+  and the projects page), account-request intake switch, site name, hero copy and
+  hero image - stored in the `Setting` table, applied site-wide on save.
+- **Departments**: the official Kyungsung catalogue (62 학부/학과, from
+  kscms.ks.ac.kr) ships via `prisma/ks-departments.ts`. Each department carries an
+  optional **university website link** (admin-editable in Admin → Departments;
+  rendered as a redirect button on project pages and the admin cards) and a
+  **capstone term** (`capstoneLabel`, default "Capstone Design" - Global IT's
+  terminology; other faculties can rename it to e.g. "Graduation Work", which then
+  drives the admin intake form and student dashboards).
+- **Professor profiles**: project supervisors resolve to professor accounts - the
+  detail page links to the faculty profile, which also lists the projects they
+  supervise. Professors can add their **university profile link** (Account
+  settings → *University profile*, or Admin → Users → 🎓 button); it shows as a
+  redirect button on their public profile.
+- **Intake visibility**: every "Request an account" entry point (header drawer,
+  footer, home hero + steps, guidelines CTA) is guest-only. Signed-in visitors who
+  deep-link to the request form see a friendly "You're already signed in" notice.
+- **Forgot password**: the sign-in dialog has a *Forgot password?* flow - the
+  visitor enters their university email; if it belongs to a registered account a
+  fresh temporary password is generated, stored, and emailed
+  (`PASSWORD_RESET` outbox mail). The response is neutral either way (no account
+  enumeration) and **every attempt is registered in Admin → Resets** with the
+  matched account (or a *No match* flag). Students keep signing in with their
+  student number, staff with their username.
+- **Admin user editing**: Admin → Users → Edit member (👤 button) edits name,
+  username, email, role, department, program, the student section (Student ID,
+  classID, capstone, cohort year, professor, team role) and the professor teaching
+  section + university profile link, plus an optional password reset (blank keeps
+  the current password). Uniqueness conflicts return friendly 409s; moving a
+  member off STUDENT strips section data automatically.
+
+## Testing each flow
+
+1. **Visitor** → About/Projects/Announcements/Guidelines work; no Submit button;
+   auth modal is login-only with a "request an account" link.
+2. **Request an account** → submit the public form; duplicate student IDs get 409.
+3. **Admin approvals** → Admin → Approvals → Review a pending request → the classID
+   is prefilled from the named professor's registered teaching section (falls back
+   to `CD{round}-{year}-{SURNAME}`), choose Member/Team Leader → Approve →
+   credentials popup with copy buttons → the email appears in Admin → Emails.
+4. **Student login** → sign in with the generated userID + password; change the
+   password in Account settings.
+5. **Professor class section** → Admin → Users → Edit a professor → set the
+   *Teaching section* classID → submit a public request naming that professor →
+   approve with the prefilled classID → the student's classID equals the
+   professor's. Two students naming the same professor always land in one section.
+6. **Forgot password** → sign out → Sign in → *Forgot password?* → enter a
+   registered university email (e.g. `a<studentNumber>@ks.ac.kr`) → neutral success notice →
+   Admin → Resets shows the request with the matched account, and Admin → Emails →
+   *Password resets* shows the mail. The old password stops working; the emailed
+   temporary password signs in.
+7. **Admin edit member** → Admin → Users → 👤 Edit → change name/username/email or
+   reset a password (blank = keep) → save; duplicate username/email/student ID get
+   clear 409 toasts.
+8. **Leader vs member** → leader sees Submit and can publish; a member sees no submit
+   UI and gets 403 from the API.
+9. **Search toggle** → Admin → Settings → turn *Search bar* off → save → the header
+   icon, ⌘K palette and projects-page search disappear; re-enable to restore.
+10. **Moderator / professor** → sign in as a moderator (limited console) and
+    a professor (section verification queue); each dashboard reflects its role.
+11. **Departments** → Admin → Departments: edit a department's *University website*
+    link or *Capstone term* → the project-page redirect button and the intake-form
+    labels update. New-member dialog: pick a department → the capstone round options
+    rename to that faculty's term.
+12. **Professor link** → sign in as a professor → Account settings → *University
+    profile* → paste the faculty page URL → save; it appears on the public profile
+    and in Admin → Users. Admins can also set it from the console (🎓 button).
+13. **Intake hiding** → sign in, then check the header drawer, footer, home and
+    guidelines: no "Request an account" anywhere; opening the request form signed-in
+    shows the "already signed in" notice.
+
+## Removed in this overhaul
+
+Public signup, the email-verification code flow, Google demo auth, the community
+board, the student directory and campus events were removed to keep the platform
+focused (requirement 7). Project likes/bookmarks, join requests, comments,
+verifications, notifications and profiles remain.
+
+## Project layout
 
 ```
-src/
-├─ app/
-│  ├─ page.tsx                 # the single route (SPA shell)
-│  ├─ globals.css              # design tokens (teal brand, night canvas)
-│  └─ api/                     # REST route handlers
-│     ├─ auth/                 # login · register · logout · me · google
-│     │  └─ email/             # request-code · verify-code (email verification)
-│     ├─ projects/[slug]/      # detail, like, bookmark, comments, join…
-│     ├─ posts/ users/ departments/ events/ technologies/
-│     ├─ likes/ bookmarks/ follow/ reports/ notifications/
-│     ├─ moderation/ admin/ search/ stats/
-├─ components/
-│  ├─ ui/                      # shadcn/ui primitives
-│  └─ uniproject/
-│     ├─ app-shell.tsx         # header + view switcher + footer
-│     ├─ auth-modal.tsx        # sign-in / 2-step verified registration
-│     ├─ api-client.ts         # typed fetch client (THE contract)
-│     ├─ header.tsx footer.tsx project-card.tsx ui-bits.tsx …
-│     └─ views/                # home · projects · detail · community ·
-│                              # students · profile · create · settings ·
-│                              # notifications · moderation · admin
-├─ lib/
-│  ├─ config.ts                # university branding, categories, accents
-│  ├─ auth.ts                  # scrypt, sessions, safe user mapper
-│  ├─ edu-email.ts             # education-email validator (shared client/server)
-│  ├─ mailer.ts                # verification-code delivery (console today)
-│  ├─ db.ts  types.ts  utils.ts
-prisma/
-├─ schema.prisma               # User · Session · EmailVerification ·
-│                              # Project · Department · Post · Comment · …
-└─ seed.ts                     # rich demo data (bun prisma/seed.ts)
-db/custom.db                   # SQLite database
+prisma/schema.prisma          # models + role/section fields
+src/lib/rbac.ts               # role hierarchy + capability helpers
+src/lib/settings.ts           # DB-backed site settings
+src/lib/mailer.ts             # credential/system email + outbox
+src/app/api/                  # REST API (auth, account-requests, settings,
+                              # announcements, projects, admin, upload, …)
+src/components/uniproject/    # SPA shell, header/footer, views (home, projects,
+                              # dashboard, admin, announcements, guidelines, …)
 ```
-
----
-
-## 🔌 API at a glance
-
-All endpoints return `{ error }` with a 4xx/5xx on failure; authenticated routes read the `up_session` cookie.
-
-| Group | Endpoints |
-|---|---|
-| Auth | `POST /api/auth/login` · `register` (requires verify token) · `logout` · `GET me` · Google OAuth |
-| Email verification | `POST /api/auth/email/request-code` · `POST /api/auth/email/verify-code` |
-| Projects | `GET/POST /api/projects` · `GET/PATCH/DELETE /api/projects/[slug]` · like / bookmark / comments / join / timeline / images / resources |
-| Community | `GET/POST /api/posts` · comments · likes |
-| People | `GET /api/users` (directory) · `/api/users/[username]` · follow |
-| Meta | `GET /api/departments` · `events` · `technologies` · `stats` · `search` |
-| Actions | `likes` · `bookmarks` · `follow` · `reports` · `notifications` |
-| Staff | `moderation/verifications` (approve/reject) · `admin/**` (departments, events, users, overview) |
-
----
-
-## 🧹 Scripts
-
-| Command | What it does |
-|---|---|
-| `bun run dev` | Dev server on port **3000** (log streamed to `dev.log`) |
-| `bun run lint` | ESLint (Next.js rules) |
-| `bunx tsc --noEmit` | Type check |
-| `bun run db:push` | Push `prisma/schema.prisma` to SQLite |
-| `bun run db:generate` | Regenerate Prisma Client |
-| `bun run build` / `start` | Production build / standalone server |
-
----
-
-## 🎨 Design language
-
-- **Brand** — Kyungsung crest palette (blue `#005baa`, red `#d71920`, gold `#fcaf17`) with the portal **teal `#0097b2`** as the app primary; dark surfaces use `--up-night: #062530`.
-- **Departments** each carry an accent (teal / sky / orange / rose / lime / cyan) used for covers, chips, and the landing cards' hover color-flood.
-- Motion is **reduced-motion aware** everywhere (Framer Motion springs degrade to instant states); the layout is mobile-first with a sticky footer and safe-area support.
-
----
-
-*Built as a student-platform showcase — rebrand it, reseed it, and make it yours.* 🎓

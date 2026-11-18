@@ -1,0 +1,1636 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useMemo, useState } from "react";
+     4→import {
+     5→  AlertTriangle,
+     6→  ArrowLeft,
+     7→  Check,
+     8→  Crown,
+     9→  Loader2,
+    10→  Lock,
+    11→  Plus,
+    12→  Search,
+    13→  ShieldAlert,
+    14→  Trash2,
+    15→} from "lucide-react";
+    16→import { toast } from "sonner";
+    17→import { Button } from "@/components/ui/button";
+    18→import { Input } from "@/components/ui/input";
+    19→import { Label } from "@/components/ui/label";
+    20→import {
+    21→  Select,
+    22→  SelectContent,
+    23→  SelectItem,
+    24→  SelectTrigger,
+    25→  SelectValue,
+    26→} from "@/components/ui/select";
+    27→import { Switch } from "@/components/ui/switch";
+    28→import { Textarea } from "@/components/ui/textarea";
+    29→import { CATEGORIES, SEMESTERS, YEARS } from "@/lib/config";
+    30→import { cn } from "@/lib/utils";
+    31→import {
+    32→  addMember,
+    33→  addResource,
+    34→  addTimelineItem,
+    35→  createProject,
+    36→  deleteResource,
+    37→  deleteTimelineItem,
+    38→  fetchDepartments,
+    39→  fetchProject,
+    40→  fetchTechnologies,
+    41→  removeMember,
+    42→  searchUsers,
+    43→  updateMember,
+    44→  updateProject,
+    45→  type DepartmentDTO,
+    46→  type MemberDTO,
+    47→  type Navigate,
+    48→  type ProjectDetail,
+    49→  type ProjectDetailResponse,
+    50→  type ProjectInput,
+    51→  type ResourceDTO,
+    52→  type SafeUserDTO,
+    53→  type TechnologyDTO,
+    54→  type TimelineDTO,
+    55→} from "../api-client";
+    56→import { useAppStore } from "../store";
+    57→import { EmptyState, MemberAvatar } from "../ui-bits";
+    58→
+    59→// ---------- constants / helpers ----------
+    60→
+    61→const STEPS = [
+    62→  { n: 1, label: "Basics" },
+    63→  { n: 2, label: "Academics" },
+    64→  { n: 3, label: "Team" },
+    65→  { n: 4, label: "Technologies" },
+    66→  { n: 5, label: "Resources" },
+    67→] as const;
+    68→
+    69→const RESOURCE_TYPES = [
+    70→  { value: "DEMO", label: "Live demo" },
+    71→  { value: "GITHUB", label: "GitHub repo" },
+    72→  { value: "DOCUMENT", label: "Document" },
+    73→  { value: "VIDEO", label: "Video" },
+    74→  { value: "PRESENTATION", label: "Presentation" },
+    75→] as const;
+    76→
+    77→const URL_RE = /^https?:\/\/\S+/i;
+    78→
+    79→type FormState = {
+    80→  title: string;
+    81→  summary: string;
+    82→  description: string;
+    83→  dept: string;
+    84→  category: string;
+    85→  year: string;
+    86→  semester: string;
+    87→  program: string;
+    88→  supervisor: string;
+    89→  allowJoinRequests: boolean;
+    90→  lookingForTeammates: boolean;
+    91→  technologyIds: string[];
+    92→};
+    93→
+    94→const EMPTY_FORM: FormState = {
+    95→  title: "",
+    96→  summary: "",
+    97→  description: "",
+    98→  dept: "",
+    99→  category: "",
+   100→  year: "",
+   101→  semester: "",
+   102→  program: "",
+   103→  supervisor: "",
+   104→  allowJoinRequests: true,
+   105→  lookingForTeammates: false,
+   106→  technologyIds: [],
+   107→};
+   108→
+   109→type DraftResource = { key: string; type: string; label: string; url: string };
+   110→type DraftMilestone = { key: string; title: string; date: string; note: string };
+   111→type DraftMember = { username: string; name: string; role: string };
+   112→
+   113→let rowSeq = 0;
+   114→const newRowKey = () => `row-${++rowSeq}`;
+   115→
+   116→function errOf(e: unknown, fallback: string) {
+   117→  return e instanceof Error ? e.message : fallback;
+   118→}
+   119→
+   120→/** Maps a server error message back to the wizard step that most likely caused it. */
+   121→function stepForMessage(msg: string): number {
+   122→  const m = msg.toLowerCase();
+   123→  if (/technolog/.test(m)) return 4;
+   124→  if (/(member|teammate|username)/.test(m)) return 3;
+   125→  if (/(department|category|semester|supervisor|program|academic|year)/.test(m)) return 2;
+   126→  if (/(url|resource|timeline|milestone|date|link)/.test(m)) return 5;
+   127→  return 1; // title / summary / description and anything generic
+   128→}
+   129→
+   130→function WizardSkeleton() {
+   131→  return (
+   132→    <div className="mx-auto w-full max-w-4xl px-5 py-10 md:px-8 md:py-14">
+   133→      <div className="h-9 w-56 animate-pulse rounded-lg bg-surface-muted" />
+   134→      <div className="mt-8 flex flex-wrap gap-2">
+   135→        {STEPS.map((s) => (
+   136→          <div key={s.n} className="h-9 w-24 animate-pulse rounded-full bg-surface-muted" />
+   137→        ))}
+   138→      </div>
+   139→      <div className="mt-8 space-y-5 rounded-2xl border border-up-border bg-card p-6 md:p-8">
+   140→        {[0, 1, 2].map((i) => (
+   141→          <div key={i} className="space-y-2">
+   142→            <div className="h-4 w-28 animate-pulse rounded bg-surface-muted" />
+   143→            <div className="h-10 w-full animate-pulse rounded-xl bg-surface-muted" />
+   144→          </div>
+   145→        ))}
+   146→      </div>
+   147→    </div>
+   148→  );
+   149→}
+   150→
+   151→function Stepper({ current, onGo }: { current: number; onGo: (n: number) => void }) {
+   152→  return (
+   153→    <ol className="flex flex-wrap items-center gap-y-2" aria-label="Wizard steps">
+   154→      {STEPS.map((s, i) => {
+   155→        const done = s.n < current;
+   156→        const isCurrent = s.n === current;
+   157→        return (
+   158→          <li key={s.n} className="flex items-center">
+   159→            {i > 0 ? (
+   160→              <span aria-hidden className="mx-1.5 h-px w-5 bg-up-border-strong md:mx-2 md:w-8" />
+   161→            ) : null}
+   162→            <button
+   163→              type="button"
+   164→              disabled={!done}
+   165→              onClick={() => onGo(s.n)}
+   166→              aria-current={isCurrent ? "step" : undefined}
+   167→              className={cn(
+   168→                "inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-all duration-200 md:text-sm",
+   169→                done && "cursor-pointer bg-primary-500 text-white hover:bg-primary-600",
+   170→                isCurrent && "border-2 border-primary-500 bg-white text-primary-700",
+   171→                !done && !isCurrent && "cursor-default bg-surface-muted text-muted-foreground"
+   172→              )}
+   173→            >
+   174→              {done ? <Check className="size-3.5" aria-hidden /> : <span className="tabular-nums">{s.n}</span>}
+   175→              {s.label}
+   176→            </button>
+   177→          </li>
+   178→        );
+   179→      })}
+   180→    </ol>
+   181→  );
+   182→}
+   183→
+   184→/** Debounced user search + per-row role select, shared by the team step. */
+   185→function UserSearchAdd({
+   186→  exclude,
+   187→  onPick,
+   188→}: {
+   189→  exclude: Set<string>;
+   190→  onPick: (u: SafeUserDTO, role: string) => void;
+   191→}) {
+   192→  const [query, setQuery] = useState("");
+   193→  const [debounced, setDebounced] = useState("");
+   194→  const [found, setFound] = useState<SafeUserDTO[] | null>(null);
+   195→  const [foundFor, setFoundFor] = useState("");
+   196→  const [roles, setRoles] = useState<Record<string, string>>({});
+   197→  const [busyName, setBusyName] = useState<string | null>(null);
+   198→
+   199→  useEffect(() => {
+   200→    const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), 300);
+   201→    return () => clearTimeout(t);
+   202→  }, [query]);
+   203→
+   204→  useEffect(() => {
+   205→    const q = debounced;
+   206→    if (q.length < 2) return;
+   207→    const ac = new AbortController();
+   208→    searchUsers(q, ac.signal)
+   209→      .then((rows) => {
+   210→        setFound(rows);
+   211→        setFoundFor(q);
+   212→      })
+   213→      .catch(() => {});
+   214→    return () => ac.abort();
+   215→  }, [debounced]);
+   216→
+   217→  const ready = debounced.length >= 2 && foundFor === debounced;
+   218→  const visible = ready ? (found ?? []).filter((u) => !exclude.has(u.username.toLowerCase())) : null;
+   219→
+   220→  const pick = (u: SafeUserDTO) => {
+   221→    setBusyName(u.id);
+   222→    setQuery("");
+   223→    Promise.resolve(onPick(u, roles[u.id] ?? "MEMBER"))
+   224→      .catch(() => {})
+   225→      .finally(() => setBusyName(null));
+   226→  };
+   227→
+   228→  return (
+   229→    <div>
+   230→      <Label htmlFor="team-search">Find teammates</Label>
+   231→      <div className="relative mt-1.5">
+   232→        <Search
+   233→          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+   234→          aria-hidden
+   235→        />
+   236→        <Input
+   237→          id="team-search"
+   238→          value={query}
+   239→          onChange={(e) => setQuery(e.target.value)}
+   240→          placeholder="Search students by name or username…"
+   241→          className="h-10 rounded-xl bg-white pl-9"
+   242→          autoComplete="off"
+   243→        />
+   244→      </div>
+   245→      <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto nice-scroll">
+   246→        {visible === null ? (
+   247→          <p className="px-1 py-2 text-xs text-muted-foreground">
+   248→            {debounced.length >= 2 ? "Searching…" : "Type at least 2 characters to search."}
+   249→          </p>
+   250→        ) : visible.length === 0 ? (
+   251→          <p className="px-1 py-2 text-xs text-muted-foreground">No matching students.</p>
+   252→        ) : (
+   253→          visible.map((u) => (
+   254→            <div
+   255→              key={u.id}
+   256→              className="flex items-center gap-2.5 rounded-xl border border-up-border bg-white px-3 py-2"
+   257→            >
+   258→              <MemberAvatar name={u.displayName} ring={false} className="size-7" />
+   259→              <div className="min-w-0 flex-1">
+   260→                <p className="truncate text-sm font-medium text-foreground">{u.displayName}</p>
+   261→                <p className="truncate text-xs text-muted-foreground">@{u.username}</p>
+   262→              </div>
+   263→              <Select value={roles[u.id] ?? "MEMBER"} onValueChange={(role) => setRoles((r) => ({ ...r, [u.id]: role }))}>
+   264→                <SelectTrigger
+   265→                  aria-label={`Role for ${u.displayName}`}
+   266→                  className="h-8 w-[92px] rounded-lg text-xs"
+   267→                >
+   268→                  <SelectValue />
+   269→                </SelectTrigger>
+   270→                <SelectContent>
+   271→                  <SelectItem value="LEAD">Lead</SelectItem>
+   272→                  <SelectItem value="MEMBER">Member</SelectItem>
+   273→                </SelectContent>
+   274→              </Select>
+   275→              <Button
+   276→                size="sm"
+   277→                className="h-8 rounded-lg px-3 font-semibold"
+   278→                disabled={busyName === u.id}
+   279→                onClick={() => pick(u)}
+   280→              >
+   281→                {busyName === u.id ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : "Add"}
+   282→              </Button>
+   283→            </div>
+   284→          ))
+   285→        )}
+   286→      </div>
+   287→    </div>
+   288→  );
+   289→}
+   290→
+   291→// ---------- view ----------
+   292→
+   293→export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; navigate: Navigate }) {
+   294→  const { user, authLoaded, openAuth } = useAppStore();
+   295→  const editing = Boolean(editSlug);
+   296→
+   297→  const [existing, setExisting] = useState<ProjectDetailResponse | null>(null);
+   298→  const [editBlocked, setEditBlocked] = useState(false);
+   299→  const [editFailed, setEditFailed] = useState(false);
+   300→  const [editRetry, setEditRetry] = useState(0);
+   301→
+   302→  const [step, setStep] = useState(1);
+   303→  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+   304→  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+   305→  const [stepError, setStepError] = useState<string | null>(null);
+   306→  const [saving, setSaving] = useState<"" | "draft" | "final">("");
+   307→
+   308→  const [draftMembers, setDraftMembers] = useState<DraftMember[]>([]);
+   309→  const [draftResources, setDraftResources] = useState<DraftResource[]>([]);
+   310→  const [draftTimeline, setDraftTimeline] = useState<DraftMilestone[]>([]);
+   311→  const [memberBusy, setMemberBusy] = useState<string | null>(null);
+   312→
+   313→  const [departments, setDepartments] = useState<DepartmentDTO[]>([]);
+   314→  const [techs, setTechs] = useState<TechnologyDTO[] | null>(null);
+   315→
+   316→  const [newRes, setNewRes] = useState<{ type: string; label: string; url: string }>({
+   317→    type: "DEMO",
+   318→    label: "",
+   319→    url: "",
+   320→  });
+   321→  const [resErr, setResErr] = useState<string | null>(null);
+   322→  const [resBusy, setResBusy] = useState(false);
+   323→  const [newMile, setNewMile] = useState<{ title: string; date: string; note: string }>({
+   324→    title: "",
+   325→    date: "",
+   326→    note: "",
+   327→  });
+   328→  const [mileErr, setMileErr] = useState<string | null>(null);
+   329→  const [mileBusy, setMileBusy] = useState(false);
+   330→
+   331→  // departments are static — load once
+   332→  useEffect(() => {
+   333→    const ac = new AbortController();
+   334→    fetchDepartments(ac.signal)
+   335→      .then(setDepartments)
+   336→      .catch(() => {});
+   337→    return () => ac.abort();
+   338→  }, []);
+   339→
+   340→  // edit mode: load the project and populate the form
+   341→  useEffect(() => {
+   342→    if (!editSlug || !user) return;
+   343→    const ac = new AbortController();
+   344→    fetchProject(editSlug, ac.signal)
+   345→      .then(({ project, viewer }) => {
+   346→        if (!viewer.isOwner) {
+   347→          setEditBlocked(true);
+   348→          return;
+   349→        }
+   350→        setExisting({ project, viewer });
+   351→        setForm({
+   352→          title: project.title,
+   353→          summary: project.summary,
+   354→          description: project.description,
+   355→          dept: project.department.code,
+   356→          category: project.category,
+   357→          year: String(project.year),
+   358→          semester: project.semester,
+   359→          program: project.program ?? "",
+   360→          supervisor: project.supervisor ?? "",
+   361→          allowJoinRequests: project.allowJoinRequests,
+   362→          lookingForTeammates: project.lookingForTeammates,
+   363→          technologyIds: project.technologies.map((t) => t.id),
+   364→        });
+   365→      })
+   366→      .catch(() => {
+   367→        if (!ac.signal.aborted) setEditFailed(true);
+   368→      });
+   369→    return () => ac.abort();
+   370→  }, [editSlug, user?.id, editRetry]);
+   371→
+   372→  // technologies are only needed on step 4 — lazy load
+   373→  useEffect(() => {
+   374→    if (step !== 4 || techs !== null) return;
+   375→    const ac = new AbortController();
+   376→    fetchTechnologies(ac.signal)
+   377→      .then(setTechs)
+   378→      .catch(() => setTechs([]));
+   379→    return () => ac.abort();
+   380→  }, [step, techs]);
+   381→
+   382→  const techGroups = useMemo(() => {
+   383→    const groups: { category: string; items: TechnologyDTO[] }[] = [];
+   384→    const idx = new Map<string, number>();
+   385→    for (const t of techs ?? []) {
+   386→      const i = idx.get(t.category);
+   387→      if (i === undefined) {
+   388→        idx.set(t.category, groups.length);
+   389→        groups.push({ category: t.category, items: [t] });
+   390→      } else {
+   391→        groups[i].items.push(t);
+   392→      }
+   393→    }
+   394→    return groups;
+   395→  }, [techs]);
+   396→
+   397→  // ---------- gates ----------
+   398→
+   399→  if (!authLoaded) return <WizardSkeleton />;
+   400→
+   401→  if (!user) {
+   402→    return (
+   403→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   404→        <EmptyState
+   405→          icon={Lock}
+   406→          title={editing ? "Sign in to edit a project" : "Sign in to submit a project"}
+   407→          hint="You need a student account to publish projects on the showcase."
+   408→          action={
+   409→            <Button onClick={() => openAuth("login")} className="rounded-xl font-semibold">
+   410→              Sign in
+   411→            </Button>
+   412→          }
+   413→        />
+   414→      </div>
+   415→    );
+   416→  }
+   417→
+   418→  if (editing && editBlocked) {
+   419→    return (
+   420→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   421→        <EmptyState
+   422→          icon={ShieldAlert}
+   423→          title="You can't edit this project"
+   424→          hint="Only the project owner can make changes to it."
+   425→          action={
+   426→            <Button onClick={() => navigate({ name: "projects" })} variant="outline" className="rounded-xl font-semibold">
+   427→              Back to projects
+   428→            </Button>
+   429→          }
+   430→        />
+   431→      </div>
+   432→    );
+   433→  }
+   434→
+   435→  if (editing && editFailed) {
+   436→    return (
+   437→      <div className="mx-auto w-full max-w-6xl px-5 py-24 md:px-8">
+   438→        <EmptyState
+   439→          icon={AlertTriangle}
+   440→          title="Something went wrong"
+   441→          hint="We couldn't load this project for editing."
+   442→          action={
+   443→            <Button
+   444→              onClick={() => {
+   445→                setEditFailed(false);
+   446→                setEditRetry((r) => r + 1);
+   447→              }}
+   448→              variant="outline"
+   449→              className="rounded-xl font-semibold"
+   450→            >
+   451→              Try again
+   452→            </Button>
+   453→          }
+   454→        />
+   455→      </div>
+   456→    );
+   457→  }
+   458→
+   459→  if (editing && !existing) return <WizardSkeleton />;
+   460→
+   461→  const editProject = existing?.project ?? null;
+   462→  const publishNow = editing && editProject ? editProject.status === "DRAFT" : false;
+   463→
+   464→  // ---------- form helpers ----------
+   465→
+   466→  const setField = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+   467→    setForm((f) => ({ ...f, [k]: v }));
+   468→    setErrors((e) => (e[k] ? { ...e, [k]: undefined } : e));
+   469→  };
+   470→
+   471→  const fieldErr = (key: string) =>
+   472→    errors[key] ? <p className="text-xs font-medium text-danger">{errors[key]}</p> : null;
+   473→
+   474→  const validateStep = (s: number): Record<string, string> => {
+   475→    const e: Record<string, string> = {};
+   476→    if (s === 1) {
+   477→      const t = form.title.trim();
+   478→      if (t.length < 4) e.title = "Title must be at least 4 characters";
+   479→      const sum = form.summary.trim();
+   480→      if (sum.length < 20) e.summary = `Summary must be at least 20 characters (${sum.length}/20)`;
+   481→      const d = form.description.trim();
+   482→      if (d.length < 60) e.description = `Description must be at least 60 characters (${d.length}/60)`;
+   483→    }
+   484→    if (s === 2) {
+   485→      if (!form.dept) e.dept = "Choose a department";
+   486→      if (!form.category) e.category = "Choose a category";
+   487→      if (!form.year) e.year = "Choose a year";
+   488→      if (!form.semester) e.semester = "Choose a semester";
+   489→    }
+   490→    return e;
+   491→  };
+   492→
+   493→  const validateCore = (): { step: number; errors: Record<string, string> } | null => {
+   494→    const e1 = validateStep(1);
+   495→    if (Object.keys(e1).length) return { step: 1, errors: e1 };
+   496→    const e2 = validateStep(2);
+   497→    if (Object.keys(e2).length) return { step: 2, errors: e2 };
+   498→    return null;
+   499→  };
+   500→
+   501→  const draftRowError = (): string | null => {
+   502→    for (const r of draftResources) {
+   503→      if (!r.url.trim()) continue;
+   504→      if (!URL_RE.test(r.url.trim())) return "A resource link is not a valid URL — use the full http(s):// address.";
+   505→    }
+   506→    for (const t of draftTimeline) {
+   507→      if (!t.title.trim() && !t.date && !t.note.trim()) continue;
+   508→      if (!t.title.trim() || !t.date) return "Milestones need both a title and a date (empty rows are ignored).";
+   509→    }
+   510→    return null;
+   511→  };
+   512→
+   513→  const corePayload = (publish: boolean): ProjectInput => ({
+   514→    title: form.title.trim(),
+   515→    summary: form.summary.trim(),
+   516→    description: form.description.trim(),
+   517→    category: form.category,
+   518→    year: Number(form.year),
+   519→    semester: form.semester,
+   520→    dept: form.dept,
+   521→    program: form.program.trim() || undefined,
+   522→    supervisor: form.supervisor.trim() || undefined,
+   523→    tags: [],
+   524→    publish,
+   525→    technologyIds: form.technologyIds,
+   526→    allowJoinRequests: form.allowJoinRequests,
+   527→    lookingForTeammates: form.lookingForTeammates,
+   528→    members: draftMembers.map(({ username, role }) => ({ username, role })),
+   529→  });
+   530→
+   531→  const onSubmitError = (err: unknown) => {
+   532→    const msg = errOf(err, "Something went wrong");
+   533→    setStep(stepForMessage(msg));
+   534→    setStepError(msg);
+   535→    toast.error(msg);
+   536→  };
+   537→
+   538→  // ---------- edit-mode live mutations (members / resources / timeline) ----------
+   539→
+   540→  const reloadLists = () => {
+   541→    if (!editSlug) return;
+   542→    fetchProject(editSlug)
+   543→      .then(({ project }) => {
+   544→        setExisting((ex) =>
+   545→          ex
+   546→            ? {
+   547→                ...ex,
+   548→                project: {
+   549→                  ...ex.project,
+   550→                  members: project.members,
+   551→                  resources: project.resources,
+   552→                  timeline: project.timeline,
+   553→                },
+   554→              }
+   555→            : ex
+   556→        );
+   557→      })
+   558→      .catch(() => {});
+   559→  };
+   560→
+   561→  const patchProject = (patch: Partial<ProjectDetail>) =>
+   562→    setExisting((ex) => (ex ? { ...ex, project: { ...ex.project, ...patch } } : ex));
+   563→
+   564→  const changeMemberRole = (m: MemberDTO, role: string) => {
+   565→    if (!editSlug || role === m.role) return;
+   566→    setMemberBusy(m.id);
+   567→    updateMember(editSlug, { memberId: m.id, role })
+   568→      .then(() => {
+   569→        toast.success(`${m.name} is now ${role === "LEAD" ? "a lead" : "a member"}`);
+   570→        reloadLists();
+   571→      })
+   572→      .catch((e: unknown) => toast.error(errOf(e, "Update failed")))
+   573→      .finally(() => setMemberBusy(null));
+   574→  };
+   575→
+   576→  const removeMemberNow = (m: MemberDTO) => {
+   577→    if (!editSlug) return;
+   578→    setMemberBusy(m.id);
+   579→    removeMember(editSlug, { memberId: m.id })
+   580→      .then(() => {
+   581→        toast.success(`${m.name} was removed from the team`);
+   582→        reloadLists();
+   583→      })
+   584→      .catch((e: unknown) => toast.error(errOf(e, "Remove failed")))
+   585→      .finally(() => setMemberBusy(null));
+   586→  };
+   587→
+   588→  const addMemberNow = (u: SafeUserDTO, role: string) => {
+   589→    if (!editSlug) return;
+   590→    addMember(editSlug, { username: u.username, role })
+   591→      .then(() => {
+   592→        toast.success(`${u.displayName} joined the team`);
+   593→        reloadLists();
+   594→      })
+   595→      .catch((e: unknown) => toast.error(errOf(e, "Could not add teammate")));
+   596→  };
+   597→
+   598→  const addResourceNow = () => {
+   599→    if (!editSlug) return;
+   600→    if (!newRes.label.trim()) {
+   601→      setResErr("Give the resource a short label.");
+   602→      return;
+   603→    }
+   604→    if (!URL_RE.test(newRes.url.trim())) {
+   605→      setResErr("Enter a full URL starting with http:// or https://");
+   606→      return;
+   607→    }
+   608→    setResBusy(true);
+   609→    setResErr(null);
+   610→    addResource(editSlug, { type: newRes.type, label: newRes.label.trim(), url: newRes.url.trim() })
+   611→      .then(() => {
+   612→        toast.success("Resource added");
+   613→        setNewRes({ type: "DEMO", label: "", url: "" });
+   614→        reloadLists();
+   615→      })
+   616→      .catch((e: unknown) => setResErr(errOf(e, "Could not add resource")))
+   617→      .finally(() => setResBusy(false));
+   618→  };
+   619→
+   620→  const deleteResourceNow = (r: ResourceDTO) => {
+   621→    if (!editSlug || !editProject) return;
+   622→    deleteResource(editSlug, r.id)
+   623→      .then(() => {
+   624→        toast.success("Resource removed");
+   625→        patchProject({ resources: editProject.resources.filter((x) => x.id !== r.id) });
+   626→      })
+   627→      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+   628→  };
+   629→
+   630→  const addMilestoneNow = () => {
+   631→    if (!editSlug) return;
+   632→    if (!newMile.title.trim()) {
+   633→      setMileErr("Give the milestone a title.");
+   634→      return;
+   635→    }
+   636→    if (!newMile.date) {
+   637→      setMileErr("Pick a date.");
+   638→      return;
+   639→    }
+   640→    setMileBusy(true);
+   641→    setMileErr(null);
+   642→    addTimelineItem(editSlug, { title: newMile.title.trim(), date: newMile.date, note: newMile.note.trim() || undefined })
+   643→      .then(() => {
+   644→        toast.success("Milestone added");
+   645→        setNewMile({ title: "", date: "", note: "" });
+   646→        reloadLists();
+   647→      })
+   648→      .catch((e: unknown) => setMileErr(errOf(e, "Could not add milestone")))
+   649→      .finally(() => setMileBusy(false));
+   650→  };
+   651→
+   652→  const deleteMilestoneNow = (t: TimelineDTO) => {
+   653→    if (!editSlug || !editProject) return;
+   654→    deleteTimelineItem(editSlug, t.id)
+   655→      .then(() => {
+   656→        toast.success("Milestone removed");
+   657→        patchProject({ timeline: editProject.timeline.filter((x) => x.id !== t.id) });
+   658→      })
+   659→      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+   660→  };
+   661→
+   662→  // ---------- navigation / submit ----------
+   663→
+   664→  const goNext = () => {
+   665→    const e = validateStep(step);
+   666→    if (Object.keys(e).length) {
+   667→      setErrors(e);
+   668→      return;
+   669→    }
+   670→    setErrors({});
+   671→    setStepError(null);
+   672→    setStep((s) => Math.min(5, s + 1));
+   673→  };
+   674→
+   675→  const goBack = () => {
+   676→    if (step > 1) {
+   677→      setStep((s) => s - 1);
+   678→      setStepError(null);
+   679→      return;
+   680→    }
+   681→    navigate(editing && editSlug ? { name: "project", slug: editSlug } : { name: "projects" });
+   682→  };
+   683→
+   684→  const saveDraft = () => {
+   685→    const core = validateCore();
+   686→    if (core) {
+   687→      setStep(core.step);
+   688→      setErrors(core.errors);
+   689→      setStepError("Fill in the required fields before saving a draft.");
+   690→      toast.error("Missing required fields");
+   691→      return;
+   692→    }
+   693→    const rowErr = draftRowError();
+   694→    if (rowErr) {
+   695→      setStep(5);
+   696→      setStepError(rowErr);
+   697→      return;
+   698→    }
+   699→    setSaving("draft");
+   700→    setStepError(null);
+   701→    createProject(corePayload(false))
+   702→      .then((created) => {
+   703→        toast.success("Draft saved — publish whenever you're ready");
+   704→        navigate({ name: "project", slug: created.slug });
+   705→      })
+   706→      .catch(onSubmitError)
+   707→      .finally(() => setSaving(""));
+   708→  };
+   709→
+   710→  const submitFinal = () => {
+   711→    const core = validateCore();
+   712→    if (core) {
+   713→      setStep(core.step);
+   714→      setErrors(core.errors);
+   715→      setStepError("Please fix the highlighted fields first.");
+   716→      return;
+   717→    }
+   718→    const rowErr = editing ? null : draftRowError();
+   719→    if (rowErr) {
+   720→      setStepError(rowErr);
+   721→      return;
+   722→    }
+   723→    setSaving("final");
+   724→    setStepError(null);
+   725→
+   726→    if (editing && editSlug) {
+   727→      updateProject(editSlug, {
+   728→        title: form.title.trim(),
+   729→        summary: form.summary.trim(),
+   730→        description: form.description.trim(),
+   731→        category: form.category,
+   732→        year: Number(form.year),
+   733→        semester: form.semester,
+   734→        dept: form.dept,
+   735→        program: form.program.trim() || undefined,
+   736→        supervisor: form.supervisor.trim() || undefined,
+   737→        technologyIds: form.technologyIds,
+   738→        allowJoinRequests: form.allowJoinRequests,
+   739→        lookingForTeammates: form.lookingForTeammates,
+   740→        ...(publishNow ? { status: "PUBLISHED" as const } : {}),
+   741→      })
+   742→        .then(() => {
+   743→          toast.success(publishNow ? "Project published!" : "Changes saved");
+   744→          navigate({ name: "project", slug: editSlug });
+   745→        })
+   746→        .catch(onSubmitError)
+   747→        .finally(() => setSaving(""));
+   748→      return;
+   749→    }
+   750→
+   751→    createProject(corePayload(true))
+   752→      .then((created) => {
+   753→        const slug = created.slug;
+   754→        // createProject has no resources/timeline fields — apply them best-effort
+   755→        const jobs: Promise<unknown>[] = [
+   756→          ...draftResources
+   757→            .filter((r) => r.url.trim())
+   758→            .map((r) =>
+   759→              addResource(slug, { type: r.type, label: r.label.trim() || r.type, url: r.url.trim() })
+   760→            ),
+   761→          ...draftTimeline
+   762→            .filter((t) => t.title.trim() && t.date)
+   763→            .map((t) =>
+   764→              addTimelineItem(slug, {
+   765→                title: t.title.trim(),
+   766→                date: t.date,
+   767→                note: t.note.trim() || undefined,
+   768→              })
+   769→            ),
+   770→        ];
+   771→        return Promise.all(jobs.map((j) => j.catch(() => null))).then(() => slug);
+   772→      })
+   773→      .then((slug) => {
+   774→        toast.success("Project published!");
+   775→        navigate({ name: "project", slug });
+   776→      })
+   777→      .catch(onSubmitError)
+   778→      .finally(() => setSaving(""));
+   779→  };
+   780→
+   781→  // ---------- render ----------
+   782→
+   783→  const stepLabel = STEPS[step - 1].label;
+   784→
+   785→  return (
+   786→    <div className="mx-auto w-full max-w-4xl px-5 py-10 md:px-8 md:py-12">
+   787→      {/* Heading */}
+   788→      <div className="flex flex-wrap items-end justify-between gap-3">
+   789→        <div>
+   790→          <p className="text-xs font-semibold uppercase tracking-widest text-primary-600">
+   791→            {editing ? "Edit project" : "New submission"}
+   792→          </p>
+   793→          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+   794→            {editing ? "Edit project" : "Submit a project"}
+   795→          </h1>
+   796→        </div>
+   797→        <p className="text-sm text-muted-foreground" aria-live="polite">
+   798→          Step {step} of 5 — {stepLabel}
+   799→        </p>
+   800→      </div>
+   801→
+   802→      {/* Stepper */}
+   803→      <div className="mt-8">
+   804→        <Stepper current={step} onGo={(n) => setStep(n)} />
+   805→      </div>
+   806→
+   807→      {stepError ? (
+   808→        <div
+   809→          role="alert"
+   810→          className="mt-6 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm font-medium text-danger"
+   811→        >
+   812→          {stepError}
+   813→        </div>
+   814→      ) : null}
+   815→
+   816→      {/* Step card */}
+   817→      <section className="mt-6 rounded-2xl border border-up-border bg-card p-6 md:p-8">
+   818→        {/* ---------- Step 1: Basics ---------- */}
+   819→        {step === 1 ? (
+   820→          <div className="space-y-5">
+   821→            <div className="space-y-1.5">
+   822→              <Label htmlFor="f-title">Project title</Label>
+   823→              <Input
+   824→                id="f-title"
+   825→                value={form.title}
+   826→                maxLength={120}
+   827→                onChange={(e) => setField("title", e.target.value)}
+   828→                placeholder="e.g. Smart compost tracker for campus cafeterias"
+   829→                aria-invalid={Boolean(errors.title)}
+   830→                className="h-10 rounded-xl bg-white"
+   831→              />
+   832→              <div className="flex items-start justify-between gap-3">
+   833→                {errors.title ? (
+   834→                  fieldErr("title")
+   835→                ) : (
+   836→                  <p className="text-xs text-muted-foreground">A clear, specific name (4–120 characters).</p>
+   837→                )}
+   838→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+   839→                  {form.title.length}/120
+   840→                </span>
+   841→              </div>
+   842→            </div>
+   843→
+   844→            <div className="space-y-1.5">
+   845→              <Label htmlFor="f-summary">One-line summary</Label>
+   846→              <Input
+   847→                id="f-summary"
+   848→                value={form.summary}
+   849→                maxLength={220}
+   850→                onChange={(e) => setField("summary", e.target.value)}
+   851→                placeholder="What does it do, in one sentence?"
+   852→                aria-invalid={Boolean(errors.summary)}
+   853→                className="h-10 rounded-xl bg-white"
+   854→              />
+   855→              <div className="flex items-start justify-between gap-3">
+   856→                {errors.summary ? (
+   857→                  fieldErr("summary")
+   858→                ) : (
+   859→                  <p className="text-xs text-muted-foreground">Shown on cards and search results (20–220 characters).</p>
+   860→                )}
+   861→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+   862→                  {form.summary.length}/220
+   863→                </span>
+   864→              </div>
+   865→            </div>
+   866→
+   867→            <div className="space-y-1.5">
+   868→              <Label htmlFor="f-desc">Description</Label>
+   869→              <Textarea
+   870→                id="f-desc"
+   871→                rows={8}
+   872→                value={form.description}
+   873→                onChange={(e) => setField("description", e.target.value)}
+   874→                placeholder={"The problem, your approach, and what you built…\n\nUse plain text — leave a blank line between paragraphs."}
+   875→                aria-invalid={Boolean(errors.description)}
+   876→                className="rounded-xl bg-white"
+   877→              />
+   878→              <div className="flex items-start justify-between gap-3">
+   879→                {errors.description ? (
+   880→                  fieldErr("description")
+   881→                ) : (
+   882→                  <p className="text-xs text-muted-foreground">
+   883→                    Plain text — blank lines become paragraph breaks.
+   884→                  </p>
+   885→                )}
+   886→                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+   887→                  {form.description.length} chars
+   888→                </span>
+   889→              </div>
+   890→            </div>
+   891→          </div>
+   892→        ) : null}
+   893→
+   894→        {/* ---------- Step 2: Academics ---------- */}
+   895→        {step === 2 ? (
+   896→          <div className="grid gap-5 sm:grid-cols-2">
+   897→            <div className="space-y-1.5">
+   898→              <Label htmlFor="f-dept">Department</Label>
+   899→              <Select
+   900→                value={form.dept || "__none__"}
+   901→                onValueChange={(v) => setField("dept", v === "__none__" ? "" : v)}
+   902→              >
+   903→                <SelectTrigger
+   904→                  id="f-dept"
+   905→                  aria-label="Department"
+   906→                  aria-invalid={Boolean(errors.dept)}
+   907→                  className="h-10 w-full rounded-xl bg-white"
+   908→                >
+   909→                  <SelectValue placeholder="Select department" />
+   910→                </SelectTrigger>
+   911→                <SelectContent>
+   912→                  {departments.map((d) => (
+   913→                    <SelectItem key={d.id} value={d.code}>
+   914→                      {d.name}
+   915→                    </SelectItem>
+   916→                  ))}
+   917→                </SelectContent>
+   918→              </Select>
+   919→              {fieldErr("dept")}
+   920→            </div>
+   921→
+   922→            <div className="space-y-1.5">
+   923→              <Label htmlFor="f-category">Category</Label>
+   924→              <Select
+   925→                value={form.category || "__none__"}
+   926→                onValueChange={(v) => setField("category", v === "__none__" ? "" : v)}
+   927→              >
+   928→                <SelectTrigger
+   929→                  id="f-category"
+   930→                  aria-label="Category"
+   931→                  aria-invalid={Boolean(errors.category)}
+   932→                  className="h-10 w-full rounded-xl bg-white"
+   933→                >
+   934→                  <SelectValue placeholder="Select category" />
+   935→                </SelectTrigger>
+   936→                <SelectContent>
+   937→                  {CATEGORIES.map((c) => (
+   938→                    <SelectItem key={c} value={c}>
+   939→                      {c}
+   940→                    </SelectItem>
+   941→                  ))}
+   942→                </SelectContent>
+   943→              </Select>
+   944→              {fieldErr("category")}
+   945→            </div>
+   946→
+   947→            <div className="space-y-1.5">
+   948→              <Label htmlFor="f-year">Year</Label>
+   949→              <Select
+   950→                value={form.year || "__none__"}
+   951→                onValueChange={(v) => setField("year", v === "__none__" ? "" : v)}
+   952→              >
+   953→                <SelectTrigger
+   954→                  id="f-year"
+   955→                  aria-label="Year"
+   956→                  aria-invalid={Boolean(errors.year)}
+   957→                  className="h-10 w-full rounded-xl bg-white"
+   958→                >
+   959→                  <SelectValue placeholder="Select year" />
+   960→                </SelectTrigger>
+   961→                <SelectContent>
+   962→                  {YEARS.map((y) => (
+   963→                    <SelectItem key={y} value={String(y)}>
+   964→                      {y}
+   965→                    </SelectItem>
+   966→                  ))}
+   967→                </SelectContent>
+   968→              </Select>
+   969→              {fieldErr("year")}
+   970→            </div>
+   971→
+   972→            <div className="space-y-1.5">
+   973→              <Label htmlFor="f-semester">Semester</Label>
+   974→              <Select
+   975→                value={form.semester || "__none__"}
+   976→                onValueChange={(v) => setField("semester", v === "__none__" ? "" : v)}
+   977→              >
+   978→                <SelectTrigger
+   979→                  id="f-semester"
+   980→                  aria-label="Semester"
+   981→                  aria-invalid={Boolean(errors.semester)}
+   982→                  className="h-10 w-full rounded-xl bg-white"
+   983→                >
+   984→                  <SelectValue placeholder="Select semester" />
+   985→                </SelectTrigger>
+   986→                <SelectContent>
+   987→                  {SEMESTERS.map((s) => (
+   988→                    <SelectItem key={s} value={s}>
+   989→                      {s}
+   990→                    </SelectItem>
+   991→                  ))}
+   992→                </SelectContent>
+   993→              </Select>
+   994→              {fieldErr("semester")}
+   995→            </div>
+   996→
+   997→            <div className="space-y-1.5">
+   998→              <Label htmlFor="f-program">Program (optional)</Label>
+   999→              <Input
+  1000→                id="f-program"
+  1001→                value={form.program}
+  1002→                maxLength={80}
+  1003→                onChange={(e) => setField("program", e.target.value)}
+  1004→                placeholder="e.g. B.Sc. Computer Science"
+  1005→                className="h-10 rounded-xl bg-white"
+  1006→              />
+  1007→            </div>
+  1008→
+  1009→            <div className="space-y-1.5">
+  1010→              <Label htmlFor="f-supervisor">Supervisor (optional)</Label>
+  1011→              <Input
+  1012→                id="f-supervisor"
+  1013→                value={form.supervisor}
+  1014→                maxLength={80}
+  1015→                onChange={(e) => setField("supervisor", e.target.value)}
+  1016→                placeholder="e.g. Prof. Dana Kim"
+  1017→                className="h-10 rounded-xl bg-white"
+  1018→              />
+  1019→            </div>
+  1020→          </div>
+  1021→        ) : null}
+  1022→
+  1023→        {/* ---------- Step 3: Team ---------- */}
+  1024→        {step === 3 ? (
+  1025→          <div className="space-y-6">
+  1026→            <div className="flex items-center gap-3 rounded-2xl border border-primary-100 bg-primary-50/60 px-4 py-3">
+  1027→              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-white">
+  1028→                <Crown className="size-4" aria-hidden />
+  1029→              </span>
+  1030→              <div className="min-w-0">
+  1031→                <p className="truncate text-sm font-semibold text-foreground">{user.displayName}</p>
+  1032→                <p className="truncate text-xs text-muted-foreground">
+  1033→                  @{user.username} · You — project owner
+  1034→                </p>
+  1035→              </div>
+  1036→            </div>
+  1037→
+  1038→            <div>
+  1039→              <Label>Teammates</Label>
+  1040→              <p className="mt-1 text-xs text-muted-foreground">
+  1041→                {editing
+  1042→                  ? "Changes apply immediately."
+  1043→                  : "They'll be tagged on the project when you publish."}
+  1044→              </p>
+  1045→
+  1046→              <div className="mt-3 space-y-2">
+  1047→                {/* create mode: local draft rows */}
+  1048→                {!editing
+  1049→                  ? draftMembers.map((m) => (
+  1050→                      <div
+  1051→                        key={m.username}
+  1052→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1053→                      >
+  1054→                        <MemberAvatar name={m.name} ring={false} />
+  1055→                        <div className="min-w-0 flex-1">
+  1056→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1057→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1058→                        </div>
+  1059→                        <Select
+  1060→                          value={m.role}
+  1061→                          onValueChange={(role) =>
+  1062→                            setDraftMembers((list) =>
+  1063→                              list.map((x) => (x.username === m.username ? { ...x, role } : x))
+  1064→                            )
+  1065→                          }
+  1066→                        >
+  1067→                          <SelectTrigger
+  1068→                            aria-label={`Role for ${m.name}`}
+  1069→                            className="h-8 w-[100px] rounded-lg text-xs"
+  1070→                          >
+  1071→                            <SelectValue />
+  1072→                          </SelectTrigger>
+  1073→                          <SelectContent>
+  1074→                            <SelectItem value="LEAD">Lead</SelectItem>
+  1075→                            <SelectItem value="MEMBER">Member</SelectItem>
+  1076→                          </SelectContent>
+  1077→                        </Select>
+  1078→                        <Button
+  1079→                          variant="ghost"
+  1080→                          size="icon"
+  1081→                          aria-label={`Remove ${m.name}`}
+  1082→                          className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1083→                          onClick={() =>
+  1084→                            setDraftMembers((list) => list.filter((x) => x.username !== m.username))
+  1085→                          }
+  1086→                        >
+  1087→                          <Trash2 className="size-4" aria-hidden />
+  1088→                        </Button>
+  1089→                      </div>
+  1090→                    ))
+  1091→                  : null}
+  1092→
+  1093→                {/* edit mode: live member rows */}
+  1094→                {editing && editProject
+  1095→                  ? editProject.members.map((m) => (
+  1096→                      <div
+  1097→                        key={m.id}
+  1098→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1099→                      >
+  1100→                        <MemberAvatar name={m.name} ring={false} />
+  1101→                        <div className="min-w-0 flex-1">
+  1102→                          <p className="truncate text-sm font-medium text-foreground">{m.name}</p>
+  1103→                          <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+  1104→                        </div>
+  1105→                        {m.role === "OWNER" ? (
+  1106→                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+  1107→                            <Crown className="size-3" aria-hidden />
+  1108→                            Owner
+  1109→                          </span>
+  1110→                        ) : (
+  1111→                          <>
+  1112→                            <Select
+  1113→                              value={m.role}
+  1114→                              disabled={memberBusy === m.id}
+  1115→                              onValueChange={(role) => changeMemberRole(m, role)}
+  1116→                            >
+  1117→                              <SelectTrigger
+  1118→                                aria-label={`Role for ${m.name}`}
+  1119→                                className="h-8 w-[100px] rounded-lg text-xs"
+  1120→                              >
+  1121→                                <SelectValue />
+  1122→                              </SelectTrigger>
+  1123→                              <SelectContent>
+  1124→                                <SelectItem value="LEAD">Lead</SelectItem>
+  1125→                                <SelectItem value="MEMBER">Member</SelectItem>
+  1126→                              </SelectContent>
+  1127→                            </Select>
+  1128→                            <Button
+  1129→                              variant="ghost"
+  1130→                              size="icon"
+  1131→                              aria-label={`Remove ${m.name}`}
+  1132→                              disabled={memberBusy === m.id}
+  1133→                              className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1134→                              onClick={() => removeMemberNow(m)}
+  1135→                            >
+  1136→                              <Trash2 className="size-4" aria-hidden />
+  1137→                            </Button>
+  1138→                          </>
+  1139→                        )}
+  1140→                      </div>
+  1141→                    ))
+  1142→                  : null}
+  1143→
+  1144→                {(!editing && draftMembers.length === 0) || (editing && editProject && editProject.members.length <= 1) ? (
+  1145→                  <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1146→                    Flying solo for now — search below to add teammates.
+  1147→                  </p>
+  1148→                ) : null}
+  1149→              </div>
+  1150→
+  1151→              <div className="mt-4">
+  1152→                <UserSearchAdd
+  1153→                  exclude={
+  1154→                    editing
+  1155→                      ? new Set([user.username.toLowerCase(), ...(editProject?.members.map((m) => m.username.toLowerCase()) ?? [])])
+  1156→                      : new Set([user.username.toLowerCase(), ...draftMembers.map((m) => m.username.toLowerCase())])
+  1157→                  }
+  1158→                  onPick={(u, role) => {
+  1159→                    if (editing) {
+  1160→                      addMemberNow(u, role);
+  1161→                      return;
+  1162→                    }
+  1163→                    if (draftMembers.some((m) => m.username === u.username)) return;
+  1164→                    setDraftMembers((list) => [
+  1165→                      ...list,
+  1166→                      { username: u.username, name: u.displayName, role },
+  1167→                    ]);
+  1168→                    toast.success(`${u.displayName} added to the team`);
+  1169→                  }}
+  1170→                />
+  1171→              </div>
+  1172→            </div>
+  1173→
+  1174→            <div className="grid gap-3 sm:grid-cols-2">
+  1175→              <label
+  1176→                htmlFor="sw-join"
+  1177→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1178→              >
+  1179→                <span className="min-w-0">
+  1180→                  <span className="block text-sm font-medium text-foreground">Allow join requests</span>
+  1181→                  <span className="block text-xs text-muted-foreground">
+  1182→                    Students can ask to join your team.
+  1183→                  </span>
+  1184→                </span>
+  1185→                <Switch
+  1186→                  id="sw-join"
+  1187→                  checked={form.allowJoinRequests}
+  1188→                  onCheckedChange={(v) => setField("allowJoinRequests", v)}
+  1189→                />
+  1190→              </label>
+  1191→              <label
+  1192→                htmlFor="sw-teammates"
+  1193→                className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-up-border bg-white px-4 py-3.5 transition-colors hover:border-up-border-strong"
+  1194→              >
+  1195→                <span className="min-w-0">
+  1196→                  <span className="block text-sm font-medium text-foreground">Looking for teammates</span>
+  1197→                  <span className="block text-xs text-muted-foreground">
+  1198→                    Shows an “open to teammates” badge.
+  1199→                  </span>
+  1200→                </span>
+  1201→                <Switch
+  1202→                  id="sw-teammates"
+  1203→                  checked={form.lookingForTeammates}
+  1204→                  onCheckedChange={(v) => setField("lookingForTeammates", v)}
+  1205→                />
+  1206→              </label>
+  1207→            </div>
+  1208→          </div>
+  1209→        ) : null}
+  1210→
+  1211→        {/* ---------- Step 4: Technologies ---------- */}
+  1212→        {step === 4 ? (
+  1213→          <div>
+  1214→            {techs === null ? (
+  1215→              <div className="flex flex-wrap gap-2" aria-hidden>
+  1216→                {Array.from({ length: 14 }).map((_, i) => (
+  1217→                  <div key={i} className="h-8 w-24 animate-pulse rounded-full bg-surface-muted" />
+  1218→                ))}
+  1219→              </div>
+  1220→            ) : techGroups.length === 0 ? (
+  1221→              <p className="text-sm text-muted-foreground">
+  1222→                No technologies available right now — you can continue without them.
+  1223→              </p>
+  1224→            ) : (
+  1225→              <div className="space-y-6">
+  1226→                {techGroups.map((g) => (
+  1227→                  <div key={g.category}>
+  1228→                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+  1229→                      {g.category}
+  1230→                    </p>
+  1231→                    <div className="mt-2.5 flex flex-wrap gap-2">
+  1232→                      {g.items.map((t) => {
+  1233→                        const on = form.technologyIds.includes(t.id);
+  1234→                        return (
+  1235→                          <button
+  1236→                            key={t.id}
+  1237→                            type="button"
+  1238→                            aria-pressed={on}
+  1239→                            onClick={() =>
+  1240→                              setField(
+  1241→                                "technologyIds",
+  1242→                                on
+  1243→                                  ? form.technologyIds.filter((x) => x !== t.id)
+  1244→                                  : [...form.technologyIds, t.id]
+  1245→                              )
+  1246→                            }
+  1247→                            className={cn(
+  1248→                              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all duration-200",
+  1249→                              on
+  1250→                                ? "border-primary-500 bg-primary-500 text-white shadow-sm"
+  1251→                                : "border-up-border bg-white text-foreground hover:border-up-border-strong hover:shadow-sm"
+  1252→                            )}
+  1253→                          >
+  1254→                            {on ? <Check className="mr-1 inline size-3.5" aria-hidden /> : null}
+  1255→                            {t.name}
+  1256→                          </button>
+  1257→                        );
+  1258→                      })}
+  1259→                    </div>
+  1260→                  </div>
+  1261→                ))}
+  1262→                <p className="text-xs text-muted-foreground" aria-live="polite">
+  1263→                  {form.technologyIds.length} selected — pick the tools your team actually used.
+  1264→                </p>
+  1265→              </div>
+  1266→            )}
+  1267→          </div>
+  1268→        ) : null}
+  1269→
+  1270→        {/* ---------- Step 5: Resources & timeline ---------- */}
+  1271→        {step === 5 ? (
+  1272→          <div className="space-y-8">
+  1273→            {/* Resources */}
+  1274→            <div>
+  1275→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1276→                <div>
+  1277→                  <p className="font-semibold text-foreground">Resources</p>
+  1278→                  <p className="text-xs text-muted-foreground">
+  1279→                    {editing
+  1280→                      ? "Added and removed immediately."
+  1281→                      : "Demo, repo, docs, slides — up to 6 links."}
+  1282→                  </p>
+  1283→                </div>
+  1284→                {!editing ? (
+  1285→                  <Button
+  1286→                    variant="outline"
+  1287→                    size="sm"
+  1288→                    className="h-9 rounded-lg font-semibold"
+  1289→                    disabled={draftResources.length >= 6}
+  1290→                    onClick={() =>
+  1291→                      setDraftResources((list) => [
+  1292→                        ...list,
+  1293→                        { key: newRowKey(), type: "DEMO", label: "", url: "" },
+  1294→                      ])
+  1295→                    }
+  1296→                  >
+  1297→                    <Plus className="size-4" aria-hidden />
+  1298→                    Add resource
+  1299→                  </Button>
+  1300→                ) : null}
+  1301→              </div>
+  1302→
+  1303→              {/* create mode: local rows */}
+  1304→              {!editing ? (
+  1305→                <div className="mt-3 space-y-2.5">
+  1306→                  {draftResources.map((r, i) => (
+  1307→                    <div
+  1308→                      key={r.key}
+  1309→                      className="grid gap-2 rounded-xl border border-up-border bg-white p-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-center"
+  1310→                    >
+  1311→                      <Select value={r.type} onValueChange={(v) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, type: v } : x)))}>
+  1312→                        <SelectTrigger aria-label="Resource type" className="h-9 w-full rounded-lg text-xs">
+  1313→                          <SelectValue />
+  1314→                        </SelectTrigger>
+  1315→                        <SelectContent>
+  1316→                          {RESOURCE_TYPES.map((t) => (
+  1317→                            <SelectItem key={t.value} value={t.value}>
+  1318→                              {t.label}
+  1319→                            </SelectItem>
+  1320→                          ))}
+  1321→                        </SelectContent>
+  1322→                      </Select>
+  1323→                      <Input
+  1324→                        aria-label={`Resource ${i + 1} label`}
+  1325→                        placeholder="Label — e.g. Figma prototype"
+  1326→                        value={r.label}
+  1327→                        onChange={(e) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, label: e.target.value } : x)))}
+  1328→                        className="h-9 rounded-lg"
+  1329→                      />
+  1330→                      <Input
+  1331→                        aria-label={`Resource ${i + 1} URL`}
+  1332→                        placeholder="https://…"
+  1333→                        inputMode="url"
+  1334→                        value={r.url}
+  1335→                        onChange={(e) => setDraftResources((list) => list.map((x) => (x.key === r.key ? { ...x, url: e.target.value } : x)))}
+  1336→                        className="h-9 rounded-lg"
+  1337→                      />
+  1338→                      <Button
+  1339→                        variant="ghost"
+  1340→                        size="icon"
+  1341→                        aria-label={`Remove resource ${i + 1}`}
+  1342→                        className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1343→                        onClick={() => setDraftResources((list) => list.filter((x) => x.key !== r.key))}
+  1344→                      >
+  1345→                        <Trash2 className="size-4" aria-hidden />
+  1346→                      </Button>
+  1347→                    </div>
+  1348→                  ))}
+  1349→                  {draftResources.length === 0 ? (
+  1350→                    <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1351→                      No resources yet — add demo links, repositories, documents or slides.
+  1352→                    </p>
+  1353→                  ) : null}
+  1354→                </div>
+  1355→              ) : (
+  1356→                <div className="mt-3 space-y-4">
+  1357→                  <ul className="space-y-2">
+  1358→                    {(editProject?.resources ?? []).map((r) => (
+  1359→                      <li
+  1360→                        key={r.id}
+  1361→                        className="flex items-center gap-3 rounded-xl border border-up-border bg-white px-3.5 py-2.5"
+  1362→                      >
+  1363→                        <span className="min-w-0 flex-1">
+  1364→                          <span className="block truncate text-sm font-medium text-foreground">
+  1365→                            {r.label}
+  1366→                          </span>
+  1367→                          <span className="block truncate text-xs text-muted-foreground">
+  1368→                            {RESOURCE_TYPES.find((t) => t.value === r.type)?.label ?? r.type} · {r.url}
+  1369→                          </span>
+  1370→                        </span>
+  1371→                        <Button
+  1372→                          variant="ghost"
+  1373→                          size="icon"
+  1374→                          aria-label={`Delete resource: ${r.label}`}
+  1375→                          className="size-9 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+  1376→                          onClick={() => deleteResourceNow(r)}
+  1377→                        >
+  1378→                          <Trash2 className="size-4" aria-hidden />
+  1379→                        </Button>
+  1380→                      </li>
+  1381→                    ))}
+  1382→                    {(editProject?.resources ?? []).length === 0 ? (
+  1383→                      <li className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1384→                        No resources yet — add the first one below.
+  1385→                      </li>
+  1386→                    ) : null}
+  1387→                  </ul>
+  1388→                  <div className="grid gap-2 rounded-xl border border-dashed border-up-border-strong bg-surface-muted/60 p-3 sm:grid-cols-[140px_1fr_1fr_auto] sm:items-start">
+  1389→                    <Select value={newRes.type} onValueChange={(v) => setNewRes((s) => ({ ...s, type: v }))}>
+  1390→                      <SelectTrigger aria-label="Resource type" className="h-9 w-full rounded-lg text-xs">
+  1391→                        <SelectValue />
+  1392→                      </SelectTrigger>
+  1393→                      <SelectContent>
+  1394→                        {RESOURCE_TYPES.map((t) => (
+  1395→                          <SelectItem key={t.value} value={t.value}>
+  1396→                            {t.label}
+  1397→                          </SelectItem>
+  1398→                        ))}
+  1399→                      </SelectContent>
+  1400→                    </Select>
+  1401→                    <Input
+  1402→                      aria-label="New resource label"
+  1403→                      placeholder="Label"
+  1404→                      value={newRes.label}
+  1405→                      onChange={(e) => setNewRes((s) => ({ ...s, label: e.target.value }))}
+  1406→                      className="h-9 rounded-lg bg-white"
+  1407→                    />
+  1408→                    <Input
+  1409→                      aria-label="New resource URL"
+  1410→                      placeholder="https://…"
+  1411→                      inputMode="url"
+  1412→                      value={newRes.url}
+  1413→                      onChange={(e) => setNewRes((s) => ({ ...s, url: e.target.value }))}
+  1414→                      className="h-9 rounded-lg bg-white"
+  1415→                    />
+  1416→                    <Button
+  1417→                      size="sm"
+  1418→                      className="h-9 rounded-lg px-4 font-semibold"
+  1419→                      disabled={resBusy}
+  1420→                      onClick={addResourceNow}
+  1421→                    >
+  1422→                      {resBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1423→                      Add
+  1424→                    </Button>
+  1425→                    {resErr ? (
+  1426→                      <p className="text-xs font-medium text-danger sm:col-span-4">{resErr}</p>
+  1427→                    ) : null}
+  1428→                  </div>
+  1429→                </div>
+  1430→              )}
+  1431→            </div>
+  1432→
+  1433→            {/* Timeline */}
+  1434→            <div>
+  1435→              <div className="flex flex-wrap items-center justify-between gap-2">
+  1436→                <div>
+  1437→                  <p className="font-semibold text-foreground">Timeline</p>
+  1438→                  <p className="text-xs text-muted-foreground">
+  1439→                    {editing
+  1440→                      ? "Key moments, shown as a timeline on the project page."
+  1441→                      : "Optional — up to 3 key moments (kickoff, demo day, …)."}
+  1442→                  </p>
+  1443→                </div>
+  1444→                {!editing ? (
+  1445→                  <Button
+  1446→                    variant="outline"
+  1447→                    size="sm"
+  1448→                    className="h-9 rounded-lg font-semibold"
+  1449→                    disabled={draftTimeline.length >= 3}
+  1450→                    onClick={() =>
+  1451→                      setDraftTimeline((list) => [...list, { key: newRowKey(), title: "", date: "", note: "" }])
+  1452→                    }
+  1453→                  >
+  1454→                    <Plus className="size-4" aria-hidden />
+  1455→                    Add milestone
+  1456→                  </Button>
+  1457→                ) : null}
+  1458→              </div>
+  1459→
+  1460→              {!editing ? (
+  1461→                <div className="mt-3 space-y-2.5">
+  1462→                  {draftTimeline.map((t, i) => (
+  1463→                    <div
+  1464→                      key={t.key}
+  1465→                      className="grid gap-2 rounded-xl border border-up-border bg-white p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-center"
+  1466→                    >
+  1467→                      <Input
+  1468→                        aria-label={`Milestone ${i + 1} title`}
+  1469→                        placeholder="Title — e.g. Kickoff"
+  1470→                        value={t.title}
+  1471→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, title: e.target.value } : x)))}
+  1472→                        className="h-9 rounded-lg"
+  1473→                      />
+  1474→                      <Input
+  1475→                        aria-label={`Milestone ${i + 1} date`}
+  1476→                        type="date"
+  1477→                        value={t.date}
+  1478→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, date: e.target.value } : x)))}
+  1479→                        className="h-9 rounded-lg"
+  1480→                      />
+  1481→                      <Input
+  1482→                        aria-label={`Milestone ${i + 1} note`}
+  1483→                        placeholder="Note (optional)"
+  1484→                        value={t.note}
+  1485→                        onChange={(e) => setDraftTimeline((list) => list.map((x) => (x.key === t.key ? { ...x, note: e.target.value } : x)))}
+  1486→                        className="h-9 rounded-lg"
+  1487→                      />
+  1488→                      <Button
+  1489→                        variant="ghost"
+  1490→                        size="icon"
+  1491→                        aria-label={`Remove milestone ${i + 1}`}
+  1492→                        className="size-9 rounded-lg text-muted-foreground hover:text-danger"
+  1493→                        onClick={() => setDraftTimeline((list) => list.filter((x) => x.key !== t.key))}
+  1494→                      >
+  1495→                        <Trash2 className="size-4" aria-hidden />
+  1496→                      </Button>
+  1497→                    </div>
+  1498→                  ))}
+  1499→                  {draftTimeline.length === 0 ? (
+  1500→                    <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-muted-foreground">
+  1501→                      No milestones yet — optional, but they make the timeline pop.
+  1502→                    </p>
+  1503→                  ) : null}
+  1504→                </div>
+  1505→              ) : (
+  1506→                <div className="mt-3 space-y-4">
+  1507→                  <ol className="relative ml-1 space-y-5 border-l-2 border-up-border pl-6">
+  1508→                    {(editProject?.timeline ?? []).map((t) => (
+  1509→                      <li key={t.id} className="relative">
+  1510→                        <span
+  1511→                          aria-hidden
+  1512→                          className="absolute -left-[31px] top-1 size-2.5 rounded-full bg-primary-500 ring-4 ring-white"
+  1513→                        />
+  1514→                        <div className="flex items-start justify-between gap-3">
+  1515→                          <div className="min-w-0">
+  1516→                            <p className="text-sm font-semibold text-foreground">{t.title}</p>
+  1517→                            <p className="mt-0.5 text-xs font-medium text-muted-foreground">{t.date.slice(0, 10)}</p>
+  1518→                            {t.note ? (
+  1519→                              <p className="mt-1 text-sm text-muted-foreground">{t.note}</p>
+  1520→                            ) : null}
+  1521→                          </div>
+  1522→                          <Button
+  1523→                            variant="ghost"
+  1524→                            size="icon"
+  1525→                            aria-label={`Delete milestone: ${t.title}`}
+  1526→                            className="size-8 shrink-0 rounded-lg text-muted-foreground hover:text-danger"
+  1527→                            onClick={() => deleteMilestoneNow(t)}
+  1528→                          >
+  1529→                            <Trash2 className="size-3.5" aria-hidden />
+  1530→                          </Button>
+  1531→                        </div>
+  1532→                      </li>
+  1533→                    ))}
+  1534→                    {(editProject?.timeline ?? []).length === 0 ? (
+  1535→                      <li className="text-sm text-muted-foreground">No milestones yet.</li>
+  1536→                    ) : null}
+  1537→                  </ol>
+  1538→                  <div className="grid gap-2 rounded-xl border border-dashed border-up-border-strong bg-surface-muted/60 p-3 sm:grid-cols-[1fr_170px_1fr_auto] sm:items-start">
+  1539→                    <Input
+  1540→                      aria-label="New milestone title"
+  1541→                      placeholder="Title"
+  1542→                      value={newMile.title}
+  1543→                      onChange={(e) => setNewMile((s) => ({ ...s, title: e.target.value }))}
+  1544→                      className="h-9 rounded-lg bg-white"
+  1545→                    />
+  1546→                    <Input
+  1547→                      aria-label="New milestone date"
+  1548→                      type="date"
+  1549→                      value={newMile.date}
+  1550→                      onChange={(e) => setNewMile((s) => ({ ...s, date: e.target.value }))}
+  1551→                      className="h-9 rounded-lg bg-white"
+  1552→                    />
+  1553→                    <Input
+  1554→                      aria-label="New milestone note"
+  1555→                      placeholder="Note (optional)"
+  1556→                      value={newMile.note}
+  1557→                      onChange={(e) => setNewMile((s) => ({ ...s, note: e.target.value }))}
+  1558→                      className="h-9 rounded-lg bg-white"
+  1559→                    />
+  1560→                    <Button
+  1561→                      size="sm"
+  1562→                      className="h-9 rounded-lg px-4 font-semibold"
+  1563→                      disabled={mileBusy}
+  1564→                      onClick={addMilestoneNow}
+  1565→                    >
+  1566→                      {mileBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+  1567→                      Add
+  1568→                    </Button>
+  1569→                    {mileErr ? (
+  1570→                      <p className="text-xs font-medium text-danger sm:col-span-4">{mileErr}</p>
+  1571→                    ) : null}
+  1572→                  </div>
+  1573→                </div>
+  1574→              )}
+  1575→            </div>
+  1576→          </div>
+  1577→        ) : null}
+  1578→      </section>
+  1579→
+  1580→      {/* Sticky footer */}
+  1581→      <div className="sticky bottom-0 z-20 -mx-5 mt-10 border-t border-up-border bg-white/95 px-5 py-4 backdrop-blur md:-mx-8 md:px-8">
+  1582→        <div className="flex items-center justify-between gap-3">
+  1583→          <Button
+  1584→            variant="ghost"
+  1585→            onClick={goBack}
+  1586→            className="h-10 rounded-xl font-semibold text-muted-foreground hover:text-foreground"
+  1587→          >
+  1588→            <ArrowLeft className="size-4" aria-hidden />
+  1589→            Back
+  1590→          </Button>
+  1591→
+  1592→          <div className="hidden items-center gap-1.5 sm:flex" aria-hidden>
+  1593→            {STEPS.map((s) => (
+  1594→              <span
+  1595→                key={s.n}
+  1596→                className={cn(
+  1597→                  "size-1.5 rounded-full transition-all duration-200",
+  1598→                  s.n === step
+  1599→                    ? "w-5 bg-primary-500"
+  1600→                    : s.n < step
+  1601→                      ? "bg-primary-500/50"
+  1602→                      : "bg-up-border-strong"
+  1603→                )}
+  1604→              />
+  1605→            ))}
+  1606→          </div>
+  1607→
+  1608→          <div className="flex items-center gap-2">
+  1609→            {!editing ? (
+  1610→              <Button
+  1611→                variant="outline"
+  1612→                onClick={saveDraft}
+  1613→                disabled={saving !== ""}
+  1614→                className="h-10 rounded-xl font-semibold"
+  1615→              >
+  1616→                {saving === "draft" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  1617→                Save draft
+  1618→              </Button>
+  1619→            ) : null}
+  1620→            {step < 5 ? (
+  1621→              <Button onClick={goNext} className="h-10 rounded-xl font-semibold">
+  1622→                Continue
+  1623→              </Button>
+  1624→            ) : (
+  1625→              <Button onClick={submitFinal} disabled={saving !== ""} className="h-10 rounded-xl font-semibold">
+  1626→                {saving === "final" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+  1627→                {editing ? (publishNow ? "Publish project" : "Save changes") : "Publish project"}
+  1628→              </Button>
+  1629→            )}
+  1630→          </div>
+  1631→        </div>
+  1632→      </div>
+  1633→    </div>
+  1634→  );
+  1635→}
+  1636→

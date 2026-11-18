@@ -1,0 +1,1278 @@
+     1→# UniProject Design System
+     2→
+     3→> **Visual reference:** [Flokka](https://flokka.me/)\
+     4→> **Purpose:** Visual design specification for UniProject --- colors,
+     5→> typography, layout, components, states, responsive behavior, and
+     6→> interaction style.
+     7→
+     8→## 1. Design Direction
+     9→
+    10→UniProject should borrow the **visual feeling** of Flokka rather than
+    11→copy its branding.
+    12→
+    13→Flokka's current landing page uses a focused student-network message,
+    14→short sections, generous whitespace, strong typography, simple
+    15→navigation, and clear primary actions. Its content hierarchy moves from
+    16→a large statement → supporting explanation → feature/value blocks →
+    17→process → final CTA. citeturn1view0
+    18→
+    19→### UniProject visual personality
+    20→
+    21→-   **Modern academic**
+    22→-   **Friendly and student-first**
+    23→-   **Clean rather than corporate**
+    24→-   **Content-led**
+    25→-   **High whitespace**
+    26→-   **Strong typography**
+    27→-   **Soft surfaces and rounded components**
+    28→-   **One recognizable accent color**
+    29→-   **Minimal decorative noise**
+    30→
+    31→The interface should feel like a combination of:
+    32→
+    33→`University archive + student portfolio + community network`
+    34→
+    35→not a traditional university administration portal.
+    36→
+    37→------------------------------------------------------------------------
+    38→
+    39→## 2. Brand Principles
+    40→
+    41→### 2.1 Content is the hero
+    42→
+    43→Projects, students, screenshots, technologies, and documentation are the
+    44→primary visual content.
+    45→
+    46→Do not let UI decoration compete with project content.
+    47→
+    48→### 2.2 One strong accent
+    49→
+    50→Use one primary brand color consistently for:
+    51→
+    52→-   Primary buttons
+    53→-   Active navigation
+    54→-   Links
+    55→-   Selected filters
+    56→-   Important badges
+    57→-   Focus states
+    58→-   Small visual accents
+    59→
+    60→Avoid using many saturated colors at once.
+    61→
+    62→### 2.3 Soft neutral canvas
+    63→
+    64→The main page background should be a very light warm/cool neutral rather
+    65→than pure white.
+    66→
+    67→Cards can remain white so that content feels elevated without heavy
+    68→shadows.
+    69→
+    70→### 2.4 Typography creates hierarchy
+    71→
+    72→Large headings should carry most of the visual identity. Body text
+    73→should remain quiet and highly readable.
+    74→
+    75→### 2.5 Rounded, but not playful
+    76→
+    77→Use medium-to-large corner radii for cards and controls.
+    78→
+    79→Avoid excessive "bubble UI".
+    80→
+    81→------------------------------------------------------------------------
+    82→
+    83→# 3. Color System
+    84→
+    85→## 3.1 Recommended UniProject palette
+    86→
+    87→These values are the **UniProject implementation palette**, inspired by
+    88→the clean, restrained visual direction of Flokka rather than copied
+    89→brand colors.
+    90→
+    91→  Token              HEX         Usage
+    92→  ------------------ ----------- ------------------------------
+    93→  `primary-500`      `#5B5CE2`   Main brand/accent
+    94→  `primary-600`      `#4D4ECF`   Hover/strong accent
+    95→  `primary-700`      `#3F40B8`   Active/pressed
+    96→  `primary-100`      `#E9E9FF`   Soft accent surface
+    97→  `primary-50`       `#F5F5FF`   Very light accent background
+    98→  `canvas`           `#F7F7F5`   Global page background
+    99→  `surface`          `#FFFFFF`   Cards, panels, inputs
+   100→  `surface-muted`    `#F1F1EF`   Secondary surfaces
+   101→  `text-primary`     `#17171C`   Headings/body emphasis
+   102→  `text-secondary`   `#5F6068`   Supporting text
+   103→  `text-tertiary`    `#8A8B93`   Metadata/captions
+   104→  `border`           `#E5E5E2`   Dividers/input borders
+   105→  `border-strong`    `#D2D2CE`   Hover/active borders
+   106→  `success`          `#16835B`   Success/verified
+   107→  `success-soft`     `#E7F6EF`   Success background
+   108→  `warning`          `#B7791F`   Warning
+   109→  `warning-soft`     `#FFF4D9`   Warning background
+   110→  `danger`           `#C44747`   Error/destructive
+   111→  `danger-soft`      `#FCEAEA`   Error background
+   112→  `info`             `#3978B8`   Informational
+   113→  `info-soft`        `#EAF3FC`   Informational background
+   114→
+   115→### 3.2 Color ratio
+   116→
+   117→Use approximately:
+   118→
+   119→-   **70%** neutral canvas/surfaces
+   120→-   **25%** text/borders/secondary neutrals
+   121→-   **5%** primary accent and semantic colors
+   122→
+   123→The accent should feel special. Do not turn the entire interface purple.
+   124→
+   125→### 3.3 Dark mode
+   126→
+   127→Dark mode is optional for v1.
+   128→
+   129→If implemented:
+   130→
+   131→``` text
+   132→background      #111116
+   133→surface         #19191F
+   134→surface-muted   #222229
+   135→text-primary    #F7F7F8
+   136→text-secondary  #B5B5BD
+   137→text-tertiary   #85858E
+   138→border          #303039
+   139→primary         #7778F0
+   140→```
+   141→
+   142→------------------------------------------------------------------------
+   143→
+   144→# 4. Typography
+   145→
+   146→## 4.1 Font
+   147→
+   148→### Primary
+   149→
+   150→**Pretendard**
+   151→
+   152→Recommended for UniProject because the product is expected to contain
+   153→Korean and English university content.
+   154→
+   155→``` css
+   156→font-family:
+   157→  "Pretendard",
+   158→  -apple-system,
+   159→  BlinkMacSystemFont,
+   160→  "Segoe UI",
+   161→  sans-serif;
+   162→```
+   163→
+   164→### Alternative
+   165→
+   166→If Pretendard is unavailable:
+   167→
+   168→``` text
+   169→Inter → Apple SD Gothic Neo → Segoe UI → sans-serif
+   170→```
+   171→
+   172→## 4.2 Font weights
+   173→
+   174→Use only four main weights:
+   175→
+   176→  Weight   Purpose
+   177→  -------- -------------------------
+   178→  400      Body
+   179→  500      Labels/buttons
+   180→  600      Card titles/subheadings
+   181→  700      Major headings
+   182→
+   183→Avoid using 800/900 except for a deliberate marketing hero.
+   184→
+   185→## 4.3 Type scale
+   186→
+   187→  Token          Size   Line height   Weight
+   188→  ------------ ------ ------------- --------
+   189→  Display        56px          1.05      700
+   190→  H1             44px           1.1      700
+   191→  H2             32px           1.2      700
+   192→  H3             24px          1.25      700
+   193→  H4             20px           1.3      600
+   194→  Body Large     18px           1.6      400
+   195→  Body           16px          1.55      400
+   196→  Body Small     14px           1.5      400
+   197→  Label          13px           1.4      500
+   198→  Caption        12px           1.4      400
+   199→
+   200→### Heading rules
+   201→
+   202→-   Keep headings short.
+   203→-   Prefer sentence case.
+   204→-   Avoid all-caps headings.
+   205→-   Use `letter-spacing: -0.02em` for large headings.
+   206→-   Do not use heavy shadows or gradients on text.
+   207→
+   208→------------------------------------------------------------------------
+   209→
+   210→# 5. Spacing System
+   211→
+   212→Use a 4px base unit.
+   213→
+   214→``` text
+   215→4   = 1xs
+   216→8   = 2xs
+   217→12  = xs
+   218→16  = sm
+   219→20  = md-sm
+   220→24  = md
+   221→32  = lg
+   222→40  = xl
+   223→48  = 2xl
+   224→64  = 3xl
+   225→80  = 4xl
+   226→96  = 5xl
+   227→128 = 6xl
+   228→```
+   229→
+   230→### Common usage
+   231→
+   232→-   Icon-to-label: `8px`
+   233→-   Input padding: `12–16px`
+   234→-   Card internal padding: `20–24px`
+   235→-   Section gap: `48–80px`
+   236→-   Major page sections: `80–120px`
+   237→-   Mobile page padding: `20px`
+   238→-   Desktop page padding: `32px`
+   239→
+   240→------------------------------------------------------------------------
+   241→
+   242→# 6. Layout
+   243→
+   244→## 6.1 Main container
+   245→
+   246→``` text
+   247→Maximum width: 1200px
+   248→Preferred width: calc(100% - 40px)
+   249→```
+   250→
+   251→For large project galleries:
+   252→
+   253→``` text
+   254→Maximum width: 1280px
+   255→```
+   256→
+   257→For reading-heavy documentation:
+   258→
+   259→``` text
+   260→Maximum width: 820px
+   261→```
+   262→
+   263→## 6.2 Desktop grid
+   264→
+   265→Default:
+   266→
+   267→``` text
+   268→12-column grid
+   269→24px gutter
+   270→```
+   271→
+   272→Example:
+   273→
+   274→``` text
+   275→[ 3 ][ 6 ][ 3 ]
+   276→```
+   277→
+   278→Profile/project detail:
+   279→
+   280→``` text
+   281→[ 8 ][ 4 ]
+   282→```
+   283→
+   284→Project gallery:
+   285→
+   286→``` text
+   287→[ 4 ][ 4 ][ 4 ]
+   288→```
+   289→
+   290→## 6.3 Mobile
+   291→
+   292→Below `768px`:
+   293→
+   294→-   Collapse multi-column layouts.
+   295→-   Use a single content column.
+   296→-   Reduce horizontal padding.
+   297→-   Keep primary CTA full-width where appropriate.
+   298→-   Convert filter bars into horizontal scroll or a filter sheet.
+   299→
+   300→------------------------------------------------------------------------
+   301→
+   302→# 7. Breakpoints
+   303→
+   304→``` text
+   305→sm   640px
+   306→md   768px
+   307→lg   1024px
+   308→xl   1280px
+   309→2xl  1440px
+   310→```
+   311→
+   312→Primary design targets:
+   313→
+   314→-   Mobile: `360–639px`
+   315→-   Tablet: `640–1023px`
+   316→-   Desktop: `1024–1279px`
+   317→-   Wide desktop: `1280px+`
+   318→
+   319→------------------------------------------------------------------------
+   320→
+   321→# 8. Radius
+   322→
+   323→  Token             Radius Usage
+   324→  --------------- -------- -------------------
+   325→  `radius-sm`          8px Small controls
+   326→  `radius-md`         12px Inputs/buttons
+   327→  `radius-lg`         16px Cards
+   328→  `radius-xl`         20px Featured cards
+   329→  `radius-2xl`        28px Hero/large panels
+   330→  `radius-full`      999px Pills/avatars
+   331→
+   332→Default card radius: **16px**
+   333→
+   334→Default button radius: **12px**
+   335→
+   336→------------------------------------------------------------------------
+   337→
+   338→# 9. Shadows
+   339→
+   340→Keep shadows subtle.
+   341→
+   342→### Card
+   343→
+   344→``` css
+   345→box-shadow:
+   346→  0 1px 2px rgba(20, 20, 30, 0.04),
+   347→  0 8px 24px rgba(20, 20, 30, 0.05);
+   348→```
+   349→
+   350→### Floating element
+   351→
+   352→``` css
+   353→box-shadow:
+   354→  0 12px 32px rgba(20, 20, 30, 0.10);
+   355→```
+   356→
+   357→Avoid large dark shadows.
+   358→
+   359→Prefer borders + very soft shadows.
+   360→
+   361→------------------------------------------------------------------------
+   362→
+   363→# 10. Navigation
+   364→
+   365→## Desktop
+   366→
+   367→Recommended structure:
+   368→
+   369→``` text
+   370→UniProject
+   371→
+   372→Explore     Projects     Students     Community
+   373→
+   374→                         Search   Log in   [Create Project]
+   375→```
+   376→
+   377→### Behavior
+   378→
+   379→-   Header height: `64–72px`
+   380→-   White or translucent surface
+   381→-   Thin bottom border
+   382→-   Sticky on desktop
+   383→-   Logo/wordmark remains left aligned
+   384→-   Primary CTA remains visually dominant
+   385→
+   386→### Mobile
+   387→
+   388→``` text
+   389→[Logo]                 [Search] [Menu]
+   390→```
+   391→
+   392→Navigation opens as a full-height or large sheet.
+   393→
+   394→------------------------------------------------------------------------
+   395→
+   396→# 11. Buttons
+   397→
+   398→## Primary
+   399→
+   400→Use for the most important action.
+   401→
+   402→Examples:
+   403→
+   404→-   Create Project
+   405→-   Explore Projects
+   406→-   Join Community
+   407→-   Save Project
+   408→
+   409→Style:
+   410→
+   411→``` text
+   412→Background: primary-500
+   413→Text: white
+   414→Height: 44px
+   415→Padding: 0 18px
+   416→Radius: 12px
+   417→Weight: 600
+   418→```
+   419→
+   420→## Secondary
+   421→
+   422→``` text
+   423→Background: white
+   424→Border: 1px solid border
+   425→Text: text-primary
+   426→```
+   427→
+   428→## Ghost
+   429→
+   430→For low-priority navigation actions.
+   431→
+   432→``` text
+   433→Background: transparent
+   434→Text: text-secondary
+   435→```
+   436→
+   437→## Destructive
+   438→
+   439→Use only for irreversible actions.
+   440→
+   441→``` text
+   442→Background: danger
+   443→Text: white
+   444→```
+   445→
+   446→### Button states
+   447→
+   448→``` text
+   449→Default
+   450→Hover
+   451→Pressed
+   452→Focus
+   453→Disabled
+   454→Loading
+   455→```
+   456→
+   457→Never communicate state using color alone.
+   458→
+   459→------------------------------------------------------------------------
+   460→
+   461→# 12. Inputs
+   462→
+   463→Default:
+   464→
+   465→``` text
+   466→Height: 44–48px
+   467→Radius: 12px
+   468→Border: 1px solid #E5E5E2
+   469→Background: #FFFFFF
+   470→```
+   471→
+   472→Focus:
+   473→
+   474→``` text
+   475→Border: primary-500
+   476→Box shadow: 0 0 0 3px primary-100
+   477→```
+   478→
+   479→Search inputs should have a slightly larger radius:
+   480→
+   481→``` text
+   482→Radius: 14px
+   483→```
+   484→
+   485→------------------------------------------------------------------------
+   486→
+   487→# 13. Cards
+   488→
+   489→## General card
+   490→
+   491→``` text
+   492→Background: surface
+   493→Border: 1px solid border
+   494→Radius: 16px
+   495→Padding: 20–24px
+   496→```
+   497→
+   498→Hover:
+   499→
+   500→``` text
+   501→border → border-strong
+   502→transform → translateY(-1px)
+   503→shadow → slightly stronger
+   504→```
+   505→
+   506→Do not make cards jump dramatically on hover.
+   507→
+   508→------------------------------------------------------------------------
+   509→
+   510→# 14. Project Card
+   511→
+   512→Project cards are one of the most important components in UniProject.
+   513→
+   514→### Structure
+   515→
+   516→``` text
+   517→┌─────────────────────────────────────┐
+   518→│ [Project image / screenshot]        │
+   519→│                                     │
+   520→├─────────────────────────────────────┤
+   521→│ Project Title                       │
+   522→│ Short project description...        │
+   523→│                                     │
+   524→│ [Web] [AI] [React]                  │
+   525→│                                     │
+   526→│ 👤 Creator Name · 2026              │
+   527→└─────────────────────────────────────┘
+   528→```
+   529→
+   530→### Required visual information
+   531→
+   532→Prioritize:
+   533→
+   534→1.  Project thumbnail
+   535→2.  Project title
+   536→3.  Short description
+   537→4.  Technology/category tags
+   538→5.  Creator/team
+   539→6.  Year
+   540→7.  Optional status
+   541→
+   542→### Do not overload the card
+   543→
+   544→Do not show the entire documentation, repository URL, every technology,
+   545→or long descriptions on the card.
+   546→
+   547→Those belong on the project detail page.
+   548→
+   549→------------------------------------------------------------------------
+   550→
+   551→# 15. Project Detail Page
+   552→
+   553→Recommended layout:
+   554→
+   555→``` text
+   556→Breadcrumb
+   557→
+   558→Project Title
+   559→Short description
+   560→
+   561→[Live Demo] [Source Code] [Documentation]
+   562→
+   563→────────────────────────────────────
+   564→
+   565→Project screenshots / gallery
+   566→
+   567→────────────────────────────────────
+   568→
+   569→About this project
+   570→
+   571→Creators
+   572→[Student] [Student] [Student]
+   573→
+   574→Technology
+   575→[React] [Node.js] [Python]
+   576→
+   577→University
+   578→Department
+   579→Program
+   580→Category
+   581→Year / Semester
+   582→
+   583→────────────────────────────────────
+   584→
+   585→Related Projects
+   586→```
+   587→
+   588→### Hero
+   589→
+   590→The project title should be large but not excessively promotional.
+   591→
+   592→The first screen should answer:
+   593→
+   594→> What is this project?
+   595→
+   596→> Who built it?
+   597→
+   598→> What can I see/use?
+   599→
+   600→------------------------------------------------------------------------
+   601→
+   602→# 16. Student Profile
+   603→
+   604→## Profile header
+   605→
+   606→``` text
+   607→[Avatar]
+   608→
+   609→Display Name
+   610→@username
+   611→
+   612→University · Department · Program
+   613→
+   614→Short bio
+   615→
+   616→[Edit Profile] [Share]
+   617→```
+   618→
+   619→Important rule:
+   620→
+   621→**Display names are shown publicly. Usernames are identifiers.**
+   622→
+   623→If a project tags a student:
+   624→
+   625→``` text
+   626→Created by
+   627→John Kim
+   628→Sarah Lee
+   629→```
+   630→
+   631→not:
+   632→
+   633→``` text
+   634→@johnkim
+   635→@sarahlee
+   636→```
+   637→
+   638→The username may still be available through profile navigation.
+   639→
+   640→## Profile sections
+   641→
+   642→``` text
+   643→Projects
+   644→Contributions
+   645→About
+   646→Skills
+   647→```
+   648→
+   649→Projects tagged with the student should automatically appear in their
+   650→project section.
+   651→
+   652→------------------------------------------------------------------------
+   653→
+   654→# 17. Community Feed
+   655→
+   656→The community should feel like a lightweight student network rather than
+   657→a social-media clone.
+   658→
+   659→### Feed card
+   660→
+   661→``` text
+   662→Avatar  Display Name
+   663→        Department · 2h
+   664→
+   665→Post content...
+   666→
+   667→[Project preview]
+   668→
+   669→♡ 12     Comment 4     Share
+   670→```
+   671→
+   672→### Recommended post types
+   673→
+   674→-   Project announcement
+   675→-   Project update
+   676→-   Looking for teammates
+   677→-   Seeking feedback
+   678→-   Resource sharing
+   679→-   Event/hackathon
+   680→-   Question
+   681→
+   682→Avoid introducing too many social mechanics in v1.
+   683→
+   684→------------------------------------------------------------------------
+   685→
+   686→# 18. Tags and Badges
+   687→
+   688→### Technology tag
+   689→
+   690→``` text
+   691→Background: #F1F1EF
+   692→Text: text-secondary
+   693→Radius: full
+   694→Height: 28px
+   695→Padding: 0 10px
+   696→```
+   697→
+   698→### Category tag
+   699→
+   700→Use primary-soft styling when the category is important.
+   701→
+   702→### Verified badge
+   703→
+   704→Use `success` only when verification is meaningful.
+   705→
+   706→Do not use green decoration merely because something is a project.
+   707→
+   708→------------------------------------------------------------------------
+   709→
+   710→# 19. Filters
+   711→
+   712→Project discovery should be filter-first.
+   713→
+   714→Recommended filters:
+   715→
+   716→``` text
+   717→University
+   718→Department
+   719→Program
+   720→Category
+   721→Year
+   722→Semester
+   723→Technology
+   724→Project Type
+   725→```
+   726→
+   727→### Desktop
+   728→
+   729→Use a horizontal filter row or left sidebar.
+   730→
+   731→### Mobile
+   732→
+   733→Use:
+   734→
+   735→``` text
+   736→[Filter]
+   737→```
+   738→
+   739→opening a bottom sheet.
+   740→
+   741→### Active filters
+   742→
+   743→Display removable chips:
+   744→
+   745→``` text
+   746→Computer Science ×
+   747→2026 ×
+   748→AI ×
+   749→```
+   750→
+   751→------------------------------------------------------------------------
+   752→
+   753→# 20. Search
+   754→
+   755→Global search should support:
+   756→
+   757→-   Projects
+   758→-   Students
+   759→-   Universities
+   760→-   Departments
+   761→-   Technologies
+   762→-   Categories
+   763→
+   764→Search results should visually separate result types.
+   765→
+   766→Example:
+   767→
+   768→``` text
+   769→PROJECT
+   770→Smart Campus Assistant
+   771→
+   772→STUDENT
+   773→Kim Minseo
+   774→
+   775→TECHNOLOGY
+   776→React
+   777→```
+   778→
+   779→------------------------------------------------------------------------
+   780→
+   781→# 21. Empty States
+   782→
+   783→Empty states should be useful, not decorative.
+   784→
+   785→Example:
+   786→
+   787→``` text
+   788→No projects found
+   789→
+   790→Try changing your filters or search terms.
+   791→
+   792→[Clear filters]
+   793→```
+   794→
+   795→For a new profile:
+   796→
+   797→``` text
+   798→No projects yet
+   799→
+   800→Projects you create or are tagged in will appear here.
+   801→
+   802→[Explore Projects]
+   803→```
+   804→
+   805→------------------------------------------------------------------------
+   806→
+   807→# 22. Loading States
+   808→
+   809→Prefer skeletons over generic spinners for content.
+   810→
+   811→Project card skeleton:
+   812→
+   813→``` text
+   814→████████████████████
+   815→████████████████████
+   816→████████
+   817→
+   818→████████████
+   819→████████████████
+   820→████████
+   821→```
+   822→
+   823→Use animation subtly.
+   824→
+   825→------------------------------------------------------------------------
+   826→
+   827→# 23. Error States
+   828→
+   829→Example:
+   830→
+   831→``` text
+   832→Something went wrong
+   833→
+   834→We couldn't load this project.
+   835→
+   836→[Try again]
+   837→```
+   838→
+   839→Use red only for the actual error message/action.
+   840→
+   841→------------------------------------------------------------------------
+   842→
+   843→# 24. Interaction States
+   844→
+   845→Every interactive component should define:
+   846→
+   847→``` text
+   848→Default
+   849→Hover
+   850→Focus-visible
+   851→Pressed
+   852→Disabled
+   853→Loading
+   854→Selected
+   855→Error
+   856→```
+   857→
+   858→### Focus
+   859→
+   860→Use a visible focus ring:
+   861→
+   862→``` css
+   863→outline: 3px solid rgba(91, 92, 226, 0.25);
+   864→outline-offset: 2px;
+   865→```
+   866→
+   867→Never remove browser focus without replacing it.
+   868→
+   869→------------------------------------------------------------------------
+   870→
+   871→# 25. Icons
+   872→
+   873→Recommended icon library:
+   874→
+   875→**Lucide**
+   876→
+   877→Use icons consistently at:
+   878→
+   879→``` text
+   880→16px — compact UI
+   881→18px — buttons
+   882→20px — navigation
+   883→24px — major actions
+   884→```
+   885→
+   886→Do not mix multiple icon styles.
+   887→
+   888→Icons should support labels, not replace important text.
+   889→
+   890→------------------------------------------------------------------------
+   891→
+   892→# 26. Images
+   893→
+   894→Project screenshots are content, not decoration.
+   895→
+   896→### Project thumbnails
+   897→
+   898→Preferred ratio:
+   899→
+   900→``` text
+   901→16:10
+   902→```
+   903→
+   904→### Profile avatars
+   905→
+   906→``` text
+   907→1:1
+   908→```
+   909→
+   910→### Gallery
+   911→
+   912→Support:
+   913→
+   914→``` text
+   915→16:10
+   916→4:3
+   917→1:1
+   918→```
+   919→
+   920→Use `object-fit: cover` for cards.
+   921→
+   922→Use `object-fit: contain` for screenshots where cropping would hide
+   923→important UI.
+   924→
+   925→------------------------------------------------------------------------
+   926→
+   927→# 27. Motion
+   928→
+   929→Animation should feel calm and fast.
+   930→
+   931→### Standard duration
+   932→
+   933→``` text
+   934→Fast: 120ms
+   935→Normal: 180ms
+   936→Slow: 260ms
+   937→```
+   938→
+   939→### Easing
+   940→
+   941→``` text
+   942→ease-out
+   943→```
+   944→
+   945→Use motion for:
+   946→
+   947→-   Card hover
+   948→-   Menu opening
+   949→-   Filter transitions
+   950→-   Modal/sheet entry
+   951→-   Toasts
+   952→-   Page-level content appearance
+   953→
+   954→Avoid:
+   955→
+   956→-   Large bouncing animations
+   957→-   Continuous decorative animations
+   958→-   Excessive parallax
+   959→-   Slow page transitions
+   960→
+   961→Respect:
+   962→
+   963→``` css
+   964→@media (prefers-reduced-motion: reduce)
+   965→```
+   966→
+   967→------------------------------------------------------------------------
+   968→
+   969→# 28. Responsive Component Rules
+   970→
+   971→## Project cards
+   972→
+   973→Desktop:
+   974→
+   975→``` text
+   976→3 columns
+   977→```
+   978→
+   979→Tablet:
+   980→
+   981→``` text
+   982→2 columns
+   983→```
+   984→
+   985→Mobile:
+   986→
+   987→``` text
+   988→1 column
+   989→```
+   990→
+   991→## Project detail
+   992→
+   993→Desktop:
+   994→
+   995→``` text
+   996→8/4 split
+   997→```
+   998→
+   999→Mobile:
+  1000→
+  1001→``` text
+  1002→1 column
+  1003→```
+  1004→
+  1005→## Profile
+  1006→
+  1007→Desktop:
+  1008→
+  1009→``` text
+  1010→Profile header + tabs
+  1011→```
+  1012→
+  1013→Mobile:
+  1014→
+  1015→``` text
+  1016→Stacked profile
+  1017→Scrollable tabs
+  1018→```
+  1019→
+  1020→## Community
+  1021→
+  1022→Desktop:
+  1023→
+  1024→``` text
+  1025→Main feed + optional sidebar
+  1026→```
+  1027→
+  1028→Mobile:
+  1029→
+  1030→``` text
+  1031→Feed only
+  1032→```
+  1033→
+  1034→------------------------------------------------------------------------
+  1035→
+  1036→# 29. Accessibility
+  1037→
+  1038→Minimum requirements:
+  1039→
+  1040→-   WCAG AA contrast target
+  1041→-   Keyboard navigation
+  1042→-   Visible focus states
+  1043→-   Semantic HTML
+  1044→-   Labels for all form inputs
+  1045→-   Alt text for meaningful project images
+  1046→-   Decorative images marked appropriately
+  1047→-   Never use color as the only state indicator
+  1048→-   Minimum touch target around `44 × 44px`
+  1049→
+  1050→Text contrast should generally target at least **4.5:1 for normal text**
+  1051→and **3:1 for large text/UI requirements**, consistent with common WCAG
+  1052→AA guidance. citeturn0search1turn0search4
+  1053→
+  1054→------------------------------------------------------------------------
+  1055→
+  1056→# 30. Design Tokens
+  1057→
+  1058→Recommended CSS variables:
+  1059→
+  1060→``` css
+  1061→:root {
+  1062→  --color-primary: #5B5CE2;
+  1063→  --color-primary-hover: #4D4ECF;
+  1064→  --color-primary-active: #3F40B8;
+  1065→  --color-primary-soft: #E9E9FF;
+  1066→
+  1067→  --color-canvas: #F7F7F5;
+  1068→  --color-surface: #FFFFFF;
+  1069→  --color-surface-muted: #F1F1EF;
+  1070→
+  1071→  --color-text-primary: #17171C;
+  1072→  --color-text-secondary: #5F6068;
+  1073→  --color-text-tertiary: #8A8B93;
+  1074→
+  1075→  --color-border: #E5E5E2;
+  1076→  --color-border-strong: #D2D2CE;
+  1077→
+  1078→  --color-success: #16835B;
+  1079→  --color-warning: #B7791F;
+  1080→  --color-danger: #C44747;
+  1081→  --color-info: #3978B8;
+  1082→
+  1083→  --radius-sm: 8px;
+  1084→  --radius-md: 12px;
+  1085→  --radius-lg: 16px;
+  1086→  --radius-xl: 20px;
+  1087→  --radius-2xl: 28px;
+  1088→  --radius-full: 999px;
+  1089→
+  1090→  --space-1: 4px;
+  1091→  --space-2: 8px;
+  1092→  --space-3: 12px;
+  1093→  --space-4: 16px;
+  1094→  --space-5: 20px;
+  1095→  --space-6: 24px;
+  1096→  --space-8: 32px;
+  1097→  --space-10: 40px;
+  1098→  --space-12: 48px;
+  1099→  --space-16: 64px;
+  1100→  --space-20: 80px;
+  1101→  --space-24: 96px;
+  1102→}
+  1103→```
+  1104→
+  1105→------------------------------------------------------------------------
+  1106→
+  1107→# 31. Tailwind Mapping
+  1108→
+  1109→If Tailwind CSS is used, map the semantic tokens rather than hard-coding
+  1110→colors throughout components.
+  1111→
+  1112→Example:
+  1113→
+  1114→``` js
+  1115→colors: {
+  1116→  primary: {
+  1117→    50: "#F5F5FF",
+  1118→    100: "#E9E9FF",
+  1119→    500: "#5B5CE2",
+  1120→    600: "#4D4ECF",
+  1121→    700: "#3F40B8",
+  1122→  },
+  1123→
+  1124→  canvas: "#F7F7F5",
+  1125→  surface: "#FFFFFF",
+  1126→
+  1127→  ink: {
+  1128→    900: "#17171C",
+  1129→    700: "#5F6068",
+  1130→    500: "#8A8B93",
+  1131→  },
+  1132→
+  1133→  border: "#E5E5E2",
+  1134→}
+  1135→```
+  1136→
+  1137→------------------------------------------------------------------------
+  1138→
+  1139→# 32. Page-Level Visual Rules
+  1140→
+  1141→## Landing page
+  1142→
+  1143→Follow the strongest part of the Flokka reference:
+  1144→
+  1145→``` text
+  1146→Large headline
+  1147→Short explanation
+  1148→Primary CTA
+  1149→Supporting feature blocks
+  1150→How-it-works section
+  1151→Final CTA
+  1152→```
+  1153→
+  1154→For UniProject:
+  1155→
+  1156→``` text
+  1157→Discover what students build.
+  1158→
+  1159→Explore university projects, discover student creators,
+  1160→and find inspiration for your next project.
+  1161→
+  1162→[Explore Projects] [Join UniProject]
+  1163→```
+  1164→
+  1165→Keep the hero visually quiet.
+  1166→
+  1167→## Explore page
+  1168→
+  1169→This should be the most functional page.
+  1170→
+  1171→``` text
+  1172→Page title
+  1173→Search
+  1174→Filters
+  1175→Project grid
+  1176→Pagination / infinite loading
+  1177→```
+  1178→
+  1179→## Project page
+  1180→
+  1181→This should prioritize the work itself.
+  1182→
+  1183→``` text
+  1184→Project hero
+  1185→Demo/source/documentation
+  1186→Screenshots
+  1187→Description
+  1188→Creators
+  1189→Metadata
+  1190→Related projects
+  1191→```
+  1192→
+  1193→## Student profile
+  1194→
+  1195→This should feel like a lightweight academic portfolio.
+  1196→
+  1197→``` text
+  1198→Identity
+  1199→University context
+  1200→Bio
+  1201→Skills
+  1202→Projects
+  1203→Community activity
+  1204→```
+  1205→
+  1206→## Community
+  1207→
+  1208→This should prioritize useful student interaction.
+  1209→
+  1210→``` text
+  1211→Create post
+  1212→Feed
+  1213→Categories
+  1214→Project updates
+  1215→Team requests
+  1216→```
+  1217→
+  1218→------------------------------------------------------------------------
+  1219→
+  1220→# 33. Do / Don't
+  1221→
+  1222→## Do
+  1223→
+  1224→-   Use large whitespace.
+  1225→-   Use strong typography.
+  1226→-   Keep cards clean.
+  1227→-   Use one primary accent.
+  1228→-   Show project screenshots prominently.
+  1229→-   Make creator identities visible.
+  1230→-   Keep metadata compact.
+  1231→-   Use subtle borders and shadows.
+  1232→-   Make filtering easy.
+  1233→-   Maintain consistent spacing.
+  1234→
+  1235→## Don't
+  1236→
+  1237→-   Do not copy Flokka's exact logo, branding, illustrations, or
+  1238→    proprietary visual assets.
+  1239→-   Do not use a rainbow palette.
+  1240→-   Do not turn every card into a colorful gradient.
+  1241→-   Do not use excessive shadows.
+  1242→-   Do not put huge amounts of metadata on cards.
+  1243→-   Do not make every page look like a social-media feed.
+  1244→-   Do not use all-caps text everywhere.
+  1245→-   Do not rely on hover as the only way to reveal information.
+  1246→-   Do not sacrifice readability for visual effects.
+  1247→
+  1248→------------------------------------------------------------------------
+  1249→
+  1250→# 34. Final Visual Target
+  1251→
+  1252→The final UniProject interface should feel:
+  1253→
+  1254→> **Clean + academic + social + modern + trustworthy**
+  1255→
+  1256→A useful mental model is:
+  1257→
+  1258→``` text
+  1259→Flokka's student-first simplicity
+  1260→        +
+  1261→modern portfolio presentation
+  1262→        +
+  1263→university archive structure
+  1264→        +
+  1265→light community interaction
+  1266→```
+  1267→
+  1268→The result should look like a product students would genuinely want to
+  1269→use, while still being appropriate for a university project showcase.
+  1270→
+  1271→------------------------------------------------------------------------
+  1272→
+  1273→## Reference
+  1274→
+  1275→-   Flokka --- student network: https://flokka.me/
+  1276→-   WCAG / accessibility principles should be applied when implementing
+  1277→    the final UI.
+  1278→

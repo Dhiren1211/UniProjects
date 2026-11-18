@@ -7,10 +7,9 @@ import type { ProjectListItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { targetType, targetId } — toggle bookmark ----------
+// ---------- POST { targetType, targetId } - toggle bookmark ----------
 
 const toggleSchema = z.object({
-  targetType: z.enum(["PROJECT", "POST"]),
   targetId: z.string().min(1),
 });
 
@@ -26,15 +25,11 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { targetType, targetId } = parsed.data;
+    const targetId = parsed.data.targetId;
+    const targetType = "PROJECT";
 
-    if (targetType === "PROJECT") {
-      const target = await db.project.findUnique({ where: { id: targetId }, select: { id: true } });
-      if (!target) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    } else {
-      const target = await db.post.findUnique({ where: { id: targetId }, select: { id: true } });
-      if (!target) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
+    const target = await db.project.findUnique({ where: { id: targetId }, select: { id: true } });
+    if (!target) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const existing = await db.bookmark.findUnique({
       where: { userId_targetType_targetId: { userId: viewer.id, targetType, targetId } },
@@ -53,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ---------- GET — the viewer's bookmarked published projects ----------
+// ---------- GET - the viewer's bookmarked published projects ----------
 
 export async function GET(req: NextRequest) {
   try {

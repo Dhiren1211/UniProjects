@@ -87,7 +87,7 @@ export function TeammateWantedChip() {
 
 export function FeaturedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-primary-700 shadow-sm">
+    <span className="inline-flex items-center gap-1 rounded-full bg-background/85 px-2.5 py-1 text-[11px] font-semibold text-primary-700 shadow-sm">
       <Star className="size-3 fill-current" aria-hidden />
       Featured
     </span>
@@ -95,11 +95,44 @@ export function FeaturedBadge() {
 }
 
 export function StaffBadge({ role }: { role: string }) {
-  if (role !== "FACULTY" && role !== "ADMIN") return null;
+  if (role !== "ADMIN" && role !== "MODERATOR" && role !== "PROFESSOR") return null;
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-semibold text-info">
       <ShieldCheck className="size-3" aria-hidden />
-      {role === "ADMIN" ? "Admin" : "Faculty"}
+      {role === "ADMIN" ? "Admin" : role === "MODERATOR" ? "Moderator" : "Professor"}
+    </span>
+  );
+}
+
+/** Small role pill for any account role - used in dashboards and admin lists. */
+export function RoleBadge({ role, className }: { role: string; className?: string }) {
+  const tone =
+    role === "ADMIN"
+      ? "bg-danger-soft text-danger"
+      : role === "MODERATOR"
+        ? "bg-warning-soft text-warning"
+        : role === "PROFESSOR"
+          ? "bg-info-soft text-info"
+          : "bg-surface-muted text-muted-foreground";
+  const label =
+    role === "ADMIN"
+      ? "Administrator"
+      : role === "MODERATOR"
+        ? "Moderator"
+        : role === "PROFESSOR"
+          ? "Professor"
+          : role === "STUDENT"
+            ? "Student"
+            : role;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        tone,
+        className
+      )}
+    >
+      {label}
     </span>
   );
 }
@@ -137,12 +170,12 @@ export function CategoryIcon({
 // ---------- avatars ----------
 
 const AVATAR_STYLES = [
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-700",
-  "bg-rose-100 text-rose-700",
-  "bg-teal-100 text-teal-700",
-  "bg-orange-100 text-orange-700",
-  "bg-lime-100 text-lime-700",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-400/15 dark:text-teal-300",
+  "bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300",
+  "bg-lime-100 text-lime-700 dark:bg-lime-400/15 dark:text-lime-300",
 ];
 
 export function initialsOf(name: string) {
@@ -300,7 +333,7 @@ export function CardSkeletonGrid({ count = 6 }: { count?: number }) {
 // ---------- lightbox ----------
 
 /**
- * Full-screen image viewer. The image is always shown whole — natural aspect
+ * Full-screen image viewer. The image is always shown whole - natural aspect
  * ratio, letterboxed on a dark blurred backdrop, never cropped or stretched.
  * Optional prev/next handlers enable gallery navigation (arrow keys too).
  */
@@ -388,5 +421,24 @@ export function Lightbox({
         </button>
       ) : null}
     </motion.div>
+  );
+}
+
+// ---------- the drawn arrow every primary carries (data-buttons="arrow") ----------
+
+export function MArrow({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={cn("m-arrow", className)}
+    >
+      <path d="M2.5 8h10.5M9 3.5 13.5 8 9 12.5" />
+    </svg>
   );
 }

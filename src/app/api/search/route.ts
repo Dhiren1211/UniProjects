@@ -1,29 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSessionUser, toSafeUser } from "@/lib/auth";
-import {
-  likeCountMap,
-  mapPosts,
-  postInclude,
-  projectInclude,
-  toListItem,
-} from "../_utils/serialize";
+import { likeCountMap, projectInclude, toListItem } from "../_utils/serialize";
 import type { ProjectListItem, SafeUserDTO } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// ---------- GET ?q= — global search across projects / users / posts ----------
+// ---------- GET ?q= - global search across projects and people ----------
 
 export async function GET(req: NextRequest) {
   try {
     const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
-    const viewer = await getSessionUser(req);
 
     if (!q) {
-      return NextResponse.json({ projects: [], users: [], posts: [] });
+      return NextResponse.json({ projects: [], users: [] });
     }
 
-    const [projectRows, userRows, postRows] = await Promise.all([
+    const [projectRows, userRows] = await Promise.all([
       db.project.findMany({
         where: {
           status: "PUBLISHED",
@@ -48,13 +41,11 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: "desc" },
         take: 6,
-        include: { department: { select: { id: true, name: true, code: true, accent: true } } },
-      }),
-      db.post.findMany({
-        where: { body: { contains: q } },
-        orderBy: { createdAt: "desc" },
-        take: 4,
-        include: postInclude,
+        include: {
+          department: {
+            select: { id: true, name: true, code: true, tagline: true, website: true, capstoneLabel: true, accent: true },
+          },
+        },
       }),
     ]);
 
@@ -63,9 +54,8 @@ export async function GET(req: NextRequest) {
       toListItem(p, likes.get(p.id) ?? 0)
     );
     const users: SafeUserDTO[] = userRows.map((u) => toSafeUser(u));
-    const posts = await mapPosts(postRows, viewer?.id ?? null);
 
-    return NextResponse.json({ projects, users, posts });
+    return NextResponse.json({ projects, users });
   } catch (e) {
     console.error("GET /api/search", e);
     return NextResponse.json({ error: "Search failed" }, { status: 500 });

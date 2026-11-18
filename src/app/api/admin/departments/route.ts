@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const ACCENT_VALUES = ["teal", "sky", "orange", "rose", "lime", "violet"] as const;
 
-// Uppercase A–Z / 0–9, 2–8 chars — normalized to uppercase before validation
+// Uppercase A–Z / 0–9, 2–8 chars - normalized to uppercase before validation
 const codeSchema = z
   .string()
   .trim()
@@ -16,6 +16,21 @@ const codeSchema = z
   .max(8, "Code must be 2–8 uppercase characters")
   .transform((v) => v.toUpperCase())
   .refine((v) => /^[A-Z0-9]+$/.test(v), "Code may only use uppercase letters and numbers");
+
+// http(s) URL - optional, empty string clears it
+const websiteSchema = z
+  .union([z.literal(""), z.string().trim().max(300)])
+  .refine((v) => v === "" || /^https?:\/\/\S+$/.test(v), {
+    message: "Website must be a full URL starting with http:// or https://",
+  })
+  .transform((v) => (v === "" ? null : v));
+
+// What the faculty calls its capstone course - Global IT's "Capstone Design" is the default
+const capstoneLabelSchema = z
+  .string()
+  .trim()
+  .min(2, "Capstone term must be at least 2 characters")
+  .max(40, "Capstone term must be 40 characters or fewer");
 
 const deptFields = {
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(80, "Name is too long"),
@@ -26,6 +41,8 @@ const deptFields = {
     .max(120, "Tagline must be 120 characters or fewer")
     .optional()
     .or(z.literal("")),
+  website: websiteSchema.optional(),
+  capstoneLabel: capstoneLabelSchema.optional(),
   accent: z.enum(ACCENT_VALUES).optional(),
   sortOrder: z
     .number()
@@ -39,6 +56,8 @@ function toDTO(d: {
   name: string;
   code: string;
   tagline: string | null;
+  website: string | null;
+  capstoneLabel: string;
   accent: string;
   sortOrder: number;
   _count?: { projects: number };
@@ -48,13 +67,15 @@ function toDTO(d: {
     name: d.name,
     code: d.code,
     tagline: d.tagline,
+    website: d.website,
+    capstoneLabel: d.capstoneLabel,
     accent: d.accent,
     sortOrder: d.sortOrder,
     projectCount: d._count?.projects ?? 0,
   };
 }
 
-// ---------- GET — every department with an all-status project count ----------
+// ---------- GET - every department with an all-status project count ----------
 
 export async function GET(req: NextRequest) {
   try {
@@ -73,7 +94,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---------- POST — create a department ----------
+// ---------- POST - create a department ----------
 
 const createSchema = z.object(deptFields);
 
@@ -89,7 +110,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { name, code, tagline, accent, sortOrder } = parsed.data;
+    const { name, code, tagline, website, capstoneLabel, accent, sortOrder } = parsed.data;
 
     const dupe = await db.department.findUnique({ where: { code } });
     if (dupe) {
@@ -104,6 +125,8 @@ export async function POST(req: NextRequest) {
         name,
         code,
         tagline: tagline || null,
+        website: website ?? null,
+        capstoneLabel: capstoneLabel ?? "Capstone Design",
         accent: accent ?? "teal",
         sortOrder: sortOrder ?? 0,
       },
@@ -116,7 +139,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ---------- PATCH { id, ...fields } — edit a department ----------
+// ---------- PATCH { id, ...fields } - edit a department ----------
 
 const patchSchema = z
   .object({
@@ -124,6 +147,8 @@ const patchSchema = z
     name: deptFields.name.optional(),
     code: codeSchema.optional(),
     tagline: deptFields.tagline,
+    website: websiteSchema,
+    capstoneLabel: capstoneLabelSchema.optional(),
     accent: deptFields.accent,
     sortOrder: deptFields.sortOrder,
   })
@@ -132,6 +157,8 @@ const patchSchema = z
       d.name !== undefined ||
       d.code !== undefined ||
       d.tagline !== undefined ||
+      d.website !== undefined ||
+      d.capstoneLabel !== undefined ||
       d.accent !== undefined ||
       d.sortOrder !== undefined,
     { message: "Nothing to update" }
@@ -149,7 +176,7 @@ export async function PATCH(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { id, name, code, tagline, accent, sortOrder } = parsed.data;
+    const { id, name, code, tagline, website, capstoneLabel, accent, sortOrder } = parsed.data;
 
     const existing = await db.department.findUnique({ where: { id } });
     if (!existing) {
@@ -170,6 +197,8 @@ export async function PATCH(req: NextRequest) {
     if (name !== undefined) data.name = name;
     if (code !== undefined) data.code = code;
     if (tagline !== undefined) data.tagline = tagline || null;
+    if (website !== undefined) data.website = website;
+    if (capstoneLabel !== undefined) data.capstoneLabel = capstoneLabel;
     if (accent !== undefined) data.accent = accent;
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
 
@@ -186,7 +215,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// ---------- DELETE ?id= — blocked while projects reference the department ----------
+// ---------- DELETE ?id= - blocked while projects reference the department ----------
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -207,7 +236,7 @@ export async function DELETE(req: NextRequest) {
     }
     if (dept._count.projects > 0) {
       return NextResponse.json(
-        { error: "Department has projects — move or delete them first" },
+        { error: "Department has projects - move or delete them first" },
         { status: 409 }
       );
     }

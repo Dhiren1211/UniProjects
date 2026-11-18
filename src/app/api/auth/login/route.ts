@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
       where: {
         OR: [{ username: login.toLowerCase() }, { email: login.toLowerCase() }],
       },
-      include: { department: { select: { id: true, name: true, code: true, accent: true } } },
+      include: {
+        department: {
+          select: { id: true, name: true, code: true, accent: true, capstoneLabel: true },
+        },
+      },
     });
 
     if (!user || !verifyPassword(password, user.passwordHash)) {

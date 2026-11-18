@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { notify } from "../_utils/notify";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST { targetType, targetId } — toggle like ----------
+// ---------- POST { targetId } - toggle a project like ----------
 
 const toggleSchema = z.object({
-  targetType: z.enum(["POST", "PROJECT"]),
   targetId: z.string().min(1),
 });
 
@@ -25,23 +23,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { targetType, targetId } = parsed.data;
+    const targetId = parsed.data.targetId;
+    const targetType = "PROJECT";
 
-    let authorId: string | null = null;
-    if (targetType === "POST") {
-      const target = await db.post.findUnique({
-        where: { id: targetId },
-        select: { id: true, userId: true },
-      });
-      if (!target) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-      authorId = target.userId;
-    } else {
-      const target = await db.project.findUnique({
-        where: { id: targetId },
-        select: { id: true },
-      });
-      if (!target) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    const target = await db.project.findUnique({
+      where: { id: targetId },
+      select: { id: true },
+    });
+    if (!target) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
     const existing = await db.like.findUnique({
       where: { userId_targetType_targetId: { userId: viewer.id, targetType, targetId } },
@@ -53,10 +42,6 @@ export async function POST(req: NextRequest) {
     }
 
     await db.like.create({ data: { userId: viewer.id, targetType, targetId } });
-
-    if (targetType === "POST" && authorId && authorId !== viewer.id) {
-      notify(authorId, "LIKE", `${viewer.displayName} liked your post`, "/community");
-    }
 
     return NextResponse.json({ active: true });
   } catch (e) {

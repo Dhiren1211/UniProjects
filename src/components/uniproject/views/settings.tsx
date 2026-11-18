@@ -86,6 +86,9 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
   const [skills, setSkills] = useState(user.skills.join(", "));
   const [website, setWebsite] = useState(user.website ?? "");
   const [github, setGithub] = useState(user.github ?? "");
+  // PROFESSOR only - official faculty profile page on the university website
+  const isProfessor = user.role === "PROFESSOR";
+  const [universityProfileUrl, setUniversityProfileUrl] = useState(user.universityProfileUrl ?? "");
   const [dept, setDept] = useState(user.department?.code ?? "");
   const [teammates, setTeammates] = useState(user.lookingForTeammates);
 
@@ -122,6 +125,8 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
       name: user.department.name,
       code: user.department.code,
       tagline: null,
+      website: null,
+      capstoneLabel: user.department.capstoneLabel,
       accent: user.department.accent,
     });
   }
@@ -148,7 +153,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
         return;
       }
       if (confirmPassword !== pw) {
-        toast.error("New passwords don't match — check both fields");
+        toast.error("New passwords don't match - check both fields");
         return;
       }
     }
@@ -169,6 +174,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
           .filter(Boolean),
         website: website.trim() || null,
         github: github.trim() || null,
+        ...(isProfessor ? { universityProfileUrl: universityProfileUrl.trim() || null } : {}),
         lookingForTeammates: teammates,
       };
       // only send the department when the directory loaded, so we never accidentally clear it
@@ -196,11 +202,11 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
   const handleAvatarFile = async (file: File | undefined) => {
     if (!file || uploading) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("That file isn't an image — choose a JPG, PNG, WebP, or GIF.");
+      toast.error("That file isn't an image - choose a JPG, PNG, WebP, or GIF.");
       return;
     }
     if (file.size > 6 * 1024 * 1024) {
-      toast.error("Photo is too large — the limit is 6 MB.");
+      toast.error("Photo is too large - the limit is 6 MB.");
       return;
     }
     setUploading(true);
@@ -208,9 +214,9 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
     try {
       const url = await uploadFile(file, "avatar", setUploadPct);
       setAvatarInput(url);
-      toast.success("Photo uploaded — press Save changes to keep it.");
+      toast.success("Photo uploaded - press Save changes to keep it.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Upload failed — try again");
+      toast.error(e instanceof Error ? e.message : "Upload failed - try again");
     } finally {
       setUploading(false);
       setUploadPct(0);
@@ -250,8 +256,8 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {avatarInput.trim()
-                      ? "Looking good — save changes to apply it."
-                      : "Using your initials — pick a look below."}
+                      ? "Looking good - save changes to apply it."
+                      : "Using your initials - pick a look below."}
                   </p>
                 </div>
               </div>
@@ -268,7 +274,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
               ) : null}
             </div>
 
-            {/* Preset gallery + custom upload tile (last cell — same size, so no layout jump) */}
+            {/* Preset gallery + custom upload tile (last cell - same size, so no layout jump) */}
             <div
               role="group"
               aria-label="Avatar gallery"
@@ -284,7 +290,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                     aria-pressed={selected}
                     whileTap={{ scale: 0.92 }}
                     onClick={() => setAvatarInput(path)}
-                    className={`relative aspect-square overflow-hidden rounded-xl border bg-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+                    className={`relative aspect-square overflow-hidden rounded-xl border bg-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                       selected
                         ? "border-transparent ring-2 ring-primary-500"
                         : "border-up-border hover:border-foreground/30"
@@ -292,7 +298,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                   >
                     <img src={path} alt="" loading="lazy" className="size-full object-cover" />
                     {selected ? (
-                      <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-primary-500 text-white shadow-sm">
+                      <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-primary-500 text-primary-foreground shadow-sm">
                         <Check className="size-3" aria-hidden />
                       </span>
                     ) : null}
@@ -316,7 +322,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                   {uploading ? `Uploading ${uploadPct}%` : "Upload your own"}
                 </span>
                 {uploading ? (
-                  <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-white/70">
+                  <span aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-background/85">
                     <span
                       className="block h-full bg-primary-500 transition-[width] duration-200"
                       style={{ width: `${uploadPct}%` }}
@@ -339,7 +345,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
             />
 
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Pick a campus avatar or upload your own photo — it shows next to your name, posts, and
+              Pick a campus avatar or upload your own photo - it shows next to your name, posts, and
               comments. JPG, PNG, WebP, or GIF up to 6 MB.
             </p>
 
@@ -370,7 +376,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                     className="rounded-xl"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Must start with https:// or / — leave empty to use your initials.
+                    Must start with https:// or / - leave empty to use your initials.
                   </p>
                 </div>
               </CollapsibleContent>
@@ -417,7 +423,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
               id="st-skills"
               value={skills}
               onChange={(e) => setSkills(e.target.value)}
-              placeholder="Comma separated — e.g. React, Python, Figma"
+              placeholder="Comma separated - e.g. React, Python, Figma"
               className="rounded-xl"
             />
           </div>
@@ -446,6 +452,24 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
             />
           </div>
 
+          {isProfessor ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="st-university-profile">University profile</Label>
+              <Input
+                id="st-university-profile"
+                value={universityProfileUrl}
+                onChange={(e) => setUniversityProfileUrl(e.target.value)}
+                placeholder="https://kscms.ks.ac.kr/… (your faculty page)"
+                type="url"
+                className="rounded-xl"
+              />
+              <p className="text-xs text-muted-foreground">
+                Link to your official profile on the university website - students see it as a
+                redirect button on your showcase profile.
+              </p>
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
             <Label htmlFor="st-dept">Department</Label>
             <Select
@@ -466,7 +490,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
             </Select>
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-up-border bg-white px-4 py-3 md:col-span-2">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-up-border bg-card px-4 py-3 md:col-span-2">
             <div>
               <Label htmlFor="st-teammates" className="cursor-pointer">
                 Open to teamwork
@@ -554,8 +578,9 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                   ) : null}
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground md:col-span-3">
-                  The password only changes when all three fields are filled — otherwise your
-                  current password keeps working.
+                  Your account was provisioned with a generated password - change it here. The
+                  password only updates when all three fields are filled; otherwise your current
+                  password keeps working.
                 </p>
               </div>
             </CollapsibleContent>

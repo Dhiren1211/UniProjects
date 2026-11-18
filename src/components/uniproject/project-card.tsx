@@ -31,17 +31,17 @@ export function ProjectCard({
           onOpen(project.slug);
         }
       }}
-      whileHover={reduceMotion ? undefined : { y: -4 }}
-      whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+      whileHover={reduceMotion ? undefined : { y: -2 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.995 }}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
-      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-up-border bg-card text-left shadow-card outline-none transition-[border-color,box-shadow] duration-200 hover:border-up-border-strong hover:shadow-lg focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex cursor-pointer flex-col overflow-hidden rounded-[20px] border border-up-border bg-card text-left outline-none transition-[border-color] duration-200 hover:border-up-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {/* Cover */}
       <div
         className={cn(
           "relative flex items-center justify-center overflow-hidden bg-gradient-to-br",
           accent.cover,
-          featured ? "h-44" : "h-32"
+          featured ? "h-48" : "aspect-[16/10]"
         )}
       >
         {project.coverImage ? (
@@ -52,11 +52,11 @@ export function ProjectCard({
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
-            className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            className="absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-[1.025]"
           />
         ) : null}
         {project.coverImage ? null : (
-          <span className="flex size-12 items-center justify-center rounded-2xl bg-white/70 text-foreground/60 shadow-sm transition-transform duration-200 group-hover:scale-105">
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-background/85 text-foreground/60 shadow-sm transition-transform duration-200 group-hover:scale-105">
             <CategoryIcon category={project.category} className="size-6" />
           </span>
         )}
@@ -64,7 +64,7 @@ export function ProjectCard({
           <span
             className={cn(
               "absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-primary-700 shadow-sm",
-              project.coverImage ? "bg-white/90" : "bg-white/85"
+              project.coverImage ? "bg-background/85" : "bg-background/85"
             )}
           >
             <Star className="size-3 fill-current" aria-hidden />
@@ -75,9 +75,7 @@ export function ProjectCard({
           {project.verified ? <VerifiedBadge /> : null}
           <span
             className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] font-medium shadow-sm",
-              project.coverImage ? "bg-white/90" : "bg-white/85",
-              accent.chip
+              "rounded-full border border-transparent bg-background/85 px-2 py-0.5 text-[13px] font-medium text-foreground"
             )}
           >
             {project.department.code}
@@ -87,13 +85,13 @@ export function ProjectCard({
 
       {/* Body */}
       <div className="flex flex-1 flex-col p-5">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="t-label">
           {project.category} · {project.year} {project.semester}
         </p>
-        <h3 className="mt-1.5 line-clamp-1 font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary-700">
+        <h3 className="mt-1.5 line-clamp-1 text-lg font-medium tracking-tight text-foreground transition-colors group-hover:text-primary">
           {project.title}
         </h3>
-        <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 line-clamp-2 text-[15px] leading-relaxed text-ink-700">
           {project.summary}
         </p>
 

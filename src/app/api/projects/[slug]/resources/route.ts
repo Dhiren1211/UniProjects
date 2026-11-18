@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSessionUser, isStaff } from "@/lib/auth";
+import { canManageProject } from "../../../_utils/project-access";
+import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ const RESOURCE_TYPES = ["DEMO", "GITHUB", "DOCUMENT", "VIDEO", "PRESENTATION"] a
 const isResourceTarget = (v: string) =>
   /^https?:\/\/\S+$/i.test(v) || /^\/uploads\/[a-z0-9/-]+\.[a-z0-9]{1,8}$/i.test(v);
 
-// ---------- POST { type, label, url } — add a resource (owner / staff) ----------
+// ---------- POST { type, label, url } - add a resource (owner / staff) ----------
 
 const addSchema = z.object({
   type: z.enum(RESOURCE_TYPES),
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can add resources" },
         { status: 403 }
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
   }
 }
 
-// ---------- DELETE { resourceId } — remove a resource (owner / staff) ----------
+// ---------- DELETE { resourceId } - remove a resource (owner / staff) ----------
 
 const deleteSchema = z.object({ resourceId: z.string().min(1) });
 
@@ -77,7 +78,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    if (project.ownerId !== viewer.id && !isStaff(viewer.role)) {
+    if (!(await canManageProject(viewer, project))) {
       return NextResponse.json(
         { error: "Only the project owner can remove resources" },
         { status: 403 }
