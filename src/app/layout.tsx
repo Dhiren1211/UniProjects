@@ -1,11 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Mono, Urbanist } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 
-const urbanist = Urbanist({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-urbanist", display: "swap" });
-const dmMono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-dm-mono", display: "swap" });
+// Fonts are self-hosted (src/app/fonts, latin subset) so builds never depend on
+// fetching from Google Fonts - next/font/google breaks on Google's newer font URLs.
+const urbanist = localFont({
+  src: [
+    { path: "./fonts/urbanist-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/urbanist-500.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/urbanist-600.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-urbanist",
+  display: "swap",
+  fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
+});
+const dmMono = localFont({
+  src: [
+    { path: "./fonts/dm-mono-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/dm-mono-500.woff2", weight: "500", style: "normal" },
+  ],
+  variable: "--font-dm-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "Consolas", "monospace"],
+});
 
 export const metadata: Metadata = {
   title: "UniProjects: capstone projects from Kyungsung University students",
