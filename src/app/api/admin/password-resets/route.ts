@@ -19,9 +19,31 @@ export async function GET(req: NextRequest) {
     const gate = await requireAdmin(req);
     if (!gate.ok) return gate.denied;
 
+    const sp = req.nextUrl.searchParams;
+    const status = sp.get("status")?.trim(); // PENDING | SENT | DISMISSED | NOT_FOUND
+    const q = (sp.get("q") ?? "").trim().toLowerCase().slice(0, 100);
+    // match the typed address, or the matched member's username / name
+    const matchedIds = q
+      ? (
+          await db.user.findMany({
+            where: {
+              OR: [
+                { username: { contains: q, mode: "insensitive" } },
+                { displayName: { contains: q, mode: "insensitive" } },
+              ],
+            },
+            select: { id: true },
+            take: 200,
+          })
+        ).map((u) => u.id)
+      : [];
     const rows = await db.passwordResetRequest.findMany({
+      where: {
+        ...(status && status !== "ALL" ? { status } : {}),
+        ...(q ? { OR: [{ email: { contains: q, mode: "insensitive" } }, { userId: { in: matchedIds } }] } : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 200,
     });
 
     // Resolve the matched accounts in one query for the admin table.

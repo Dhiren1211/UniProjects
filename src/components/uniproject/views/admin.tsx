@@ -212,7 +212,7 @@ const TAB_META: Record<TabKey, { title: string; description: string }> = {
   resets: {
     title: "Password resets",
     description:
-      "Every public \u201cforgot password\u201d request - matched accounts received a temporary password by email.",
+      "Forgot-password requests - press Reset to email the member a new password.",
   },
   users: {
     title: "Users",
@@ -5684,6 +5684,50 @@ function AnnouncementFormDialog({
 // Emails tab - transactional outbox (ADMIN)
 // ============================================================
 
+// Search box + status select used by the Emails and Resets tabs.
+function SearchFilterRow({
+  query,
+  onQuery,
+  placeholder,
+  status,
+  onStatus,
+  options,
+}: {
+  query: string;
+  onQuery: (v: string) => void;
+  placeholder: string;
+  status: string;
+  onStatus: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      <div className="relative flex-1">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="h-9 rounded-xl pl-9"
+        />
+      </div>
+      <Select value={status} onValueChange={onStatus}>
+        <SelectTrigger className="h-9 w-full rounded-xl sm:w-[180px]" aria-label="Filter by status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function EmailsTab({
   refreshTick,
   onLoaded,
@@ -5694,10 +5738,13 @@ function EmailsTab({
   const [kind, setKind] = useState<"ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM">("ALL");
   const [rows, setRows] = useState<EmailLogDTO[] | null>(null); // null = loading
   const [open, setOpen] = useState<EmailLogDTO | null>(null);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounced(query, 300);
+  const [mailStatus, setMailStatus] = useState("ALL");
 
   useEffect(() => {
     let cancelled = false;
-    fetchAdminEmails(kind)
+    fetchAdminEmails(kind, undefined, { q: debouncedQuery, status: mailStatus })
       .then((data) => {
         if (cancelled) return;
         setRows(data);
@@ -5712,7 +5759,9 @@ function EmailsTab({
     return () => {
       cancelled = true;
     };
-  }, [kind, refreshTick, onLoaded]);
+  }, [kind, debouncedQuery, mailStatus, refreshTick, onLoaded]);
+
+  const filtering = debouncedQuery.trim() !== "" || mailStatus !== "ALL";
 
   const chips: { key: "ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM"; label: string }[] = [
     { key: "ALL", label: "All" },
@@ -5744,9 +5793,26 @@ function EmailsTab({
           </button>
         ))}
         <p className="ml-auto hidden text-xs text-muted-foreground sm:block">
-          In this sandbox emails are logged to the console - nothing leaves the server
+          “Not sent” means email sending isn't set up - the copy here is complete
         </p>
       </div>
+
+      <SearchFilterRow
+        query={query}
+        onQuery={setQuery}
+        placeholder="Search by address or subject"
+        status={mailStatus}
+        onStatus={(v) => {
+          setMailStatus(v);
+          setRows(null);
+        }}
+        options={[
+          { value: "ALL", label: "Any status" },
+          { value: "SENT", label: "Sent" },
+          { value: "FAILED", label: "Failed" },
+          { value: "CONSOLE", label: "Not sent" },
+        ]}
+      />
 
       {rows === null ? (
         <div className="mt-3 space-y-2">
@@ -5758,8 +5824,12 @@ function EmailsTab({
         <div className="mt-3">
           <EmptyState
             icon={Mail}
-            title="No email has been sent yet"
-            hint="Credential emails appear here after you approve an account request."
+            title={filtering ? "No emails match" : "No email has been sent yet"}
+            hint={
+              filtering
+                ? "Try a different search or status."
+                : "Credential emails appear here after you approve an account request."
+            }
           />
         </div>
       ) : (
@@ -5976,6 +6046,10 @@ function ResetsTab({
   const [rows, setRows] = useState<PasswordResetRow[] | null>(null); // null = loading
   const [resetting, setResetting] = useState<ResetTarget | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounced(query, 300);
+  const [resetStatus, setResetStatus] = useState("ALL");
+  const filtering = debouncedQuery.trim() !== "" || resetStatus !== "ALL";
   const reload = () => {
     setReloadTick((t) => t + 1);
     onChanged();
@@ -5992,7 +6066,7 @@ function ResetsTab({
 
   useEffect(() => {
     let cancelled = false;
-    fetchAdminPasswordResets()
+    fetchAdminPasswordResets(undefined, { q: debouncedQuery, status: resetStatus })
       .then((data) => {
         if (cancelled) return;
         setRows(data);
@@ -6007,11 +6081,28 @@ function ResetsTab({
     return () => {
       cancelled = true;
     };
-  }, [refreshTick, reloadTick, onLoaded]);
+  }, [refreshTick, reloadTick, debouncedQuery, resetStatus, onLoaded]);
 
   return (
     <div>
       <PasswordResetDialog target={resetting} onClose={() => setResetting(null)} onDone={reload} />
+      <SearchFilterRow
+        query={query}
+        onQuery={setQuery}
+        placeholder="Search by name, user ID or email"
+        status={resetStatus}
+        onStatus={(v) => {
+          setResetStatus(v);
+          setRows(null);
+        }}
+        options={[
+          { value: "ALL", label: "Any status" },
+          { value: "PENDING", label: "Waiting" },
+          { value: "SENT", label: "New password sent" },
+          { value: "DISMISSED", label: "Dismissed" },
+          { value: "NOT_FOUND", label: "No match" },
+        ]}
+      />
       {rows === null ? (
         <div className="mt-3 space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -6022,7 +6113,7 @@ function ResetsTab({
         <div className="mt-3">
           <EmptyState
             icon={KeyRound}
-            title="No reset requests yet"
+            title={filtering ? "No requests match" : "No reset requests yet"}
             hint='When someone uses "Forgot password?" on the sign-in dialog, the request appears here with a Reset button.'
           />
         </div>

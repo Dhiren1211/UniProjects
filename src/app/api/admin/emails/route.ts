@@ -18,11 +18,25 @@ export async function GET(req: NextRequest) {
     if (!canConfigureSite(viewer?.role)) {
       return NextResponse.json({ error: "Administrators only" }, { status: viewer ? 403 : 401 });
     }
-    const kind = req.nextUrl.searchParams.get("kind")?.trim();
+    const sp = req.nextUrl.searchParams;
+    const kind = sp.get("kind")?.trim();
+    const status = sp.get("status")?.trim(); // SENT | FAILED | CONSOLE
+    const q = (sp.get("q") ?? "").trim().slice(0, 100);
     const rows = await db.emailLog.findMany({
-      where: kind && kind !== "ALL" ? { kind } : undefined,
+      where: {
+        ...(kind && kind !== "ALL" ? { kind } : {}),
+        ...(status && status !== "ALL" ? { status } : {}),
+        ...(q
+          ? {
+              OR: [
+                { to: { contains: q, mode: "insensitive" as const } },
+                { subject: { contains: q, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 200,
     });
     const emails: EmailLogDTO[] = rows.map((r) => ({
       id: r.id,

@@ -672,8 +672,15 @@ export async function deleteAdminUser(id: string): Promise<void> {
 }
 
 /** Admin audit of every public "forgot password" attempt (ADMIN only). */
-export async function fetchAdminPasswordResets(signal?: AbortSignal): Promise<PasswordResetRow[]> {
-  const data = await get<{ resets: PasswordResetRow[] }>("/api/admin/password-resets", signal);
+export async function fetchAdminPasswordResets(
+  signal?: AbortSignal,
+  filters: { q?: string; status?: string } = {}
+): Promise<PasswordResetRow[]> {
+  const sp = new URLSearchParams();
+  if (filters.status && filters.status !== "ALL") sp.set("status", filters.status);
+  if (filters.q?.trim()) sp.set("q", filters.q.trim());
+  const qs = sp.toString() ? `?${sp}` : "";
+  const data = await get<{ resets: PasswordResetRow[] }>(`/api/admin/password-resets${qs}`, signal);
   return data.resets;
 }
 
@@ -713,9 +720,14 @@ export async function fetchProfessorsPublic(signal?: AbortSignal): Promise<SafeU
 /** Admin email outbox - credentials, password resets and system mail that the platform has "sent". */
 export async function fetchAdminEmails(
   kind?: "ALL" | "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM",
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  filters: { q?: string; status?: string } = {}
 ): Promise<EmailLogDTO[]> {
-  const qs = kind && kind !== "ALL" ? `?kind=${kind}` : "";
+  const sp = new URLSearchParams();
+  if (kind && kind !== "ALL") sp.set("kind", kind);
+  if (filters.status && filters.status !== "ALL") sp.set("status", filters.status);
+  if (filters.q?.trim()) sp.set("q", filters.q.trim());
+  const qs = sp.toString() ? `?${sp}` : "";
   const data = await get<{ emails: EmailLogDTO[] }>(`/api/admin/emails${qs}`, signal);
   return data.emails;
 }
