@@ -297,6 +297,10 @@ export type AdminOverviewDTO = {
   openReports: number;
   pendingJoinRequests: number;
   pendingAccountRequests: number;
+  /** Projects waiting for approval. */
+  pendingProjectReviews: number;
+  /** Forgot-password requests waiting for an admin. */
+  pendingPasswordResets: number;
   byCategory: { category: string; count: number }[];
   byDepartment: { code: string; name: string; accent: string; count: number }[];
   byClass: { classId: string; students: number; projects: number }[];

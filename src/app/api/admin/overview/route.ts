@@ -184,6 +184,11 @@ export async function GET(req: NextRequest) {
       .map((r) => ({ category: r.category, count: r._count._all }))
       .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 
+    const [pendingProjectReviews, pendingPasswordResets] = await Promise.all([
+      db.project.count({ where: { status: "PENDING" } }),
+      db.passwordResetRequest.count({ where: { status: "PENDING" } }),
+    ]);
+
     const overview: AdminOverviewDTO = {
       users,
       students,
@@ -202,6 +207,8 @@ export async function GET(req: NextRequest) {
       openReports,
       pendingJoinRequests,
       pendingAccountRequests,
+      pendingProjectReviews,
+      pendingPasswordResets,
       byCategory,
       byDepartment: deptRows.map((d) => ({
         code: d.code,

@@ -220,7 +220,7 @@ const TAB_META: Record<TabKey, { title: string; description: string }> = {
   },
   projects: {
     title: "Projects",
-    description: "Feature, publish or remove any project across the campus showcase.",
+    description: "Approve, feature or remove projects - new projects stay hidden until approved.",
   },
   announcements: {
     title: "Announcements",
@@ -298,6 +298,8 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
   const [overview, setOverview] = useState<AdminOverviewDTO | null>(null);
   const [overviewError, setOverviewError] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [pollTick, setPollTick] = useState(0); // background badge refresh
+  const silentRef = useRef(false); // true while a background refresh is running
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState<Partial<Record<TabKey, number>>>({});
   const [arriveNew, setArriveNew] = useState(false);
@@ -375,6 +377,8 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
   useEffect(() => {
     if (!authLoaded || !isStaff) return;
     let cancelled = false;
+    const silent = silentRef.current;
+    silentRef.current = false;
     fetchAdminOverview()
       .then((data) => {
         if (cancelled) return;
@@ -383,7 +387,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
         overviewLoaded(true);
       })
       .catch((e) => {
-        if (cancelled) return;
+        if (cancelled || silent) return; // background refreshes fail quietly
         setOverviewError(true);
         overviewLoaded(false);
         toast.error(e instanceof Error ? e.message : "Could not load the admin overview");
@@ -391,7 +395,19 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
     return () => {
       cancelled = true;
     };
-  }, [refreshTick, authLoaded, isStaff, overviewLoaded]);
+  }, [refreshTick, pollTick, authLoaded, isStaff, overviewLoaded]);
+
+  // Keep the nav badges fresh: re-check the counts every minute while the tab is visible.
+  useEffect(() => {
+    if (!authLoaded || !isStaff) return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        silentRef.current = true;
+        setPollTick((n) => n + 1);
+      }
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [authLoaded, isStaff]);
 
   // ---------- gates ----------
 
@@ -432,6 +448,17 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
 
   const moderationPending = (overview?.pendingVerifications ?? 0) + (overview?.openReports ?? 0);
   const approvalsPending = isAdmin ? (overview?.pendingAccountRequests ?? 0) : 0;
+  // badges on the nav: anything waiting for an admin's action
+  const tabBadges: Partial<Record<TabKey, number>> = {
+    moderation: moderationPending,
+    approvals: approvalsPending,
+    ...(isAdmin
+      ? {
+          projects: overview?.pendingProjectReviews ?? 0,
+          resets: overview?.pendingPasswordResets ?? 0,
+        }
+      : {}),
+  };
   const meta = TAB_META[tab];
 
   return (
@@ -439,8 +466,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
       <ConsoleSidebar
         tab={tab}
         items={navItems}
-        moderationPending={moderationPending}
-        approvalsPending={approvalsPending}
+        badges={tabBadges}
         onTab={goTab}
         navigate={navigate}
       />
@@ -450,8 +476,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
           <ConsoleTopBar
             tab={tab}
             items={navItems}
-            moderationPending={moderationPending}
-            approvalsPending={approvalsPending}
+            badges={tabBadges}
             user={user}
             onTab={goTab}
           />
@@ -527,7 +552,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
               <EmailsTab refreshTick={refreshTick} onLoaded={emailsLoaded} />
             ) : null}
             {isAdmin && tab === "resets" ? (
-              <ResetsTab refreshTick={refreshTick} onLoaded={resetsLoaded} />
+              <ResetsTab refreshTick={refreshTick} onLoaded={resetsLoaded} onChanged={syncOverview} />
             ) : null}
             {isAdmin && tab === "settings" ? (
               <SettingsTab refreshTick={refreshTick} onLoaded={settingsLoaded} />
@@ -560,15 +585,13 @@ function Shell({ children }: { children: ReactNode }) {
 function ConsoleSidebar({
   tab,
   items,
-  moderationPending,
-  approvalsPending,
+  badges,
   onTab,
   navigate,
 }: {
   tab: TabKey;
   items: typeof ALL_TABS;
-  moderationPending: number;
-  approvalsPending: number;
+  badges: Partial<Record<TabKey, number>>;
   onTab: (key: TabKey, openNew?: boolean) => void;
   navigate: Navigate;
 }) {
@@ -589,12 +612,7 @@ function ConsoleSidebar({
           {items.map((item) => {
             const active = tab === item.key;
             const Icon = item.icon;
-            const pending =
-              item.key === "moderation"
-                ? moderationPending
-                : item.key === "approvals"
-                  ? approvalsPending
-                  : 0;
+            const pending = badges[item.key] ?? 0;
             return (
               <button
                 key={item.key}
@@ -660,15 +678,13 @@ function ConsoleSidebar({
 function ConsoleTopBar({
   tab,
   items,
-  moderationPending,
-  approvalsPending,
+  badges,
   user,
   onTab,
 }: {
   tab: TabKey;
   items: typeof ALL_TABS;
-  moderationPending: number;
-  approvalsPending: number;
+  badges: Partial<Record<TabKey, number>>;
   user: SafeUserDTO;
   onTab: (key: TabKey, openNew?: boolean) => void;
 }) {
@@ -691,7 +707,7 @@ function ConsoleTopBar({
         <div className="flex min-w-max gap-1.5 pb-1">
           {items.map(({ key, label, icon: Icon }) => {
             const active = tab === key;
-            const pending = key === "moderation" ? moderationPending : key === "approvals" ? approvalsPending : 0;
+            const pending = badges[key] ?? 0;
             const showCount = pending > 0;
             return (
               <button
@@ -5950,14 +5966,20 @@ function PasswordResetDialog({
 function ResetsTab({
   refreshTick,
   onLoaded,
+  onChanged,
 }: {
   refreshTick: number;
   onLoaded: (ok: boolean) => void;
+  /** Refreshes the nav badges after a reset / dismiss. */
+  onChanged: () => void;
 }) {
   const [rows, setRows] = useState<PasswordResetRow[] | null>(null); // null = loading
   const [resetting, setResetting] = useState<ResetTarget | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-  const reload = () => setReloadTick((t) => t + 1);
+  const reload = () => {
+    setReloadTick((t) => t + 1);
+    onChanged();
+  };
 
   const dismiss = async (id: string) => {
     try {
