@@ -77,6 +77,7 @@ import {
   type TimelineDTO,
 } from "../api-client";
 import { useAppStore } from "../store";
+import { deleteWithUndo } from "../undo-delete";
 import { EmptyState, UserAvatar } from "../ui-bits";
 
 // ---------- constants / helpers ----------
@@ -1022,9 +1023,6 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
       .catch(() => {});
   };
 
-  const patchProject = (patch: Partial<ProjectDetail>) =>
-    setExisting((ex) => (ex ? { ...ex, project: { ...ex.project, ...patch } } : ex));
-
   const changeMemberRole = (m: MemberDTO, role: string) => {
     if (!editSlug || role === m.role) return;
     setMemberBusy(m.id);
@@ -1037,16 +1035,31 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
       .finally(() => setMemberBusy(null));
   };
 
+  /** Hide a member / resource / milestone locally while its undo countdown runs. */
+  const hideFromProject = (key: "members" | "resources" | "timeline", id: string) =>
+    setExisting((ex) =>
+      ex
+        ? {
+            ...ex,
+            project: {
+              ...ex.project,
+              [key]: (ex.project[key] as { id: string }[]).filter((x) => x.id !== id),
+            },
+          }
+        : ex
+    );
+
   const removeMemberNow = (m: MemberDTO) => {
     if (!editSlug) return;
-    setMemberBusy(m.id);
-    removeMember(editSlug, { memberId: m.id })
-      .then(() => {
-        toast.success(`${m.name} was removed from the team`);
-        reloadLists();
-      })
-      .catch((e: unknown) => toast.error(errOf(e, "Remove failed")))
-      .finally(() => setMemberBusy(null));
+    const slug = editSlug;
+    deleteWithUndo({
+      label: m.name,
+      commit: () => removeMember(slug, { memberId: m.id }),
+      onHide: () => hideFromProject("members", m.id),
+      onRestore: reloadLists, // nothing was deleted yet - reload brings it back
+      onDeleted: reloadLists,
+      doneMessage: `${m.name} was removed from the team`,
+    });
   };
 
   const addMemberNow = (u: SafeUserDTO, role: string) => {
@@ -1088,12 +1101,14 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
 
   const deleteResourceNow = (r: ResourceDTO) => {
     if (!editSlug || !editProject) return;
-    deleteResource(editSlug, r.id)
-      .then(() => {
-        toast.success("Resource removed");
-        patchProject({ resources: editProject.resources.filter((x) => x.id !== r.id) });
-      })
-      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+    const slug = editSlug;
+    deleteWithUndo({
+      label: `“${r.label}”`,
+      commit: () => deleteResource(slug, r.id),
+      onHide: () => hideFromProject("resources", r.id),
+      onRestore: reloadLists,
+      doneMessage: "Resource removed",
+    });
   };
 
   const addMilestoneNow = () => {
@@ -1120,12 +1135,14 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
 
   const deleteMilestoneNow = (t: TimelineDTO) => {
     if (!editSlug || !editProject) return;
-    deleteTimelineItem(editSlug, t.id)
-      .then(() => {
-        toast.success("Milestone removed");
-        patchProject({ timeline: editProject.timeline.filter((x) => x.id !== t.id) });
-      })
-      .catch((e: unknown) => toast.error(errOf(e, "Delete failed")));
+    const slug = editSlug;
+    deleteWithUndo({
+      label: `“${t.title}”`,
+      commit: () => deleteTimelineItem(slug, t.id),
+      onHide: () => hideFromProject("timeline", t.id),
+      onRestore: reloadLists,
+      doneMessage: "Milestone removed",
+    });
   };
 
   // ---------- media uploads & custom tools ----------

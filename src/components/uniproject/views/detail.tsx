@@ -112,6 +112,7 @@ import {
 } from "../api-client";
 import { ProjectCard } from "../project-card";
 import { requireAuth, useAppStore } from "../store";
+import { deleteWithUndo } from "../undo-delete";
 import {
   CategoryIcon,
   EmptyState,
@@ -565,6 +566,8 @@ function ManageTeamDialog({
   const [busyUser, setBusyUser] = useState<string | null>(null);
   const [busyMember, setBusyMember] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MemberDTO | null>(null);
+  // members hidden while their removal undo countdown runs
+  const [hiddenMemberIds, setHiddenMemberIds] = useState<string[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), 300);
@@ -607,17 +610,19 @@ function ManageTeamDialog({
   const confirmRemove = () => {
     if (!removing) return;
     const m = removing;
-    setBusyMember(m.id);
-    removeMember(slug, { memberId: m.id })
-      .then(() => {
-        toast.success(`${m.name} was removed from the team`);
+    setRemoving(null);
+    const unhide = () => setHiddenMemberIds((ids) => ids.filter((id) => id !== m.id));
+    deleteWithUndo({
+      label: m.name,
+      commit: () => removeMember(slug, { memberId: m.id }),
+      onHide: () => setHiddenMemberIds((ids) => [...ids, m.id]),
+      onRestore: unhide,
+      onDeleted: () => {
         onChanged();
-      })
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Remove failed"))
-      .finally(() => {
-        setBusyMember(null);
-        setRemoving(null);
-      });
+        unhide();
+      },
+      doneMessage: `${m.name} was removed from the team`,
+    });
   };
 
   const addUser = (u: SafeUserDTO) => {
@@ -644,7 +649,7 @@ function ManageTeamDialog({
         <div className="nice-scroll max-h-[60vh] space-y-4 overflow-y-auto pr-1">
           {/* current members */}
           <div className="divide-y divide-up-border rounded-xl border border-up-border bg-card px-3.5">
-            {members.map((m) => (
+            {members.filter((m) => !hiddenMemberIds.includes(m.id)).map((m) => (
               <div key={m.id} className="flex items-center gap-3 py-2.5">
                 <UserAvatar name={m.name} avatarUrl={m.avatarUrl} ring={false} />
                 <div className="min-w-0 flex-1">
@@ -1309,30 +1314,40 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
   };
 
   const onDelete = () => {
-    deleteProject(slug)
-      .then(() => {
-        toast.success("Project deleted");
-        navigate({ name: "projects" });
-      })
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+    // Leave the page at once; Undo brings you back to the (still existing) project.
+    navigate({ name: "projects" });
+    deleteWithUndo({
+      label: `“${project.title}”`,
+      commit: () => deleteProject(slug),
+      onRestore: () => navigate({ name: "project", slug }),
+      doneMessage: "Project deleted",
+    });
   };
 
   const onResourceDelete = (r: ResourceDTO) => {
-    deleteResource(slug, r.id)
-      .then(() => {
-        toast.success("Resource removed");
-        patchProject({ resources: project.resources.filter((x) => x.id !== r.id) });
-      })
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+    deleteWithUndo({
+      label: `“${r.label}”`,
+      commit: () => deleteResource(slug, r.id),
+      onHide: () =>
+        setData((d) =>
+          d ? { ...d, project: { ...d.project, resources: d.project.resources.filter((x) => x.id !== r.id) } } : d
+        ),
+      onRestore: refresh, // still on the server - reload brings it back
+      doneMessage: "Resource removed",
+    });
   };
 
   const onMilestoneDelete = (t: TimelineDTO) => {
-    deleteTimelineItem(slug, t.id)
-      .then(() => {
-        toast.success("Milestone removed");
-        patchProject({ timeline: project.timeline.filter((x) => x.id !== t.id) });
-      })
-      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"));
+    deleteWithUndo({
+      label: `“${t.title}”`,
+      commit: () => deleteTimelineItem(slug, t.id),
+      onHide: () =>
+        setData((d) =>
+          d ? { ...d, project: { ...d.project, timeline: d.project.timeline.filter((x) => x.id !== t.id) } } : d
+        ),
+      onRestore: refresh,
+      doneMessage: "Milestone removed",
+    });
   };
 
   const onCommentSubmit = (e: React.FormEvent) => {

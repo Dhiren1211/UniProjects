@@ -264,10 +264,10 @@ export type EmailLogDTO = {
 export type PasswordResetRow = {
   id: string;
   email: string;
-  status: "SENT" | "PENDING" | "NOT_FOUND"; // SENT = legacy rows (old auto-reset flow)
+  status: "SENT" | "PENDING" | "NOT_FOUND" | "DISMISSED";
   createdAt: string;
-  /** The account the email matched (null for NOT_FOUND rows). */
-  user: { username: string; displayName: string; role: string } | null;
+  /** The account the request matched (null for NOT_FOUND rows). */
+  user: { id: string; username: string; displayName: string; role: string } | null;
 };
 
 // ===== Admin panel =====

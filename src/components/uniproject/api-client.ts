@@ -87,8 +87,9 @@ export async function login(payload: { login: string; password: string }): Promi
  * address belongs to a registered account (every attempt lands in the
  * admin panel's Resets log either way).
  */
-export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
-  return send<{ ok: boolean; message: string }>("/api/auth/forgot-password", "POST", { email });
+/** login = student ID (students) or username (staff); an email also works. */
+export async function requestPasswordReset(login: string): Promise<{ ok: boolean; message: string }> {
+  return send<{ ok: boolean; message: string }>("/api/auth/forgot-password", "POST", { login });
 }
 
 export async function logout(): Promise<void> {
@@ -628,6 +629,27 @@ export async function deleteAdminUser(id: string): Promise<void> {
 export async function fetchAdminPasswordResets(signal?: AbortSignal): Promise<PasswordResetRow[]> {
   const data = await get<{ resets: PasswordResetRow[] }>("/api/admin/password-resets", signal);
   return data.resets;
+}
+
+export type AdminPasswordResetResult = {
+  ok: true;
+  delivered: boolean;
+  email: string;
+  username: string;
+  displayName: string;
+  /** Present only when the email could not be delivered. */
+  tempPassword?: string;
+};
+
+/** One-click reset: new password, saved, emailed (admin only). */
+export function adminResetPassword(
+  target: { userId: string } | { requestId: string }
+): Promise<AdminPasswordResetResult> {
+  return send<AdminPasswordResetResult>("/api/admin/password-resets", "POST", target);
+}
+
+export function dismissPasswordResetRequest(requestId: string): Promise<{ ok: true }> {
+  return send<{ ok: true }>("/api/admin/password-resets", "PATCH", { requestId, status: "DISMISSED" });
 }
 
 /**

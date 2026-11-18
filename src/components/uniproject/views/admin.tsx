@@ -98,6 +98,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ACCENTS, UNIVERSITY, accentOf } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import {
+  adminResetPassword,
+  dismissPasswordResetRequest,
+  type AdminPasswordResetResult,
   createAdminDepartment,
   createAdminUser,
   createAnnouncement,
@@ -131,6 +134,7 @@ import {
   type View,
 } from "../api-client";
 import { useAppStore } from "../store";
+import { deleteWithUndo, restoreAt } from "../undo-delete";
 import { ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import {
   CategoryIcon,
@@ -2206,19 +2210,16 @@ function ProjectsTab({
     }
   };
 
-  const removeProject = async (row: AdminProjectRow) => {
+  const removeProject = (row: AdminProjectRow) => {
     if (busyId) return;
-    setBusyId(row.id);
-    try {
-      await deleteAdminProject(row.id);
-      setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev));
-      toast.success(`Deleted “${row.title}”`);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the project");
-    } finally {
-      setBusyId(null);
-    }
+    const index = rows?.findIndex((r) => r.id === row.id) ?? 0;
+    deleteWithUndo({
+      label: `“${row.title}”`,
+      commit: () => deleteAdminProject(row.id),
+      onHide: () => setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev)),
+      onRestore: () => setRows((prev) => restoreAt(prev, row, index)),
+      onDeleted: onChanged,
+    });
   };
 
   const total = rows?.length ?? 0;
@@ -2506,6 +2507,7 @@ function UsersTab({
   const [editingClass, setEditingClass] = useState<AdminUserRow | null>(null);
   // full "Edit member" dialog (requirement: admins can edit every user from the console)
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
+  const [resettingUser, setResettingUser] = useState<ResetTarget | null>(null);
   // professor university-profile-link editor (requirement: faculty links manageable from the console)
   const [editingFacultyLink, setEditingFacultyLink] = useState<AdminUserRow | null>(null);
   const [facultyLinkInput, setFacultyLinkInput] = useState("");
@@ -2613,20 +2615,19 @@ function UsersTab({
     }
   };
 
-  const removeUser = async () => {
+  const removeUser = () => {
     if (!deleting || deleteBusy) return;
-    setDeleteBusy(true);
-    try {
-      await deleteAdminUser(deleting.id);
-      setRows((prev) => (prev ? prev.filter((r) => r.id !== deleting.id) : prev));
-      toast.success(`Removed @${deleting.username}`);
-      setDeleting(null);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the member");
-    } finally {
-      setDeleteBusy(false);
-    }
+    const row = deleting;
+    const index = rows?.findIndex((r) => r.id === row.id) ?? 0;
+    setDeleting(null);
+    deleteWithUndo({
+      label: `@${row.username}`,
+      commit: () => deleteAdminUser(row.id),
+      onHide: () => setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev)),
+      onRestore: () => setRows((prev) => restoreAt(prev, row, index)),
+      onDeleted: onChanged,
+      doneMessage: `Removed @${row.username}`,
+    });
   };
 
   const total = rows?.length ?? 0;
@@ -2638,6 +2639,7 @@ function UsersTab({
 
   return (
     <div>
+      <PasswordResetDialog target={resettingUser} onClose={() => setResettingUser(null)} onDone={onChanged} />
       {/* toolbar */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1 md:max-w-xs">
@@ -2881,6 +2883,18 @@ function UsersTab({
                     title="Edit member"
                   >
                     <UserCog className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 rounded-lg text-muted-foreground hover:text-primary-700"
+                    onClick={() =>
+                      setResettingUser({ userId: row.id, label: row.displayName, username: row.username })
+                    }
+                    aria-label={`Reset password for ${row.displayName}`}
+                    title="Reset password and email it"
+                  >
+                    <KeyRound className="size-3.5" aria-hidden />
                   </Button>
                   <Button
                     variant="ghost"
@@ -4144,20 +4158,18 @@ function DepartmentsTab({
 
   const reload = () => setTick((n) => n + 1);
 
-  const removeDepartment = async () => {
+  const removeDepartment = () => {
     if (!deleting || busy) return;
-    setBusy(true);
-    try {
-      await deleteAdminDepartment(deleting.id);
-      setRows((prev) => (prev ? prev.filter((d) => d.id !== deleting.id) : prev));
-      toast.success(`Deleted ${deleting.code}`);
-      setDeleting(null);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the department");
-    } finally {
-      setBusy(false);
-    }
+    const row = deleting;
+    const index = rows?.findIndex((d) => d.id === row.id) ?? 0;
+    setDeleting(null);
+    deleteWithUndo({
+      label: row.code,
+      commit: () => deleteAdminDepartment(row.id),
+      onHide: () => setRows((prev) => (prev ? prev.filter((d) => d.id !== row.id) : prev)),
+      onRestore: () => setRows((prev) => restoreAt(prev, row, index)),
+      onDeleted: onChanged,
+    });
   };
 
   const total = rows?.length ?? 0;
@@ -4638,20 +4650,19 @@ function ApprovalsTab({
     };
   }, [filter, refreshTick, onLoaded]);
 
-  const removeRequest = async () => {
+  const removeRequest = () => {
     if (!deleting || deleteBusy) return;
-    setDeleteBusy(true);
-    try {
-      await deleteAccountRequest(deleting.id);
-      setRows((prev) => (prev ? prev.filter((r) => r.id !== deleting.id) : prev));
-      toast.success(`Removed ${deleting.name}'s request`);
-      setDeleting(null);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the request");
-    } finally {
-      setDeleteBusy(false);
-    }
+    const row = deleting;
+    const index = rows?.findIndex((r) => r.id === row.id) ?? 0;
+    setDeleting(null);
+    deleteWithUndo({
+      label: `${row.name}'s request`,
+      commit: () => deleteAccountRequest(row.id),
+      onHide: () => setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev)),
+      onRestore: () => setRows((prev) => restoreAt(prev, row, index)),
+      onDeleted: onChanged,
+      doneMessage: `Removed ${row.name}'s request`,
+    });
   };
 
   const chips: { key: ReqFilter; label: string }[] = [
@@ -5185,20 +5196,19 @@ function AnnouncementsTab({
     };
   }, [refreshTick, onLoaded]);
 
-  const removeAnnouncement = async () => {
+  const removeAnnouncement = () => {
     if (!deleting || busy) return;
-    setBusy(true);
-    try {
-      await deleteAnnouncement(deleting.id);
-      setRows((prev) => (prev ? prev.filter((r) => r.id !== deleting.id) : prev));
-      toast.success("Announcement removed");
-      setDeleting(null);
-      onChanged();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not delete the announcement");
-    } finally {
-      setBusy(false);
-    }
+    const row = deleting;
+    const index = rows?.findIndex((r) => r.id === row.id) ?? 0;
+    setDeleting(null);
+    deleteWithUndo({
+      label: "announcement",
+      commit: () => deleteAnnouncement(row.id),
+      onHide: () => setRows((prev) => (prev ? prev.filter((r) => r.id !== row.id) : prev)),
+      onRestore: () => setRows((prev) => restoreAt(prev, row, index)),
+      onDeleted: onChanged,
+      doneMessage: "Announcement removed",
+    });
   };
 
   return (
@@ -5626,6 +5636,119 @@ function EmailsTab({
  * asked for, whether it matched a registered account, and when. Matched
  * requests received a temporary password by email (see the Emails tab).
  */
+// ============================================================
+// One-click password reset - shared by the Resets tab and the Users list.
+// Generates a new password on the server, saves it, signs the member out,
+// emails it, and closes their pending reset requests.
+// ============================================================
+
+type ResetTarget = { label: string; username: string } & ({ userId: string } | { requestId: string });
+
+function PasswordResetDialog({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: ResetTarget | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<AdminPasswordResetResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const close = () => {
+    setResult(null);
+    setCopied(false);
+    onClose();
+  };
+
+  const run = async () => {
+    if (!target) return;
+    setBusy(true);
+    try {
+      const res = await adminResetPassword(
+        "userId" in target ? { userId: target.userId } : { requestId: target.requestId }
+      );
+      onDone();
+      if (res.delivered) {
+        toast.success(`New password emailed to ${res.email}`);
+        close();
+      } else {
+        setResult(res); // email not delivered - show the password once
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not reset the password");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!result?.tempPassword) return;
+    try {
+      await navigator.clipboard.writeText(`User ID: ${result.username}\nPassword: ${result.tempPassword}`);
+      setCopied(true);
+    } catch {
+      toast.error("Copy failed - select the text instead");
+    }
+  };
+
+  return (
+    <Dialog open={target !== null} onOpenChange={(v) => !v && !busy && close()}>
+      <DialogContent className="sm:max-w-md">
+        {result?.tempPassword ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Password reset - email not sent</DialogTitle>
+              <DialogDescription>
+                The new password is active, but the email to {result.email} could not be delivered
+                (email sending may not be set up). Give these details to {result.displayName}{" "}
+                directly. They are shown only once.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1 rounded-xl bg-surface-muted p-4 font-mono text-sm">
+              <div>User ID: {result.username}</div>
+              <div>Password: {result.tempPassword}</div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={copy} className="gap-2">
+                {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+                {copied ? "Copied" : "Copy details"}
+              </Button>
+              <Button onClick={close}>Done</Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Reset password?</DialogTitle>
+              <DialogDescription>
+                A new password is created for {target?.label} (@{target?.username}) and emailed to
+                their university address. Their old password stops working and they are signed out
+                on every device.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={close} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={run} disabled={busy} className="gap-2">
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <KeyRound className="size-4" aria-hidden />
+                )}
+                Reset and email
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ResetsTab({
   refreshTick,
   onLoaded,
@@ -5634,6 +5757,18 @@ function ResetsTab({
   onLoaded: (ok: boolean) => void;
 }) {
   const [rows, setRows] = useState<PasswordResetRow[] | null>(null); // null = loading
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const reload = () => setReloadTick((t) => t + 1);
+
+  const dismiss = async (id: string) => {
+    try {
+      await dismissPasswordResetRequest(id);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not dismiss the request");
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -5652,10 +5787,11 @@ function ResetsTab({
     return () => {
       cancelled = true;
     };
-  }, [refreshTick, onLoaded]);
+  }, [refreshTick, reloadTick, onLoaded]);
 
   return (
     <div>
+      <PasswordResetDialog target={resetting} onClose={() => setResetting(null)} onDone={reload} />
       {rows === null ? (
         <div className="mt-3 space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -5667,7 +5803,7 @@ function ResetsTab({
           <EmptyState
             icon={KeyRound}
             title="No reset requests yet"
-            hint='When someone uses "Forgot password?" on the sign-in dialog, the attempt is registered here.'
+            hint='When someone uses "Forgot password?" on the sign-in dialog, the request appears here with a Reset button.'
           />
         </div>
       ) : (
@@ -5712,18 +5848,44 @@ function ResetsTab({
                 )}
                 title={
                   r.status === "PENDING"
-                    ? "Set a new password for this member in Users → Edit, then send it to them"
+                    ? "Press Reset to email this member a new password"
                     : r.status === "SENT"
                       ? "Handled - a new password was set and emailed"
-                      : "Nothing to do - no registered account uses this email"
+                      : r.status === "DISMISSED"
+                        ? "Closed without a reset"
+                        : "Nothing to do - no account matches what was typed"
                 }
               >
                 {r.status === "PENDING"
-                  ? "Waiting for admin"
+                  ? "Waiting"
                   : r.status === "SENT"
                     ? "New password sent"
-                    : "No match"}
+                    : r.status === "DISMISSED"
+                      ? "Dismissed"
+                      : "No match"}
               </span>
+              {r.status === "PENDING" && r.user ? (
+                <span className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+                  <Button
+                    size="sm"
+                    className="h-8 flex-1 gap-1.5 sm:flex-none"
+                    onClick={() =>
+                      setResetting({ requestId: r.id, label: r.user!.displayName, username: r.user!.username })
+                    }
+                  >
+                    <KeyRound className="size-3.5" aria-hidden />
+                    Reset
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-muted-foreground"
+                    onClick={() => dismiss(r.id)}
+                  >
+                    Dismiss
+                  </Button>
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -5756,8 +5918,8 @@ function SettingsTab({
       toast.error("Choose an image file (JPG, PNG or WebP)");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
-      toast.error("The image is too large - the limit is 8 MB");
+    if (file.size > 30 * 1024 * 1024) {
+      toast.error("The image is too large - the limit is 30 MB");
       return;
     }
     setHeroPct(0);

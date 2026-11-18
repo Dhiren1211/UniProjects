@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { universityEmail } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,18 @@ export const dynamic = "force-dynamic";
 const NEUTRAL = {
   ok: true,
   message:
-    "If that email is registered at UniProjects, the capstone office has been notified and will send you a new password.",
+    "If that account exists, the capstone office has been notified and will email a new password to your university address.",
 };
 
-const bodySchema = z.object({
-  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(200),
-});
+// Students type their student ID (we look up a<id>@ks.ac.kr's account); staff type
+// their username. An email address is still accepted. "email" is the old field name.
+const bodySchema = z
+  .object({
+    login: z.string().trim().toLowerCase().min(1).max(200).optional(),
+    email: z.string().trim().toLowerCase().min(1).max(200).optional(),
+  })
+  .transform((v) => (v.login || v.email || "").trim())
+  .refine((v) => v.length > 0, "Enter your student ID or username");
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,22 +54,35 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const email = parsed.data.email;
+    const login = parsed.data;
 
-    // One logged request per address per hour - silently ignore repeats.
-    const perEmail = await rateLimit(`reset:email:${email}`, 1, 60 * 60);
-    if (!perEmail.ok) return NextResponse.json(NEUTRAL);
+    // One logged request per account identifier per hour - silently ignore repeats.
+    const perLogin = await rateLimit(`reset:login:${login}`, 1, 60 * 60);
+    if (!perLogin.ok) return NextResponse.json(NEUTRAL);
 
-    const user = await db.user.findUnique({
-      where: { email },
-      select: { id: true, username: true, displayName: true },
+    const user = await db.user.findFirst({
+      where: login.includes("@")
+        ? { email: login }
+        : { OR: [{ username: login }, { studentId: login }, { email: universityEmail(login) }] },
+      select: { id: true, username: true, displayName: true, email: true },
     });
 
-    await db.passwordResetRequest.create({
-      data: { email, userId: user?.id ?? null, status: user ? "PENDING" : "NOT_FOUND" },
-    });
+    // An open request already waiting for this member? Don't stack duplicates.
+    const open = user
+      ? await db.passwordResetRequest.findFirst({ where: { userId: user.id, status: "PENDING" } })
+      : null;
+    if (!open) {
+      await db.passwordResetRequest.create({
+        data: {
+          // the matched account's address, or what was typed when nothing matched
+          email: user?.email ?? login,
+          userId: user?.id ?? null,
+          status: user ? "PENDING" : "NOT_FOUND",
+        },
+      });
+    }
 
-    if (user) {
+    if (user && !open) {
       const admins = await db.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
       // awaited (not fire-and-forget) - serverless functions may stop after responding
       await db.notification.createMany({

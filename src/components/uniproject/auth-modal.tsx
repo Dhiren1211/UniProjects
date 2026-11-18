@@ -63,7 +63,7 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
   const handleForgot = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError("Enter your university email");
+      setError("Enter your student ID or username");
       return;
     }
     setBusy(true);
@@ -176,21 +176,23 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 Reset your password
               </DialogTitle>
               <DialogDescription>
-                Enter your university email. If it is registered at UniProjects, the capstone
-                office is notified and will send you a new password.
+                Enter your student ID (or username for staff). The capstone office will email a
+                new password to your university address.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleForgot} className="mt-2 space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="am-forgot-email">University email</Label>
+                <Label htmlFor="am-forgot-email">Student ID or username</Label>
                 <Input
                   id="am-forgot-email"
-                  name="email"
-                  type="email"
+                  name="login"
+                  type="text"
                   required
-                  placeholder="you@ks.ac.kr"
-                  autoComplete="email"
+                  placeholder="e.g. 2025123456"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
