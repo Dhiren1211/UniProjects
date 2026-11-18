@@ -135,7 +135,7 @@ import {
 } from "../api-client";
 import { useAppStore } from "../store";
 import { deleteWithUndo, restoreAt } from "../undo-delete";
-import { ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
+import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import {
   CategoryIcon,
   DeptDot,
@@ -144,6 +144,7 @@ import {
   StatusBadge,
   UserAvatar,
   formatViews,
+  statusLabel,
   timeAgo,
 } from "../ui-bits";
 import type {
@@ -1870,10 +1871,14 @@ function StatusChip({ project }: { project: ProjectListItem }) {
           "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
           project.status === "PUBLISHED"
             ? "bg-success-soft text-success"
-            : "bg-surface-muted text-muted-foreground"
+            : project.status === "PENDING"
+              ? "bg-warning-soft text-warning"
+              : project.status === "REJECTED"
+                ? "bg-danger-soft text-danger"
+                : "bg-surface-muted text-muted-foreground"
         )}
       >
-        {project.status === "PUBLISHED" ? "Published" : "Draft"}
+        {statusLabel(project.status)}
       </span>
       {project.featured ? (
         <span
@@ -2199,7 +2204,7 @@ function ProjectsTab({
     try {
       await updateAdminProject({ id: row.id, status: next });
       toast.success(
-        next === "PUBLISHED" ? `“${row.title}” is live` : `“${row.title}” moved to drafts`
+        next === "PUBLISHED" ? `“${row.title}” approved and live` : `“${row.title}” moved to drafts`
       );
       onChanged();
     } catch (e) {
@@ -2259,11 +2264,13 @@ function ProjectsTab({
               setRows(null);
             }}
           >
-            <SelectTrigger className="w-[136px]" aria-label="Filter by status">
+            <SelectTrigger className="w-[190px]" aria-label="Filter by status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
+              <SelectItem value="PENDING">Waiting for approval</SelectItem>
+              <SelectItem value="REJECTED">Changes requested</SelectItem>
               <SelectItem value="DRAFT">Drafts</SelectItem>
               <SelectItem value="PUBLISHED">Published</SelectItem>
             </SelectContent>
@@ -2388,7 +2395,7 @@ function ProjectsTab({
                   disabled={busyId === row.id}
                   onClick={() => togglePublish(row)}
                 >
-                  {row.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                  {row.status === "PUBLISHED" ? "Unpublish" : row.status === "PENDING" ? "Approve" : "Publish"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -2396,7 +2403,7 @@ function ProjectsTab({
                   className="h-8 rounded-lg px-2.5 text-xs font-semibold"
                   onClick={() => navigate({ name: "project", slug: row.slug })}
                 >
-                  Open
+                  {row.status === "PENDING" ? "Review" : "Open"}
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -4540,6 +4547,7 @@ function ModerationTab({
   overview: AdminOverviewDTO | null;
   navigate: Navigate;
 }) {
+  const user = useAppStore((s) => s.user);
   if (!overview) {
     return (
       <div className="grid gap-4 lg:grid-cols-2">
@@ -4552,6 +4560,9 @@ function ModerationTab({
   return (
     <div className="space-y-4">
       {/* actionable queues - self-fetching, so they stay fresh after every decision */}
+      {user?.role === "ADMIN" ? (
+        <ApprovalQueueCard onReview={(slug) => navigate({ name: "project", slug })} />
+      ) : null}
       <div className="grid gap-3 lg:grid-cols-2">
         <VerificationQueueCard onReview={(slug) => navigate({ name: "project", slug })} />
         <ReportsQueueCard />

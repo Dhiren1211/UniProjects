@@ -915,7 +915,12 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
   if (editing && !existing) return <WizardSkeleton />;
 
   const editProject = existing?.project ?? null;
-  const publishNow = editing && editProject ? editProject.status === "DRAFT" : false;
+  // Drafts and sent-back projects are (re)submitted on save; live ones just save.
+  const publishNow =
+    editing && editProject ? editProject.status === "DRAFT" || editProject.status === "REJECTED" : false;
+  // Admins and professors publish directly; everyone else sends for approval.
+  const selfPublish = user?.role === "ADMIN" || user?.role === "PROFESSOR";
+  const publishLabel = selfPublish ? "Publish project" : "Submit for approval";
 
   // ---------- form helpers ----------
 
@@ -1366,7 +1371,13 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
         ...(publishNow ? { status: "PUBLISHED" as const } : {}),
       })
         .then(() => {
-          toast.success(publishNow ? "Project published!" : "Changes saved");
+          toast.success(
+            publishNow
+              ? selfPublish
+                ? "Project published!"
+                : "Sent for approval - your professor has been notified"
+              : "Changes saved"
+          );
           navigate({ name: "project", slug: editSlug });
         })
         .catch(onSubmitError)
@@ -1397,7 +1408,9 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
         return Promise.all(jobs.map((j) => j.catch(() => null))).then(() => slug);
       })
       .then((slug) => {
-        toast.success("Project published!");
+        toast.success(
+          selfPublish ? "Project published!" : "Sent for approval - your professor has been notified"
+        );
         navigate({ name: "project", slug });
       })
       .catch(onSubmitError)
@@ -2697,7 +2710,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
             ) : (
               <Button onClick={submitFinal} disabled={saving !== ""} className="h-10 rounded-xl font-semibold">
                 {saving === "final" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                {editing ? (publishNow ? "Publish project" : "Save changes") : "Publish project"}
+                {editing ? (publishNow ? publishLabel : "Save changes") : publishLabel}
               </Button>
             )}
           </div>

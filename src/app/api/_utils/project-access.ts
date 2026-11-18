@@ -51,3 +51,35 @@ export async function canManageProject(
   });
   return Boolean(lead);
 }
+
+/**
+ * Who may APPROVE a project for publication: administrators, or the project's
+ * own professor (same section, or named as supervisor). Nobody else can make a
+ * project public.
+ */
+export function canReviewProject(viewer: Viewer | null | undefined, project: ProjectRef): boolean {
+  if (!viewer) return false;
+  if (viewer.role === "ADMIN") return true;
+  return isProjectProfessor(viewer, project);
+}
+
+/**
+ * Accounts to notify when a project is sent for approval: its professor(s) and
+ * every administrator.
+ */
+export async function reviewerIds(project: { classId: string | null; supervisor: string | null }): Promise<string[]> {
+  const [admins, professors] = await Promise.all([
+    db.user.findMany({ where: { role: "ADMIN" }, select: { id: true } }),
+    db.user.findMany({
+      where: { role: "PROFESSOR" },
+      select: { id: true, role: true, classId: true, displayName: true, professorName: true },
+    }),
+  ]);
+  const ref = { id: "", ownerId: null, classId: project.classId, supervisor: project.supervisor };
+  const profs = professors.filter((p) => isProjectProfessor(p, ref));
+  return [...new Set([...admins, ...profs].map((u) => u.id))];
+}
+
+/** Statuses a project can be in. Only PUBLISHED is visible to the public. */
+export const PROJECT_STATUSES = ["DRAFT", "PENDING", "PUBLISHED", "REJECTED"] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];

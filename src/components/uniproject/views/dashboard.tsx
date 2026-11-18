@@ -20,7 +20,7 @@ import {
   type Navigate,
 } from "../api-client";
 import { canSubmit, useAppStore } from "../store";
-import { ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
+import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import { StatusBadge, VerifiedBadge, formatViews } from "../ui-bits";
 import type { ProjectListItem, SafeUserDTO } from "@/lib/types";
 import { FadeIn, IdentityCard, PageHeader } from "./dashboard-bits";
@@ -217,6 +217,7 @@ function ProfessorDashboard({ user, navigate }: { user: SafeUserDTO; navigate: N
         <IdentityCard user={user} />
       </FadeIn>
       <FadeIn className="min-w-0 space-y-4" delay={0.1}>
+        <ApprovalQueueCard onReview={(slug) => navigate({ name: "project", slug })} />
         <VerificationQueueCard onReview={(slug) => navigate({ name: "project", slug })} />
         <section
           aria-label="Teaching shortcuts"

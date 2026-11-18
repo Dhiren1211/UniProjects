@@ -331,6 +331,23 @@ export async function deleteProject(slug: string): Promise<void> {
   await send(`/api/projects/${slug}`, "DELETE");
 }
 
+/** Approve (→ public) or send back with a note. Admin or the project's professor only. */
+export function reviewProject(
+  slug: string,
+  decision: "APPROVE" | "REJECT",
+  note?: string
+): Promise<{ ok: true; status: string }> {
+  return send(`/api/projects/${slug}/review`, "POST", { decision, ...(note ? { note } : {}) });
+}
+
+export type ReviewQueueItem = ProjectListItem & { submittedAt: string | null; supervisor: string | null };
+
+/** Projects waiting for the signed-in reviewer's approval. */
+export async function fetchReviewQueue(signal?: AbortSignal): Promise<ReviewQueueItem[]> {
+  const data = await get<{ projects: ReviewQueueItem[] }>("/api/reviews", signal);
+  return data.projects;
+}
+
 export async function setProjectStatus(slug: string, status: "DRAFT" | "PUBLISHED"): Promise<void> {
   await send(`/api/projects/${slug}`, "PATCH", { status });
 }

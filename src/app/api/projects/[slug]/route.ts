@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { canManageProject, isProjectProfessor } from "../../_utils/project-access";
+import { canManageProject, canReviewProject, isProjectProfessor, reviewerIds } from "../../_utils/project-access";
 import { getSessionUser, isStaff, toSafeUser } from "@/lib/auth";
 import { CATEGORIES, SEMESTERS } from "@/lib/config";
 import { normalizeSupervisorName, professorSupervisorMap } from "../../_utils/serialize";
@@ -69,6 +69,8 @@ function toDetail(p: DetailRow, likeCount = 0): ProjectDetail {
     featured: p.featured,
     verified: p.verified,
     status: p.status,
+    reviewNote: p.reviewNote,
+    submittedAt: p.submittedAt?.toISOString() ?? null,
     lookingForTeammates: p.lookingForTeammates,
     allowJoinRequests: p.allowJoinRequests,
     views: p.views,
@@ -114,6 +116,7 @@ async function buildViewer(
       liked: false,
       joinRequestStatus: null,
       canVerify: false,
+      canReview: false,
       pendingVerification: null,
     };
   }
@@ -158,6 +161,8 @@ async function buildViewer(
     joinRequestStatus: (joinReq?.status as ViewerDTO["joinRequestStatus"]) ?? null,
     // Professors may verify only projects inside their own sections.
     canVerify,
+    // Admins and the project's professor approve projects for publication.
+    canReview: canReviewProject(viewer, project),
     pendingVerification: pending
       ? { id: pending.id, requester: pending.requester.displayName, createdAt: pending.createdAt.toISOString() }
       : null,
@@ -222,7 +227,8 @@ const patchSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(30)).max(8).optional(),
   demoUrl: z.string().trim().max(300).refine((v) => /^https?:\/\/\S+$/i.test(v), "Demo link must start with http:// or https://").optional().or(z.literal("")),
   repoUrl: z.string().trim().max(300).refine((v) => /^https?:\/\/\S+$/i.test(v), "Repository link must start with http:// or https://").optional().or(z.literal("")),
-  status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
+  // PUBLISHED from a non-reviewer becomes PENDING (sent for approval)
+  status: z.enum(["DRAFT", "PENDING", "PUBLISHED"]).optional(),
   allowJoinRequests: z.boolean().optional(),
   lookingForTeammates: z.boolean().optional(),
   technologyIds: z.array(z.string()).max(20).optional(),
@@ -278,12 +284,43 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sl
     if (d.tags !== undefined) data.tags = d.tags.map((t) => t.toLowerCase()).join(",");
     if (d.demoUrl !== undefined) data.demoUrl = d.demoUrl || null;
     if (d.repoUrl !== undefined) data.repoUrl = d.repoUrl || null;
-    if (d.status !== undefined) data.status = d.status;
+    let sentForApproval = false;
+    if (d.status !== undefined) {
+      if (d.status === "DRAFT") {
+        data.status = "DRAFT";
+      } else if (canReviewProject(viewer, project)) {
+        // reviewers publish directly
+        data.status = "PUBLISHED";
+        data.reviewedAt = new Date();
+        data.reviewedById = viewer.id;
+        data.reviewNote = null;
+      } else if (project.status !== "PUBLISHED") {
+        // a team asking to publish -> waiting for approval
+        data.status = "PENDING";
+        data.submittedAt = new Date();
+        data.reviewNote = null;
+        sentForApproval = project.status !== "PENDING";
+      }
+    }
     if (d.allowJoinRequests !== undefined) data.allowJoinRequests = d.allowJoinRequests;
     if (d.lookingForTeammates !== undefined) data.lookingForTeammates = d.lookingForTeammates;
     if (d.coverImage !== undefined) data.coverImage = d.coverImage;
 
     await db.project.update({ where: { id: project.id }, data });
+
+    if (sentForApproval) {
+      const ids = (await reviewerIds(project)).filter((id) => id !== viewer.id);
+      if (ids.length) {
+        await db.notification.createMany({
+          data: ids.map((userId) => ({
+            userId,
+            type: "VERIFICATION",
+            body: `${project.title} is waiting for your approval.`,
+            link: `/project/${project.slug}`,
+          })),
+        });
+      }
+    }
 
     if (d.galleryImages) {
       await db.projectImage.deleteMany({ where: { projectId: project.id } });

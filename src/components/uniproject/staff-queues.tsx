@@ -14,9 +14,114 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { fetchReports, fetchVerifications, resolveReport } from "./api-client";
+import { fetchReports, fetchReviewQueue, fetchVerifications, resolveReport, type ReviewQueueItem } from "./api-client";
 import type { ReportDTO, VerificationDTO } from "@/lib/types";
 import { timeAgo } from "./ui-bits";
+
+// ---------- approval queue (projects waiting to be published) ----------
+
+export function ApprovalQueueCard({
+  className,
+  limit = 6,
+  onReview,
+}: {
+  className?: string;
+  /** Opens the project page - a preview with Approve / Request changes on top. */
+  onReview: (slug: string) => void;
+  limit?: number;
+}) {
+  const [rows, setRows] = useState<ReviewQueueItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetchReviewQueue(ac.signal)
+      .then(setRows)
+      .catch(() => {
+        if (!ac.signal.aborted) {
+          setRows([]);
+          setFailed(true);
+        }
+      });
+    return () => ac.abort();
+  }, []);
+
+  return (
+    <section
+      className={cn("flex flex-col rounded-2xl border border-up-border bg-card p-5 shadow-card", className)}
+      aria-label="Projects waiting for approval"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold tracking-tight text-foreground">Waiting for approval</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            New projects stay hidden until you approve them. Open one to preview it.
+          </p>
+        </div>
+        <span
+          className={cn(
+            "inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-2 text-xs font-bold tabular-nums",
+            rows && rows.length > 0 ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
+          )}
+        >
+          {rows === null ? "…" : rows.length}
+        </span>
+      </div>
+
+      {rows === null ? (
+        <div className="mt-4 space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : failed ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-danger">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          Could not load the approval queue.
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <BadgeCheck className="size-4 shrink-0 text-success" aria-hidden />
+          Nothing to approve right now.
+        </p>
+      ) : (
+        <ul className="nice-scroll mt-3 max-h-80 space-y-1 overflow-y-auto pr-0.5">
+          {rows.slice(0, limit).map((p) => (
+            <li key={p.id} className="rounded-xl border border-up-border bg-surface-muted/40 p-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onReview(p.slug)}
+                    className="block max-w-full truncate text-left text-sm font-semibold text-foreground outline-none hover:text-primary-700 hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {p.title}
+                  </button>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {p.department.code}
+                    {p.supervisor ? ` · ${p.supervisor}` : ""}
+                    {p.submittedAt ? ` · sent ${timeAgo(p.submittedAt)}` : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0 gap-1.5 rounded-lg px-3 text-xs font-semibold"
+                  onClick={() => onReview(p.slug)}
+                >
+                  <Eye className="size-3.5" aria-hidden />
+                  Review
+                </Button>
+              </div>
+            </li>
+          ))}
+          {rows.length > limit ? (
+            <li className="px-1 pt-1 text-xs font-medium text-muted-foreground">+{rows.length - limit} more waiting</li>
+          ) : null}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 // ---------- verification queue ----------
 

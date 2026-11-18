@@ -95,7 +95,7 @@ export type ProjectListItem = {
   repoUrl: string | null;
   featured: boolean;
   verified: boolean;
-  status: string; // DRAFT | PUBLISHED
+  status: string; // DRAFT | PENDING | PUBLISHED | REJECTED
   lookingForTeammates: boolean;
   views: number;
   createdAt: string;
@@ -116,6 +116,9 @@ export type ProjectDetail = ProjectListItem & {
   ownerId: string | null;
   /** Username of the PROFESSOR account whose displayName matches the supervisor string (null when unmatched). */
   supervisorUsername: string | null;
+  /** Reviewer's note when changes were requested (status REJECTED). */
+  reviewNote: string | null;
+  submittedAt: string | null;
 };
 
 export type ViewerDTO = {
@@ -127,6 +130,8 @@ export type ViewerDTO = {
   liked: boolean;
   joinRequestStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
   canVerify: boolean;
+  /** Admin or this project's professor - may approve it for publication. */
+  canReview: boolean;
   /** The open verification request, shown to the reviewer on the project page. */
   pendingVerification: { id: string; requester: string; createdAt: string } | null; // staff and project not yet verified
 };

@@ -159,7 +159,11 @@ model Project {
   ownerId             String?
   owner               User?      @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   classId             String? // denormalised from the owner's classId at submission time
-  status              String     @default("PUBLISHED") // DRAFT | PUBLISHED
+  status              String     @default("DRAFT") // DRAFT | PENDING (waiting for approval) | PUBLISHED | REJECTED (changes requested)
+  reviewNote          String? // reviewer's note when changes are requested
+  submittedAt         DateTime? // last time the team sent it for approval
+  reviewedAt          DateTime?
+  reviewedById        String?
   allowJoinRequests   Boolean    @default(true)
   lookingForTeammates Boolean    @default(false)
   verified            Boolean    @default(false)

@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     if (query) {
       where.OR = [{ title: { contains: query } }, { summary: { contains: query } }];
     }
-    if (status === "DRAFT" || status === "PUBLISHED") {
+    if (status === "DRAFT" || status === "PUBLISHED" || status === "PENDING" || status === "REJECTED") {
       where.status = status;
     }
     if (dept) {
@@ -102,9 +102,21 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const data: { featured?: boolean; status?: "DRAFT" | "PUBLISHED" } = {};
+    const data: {
+      featured?: boolean;
+      status?: "DRAFT" | "PUBLISHED";
+      reviewedAt?: Date;
+      reviewedById?: string;
+      reviewNote?: null;
+    } = {};
     if (featured !== undefined) data.featured = featured;
     if (status !== undefined) data.status = status;
+    // an admin publishing from the console counts as approving it
+    if (status === "PUBLISHED") {
+      data.reviewedAt = new Date();
+      data.reviewedById = gate.viewer.id;
+      data.reviewNote = null;
+    }
 
     const updated = await db.project.update({
       where: { id },

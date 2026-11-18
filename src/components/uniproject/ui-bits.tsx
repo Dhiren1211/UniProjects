@@ -61,17 +61,32 @@ export function VerifiedBadge({ withLabel = false }: { withLabel?: boolean }) {
   );
 }
 
+/** Human label for a project status (DRAFT | PENDING | PUBLISHED | REJECTED). */
+export function statusLabel(status: string): string {
+  return status === "DRAFT"
+    ? "Draft"
+    : status === "PENDING"
+      ? "Waiting for approval"
+      : status === "REJECTED"
+        ? "Changes requested"
+        : "Published";
+}
+
 export function StatusBadge({ status }: { status: string }) {
-  const isDraft = status === "DRAFT";
+  const tone =
+    status === "DRAFT"
+      ? "bg-surface-muted text-muted-foreground"
+      : status === "PENDING"
+        ? "bg-warning-soft text-warning"
+        : status === "REJECTED"
+          ? "bg-danger-soft text-danger"
+          : "bg-success-soft text-success";
   return (
     <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-        isDraft ? "bg-warning-soft text-warning" : "bg-surface-muted text-muted-foreground"
-      )}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", tone)}
     >
-      {isDraft ? <CircleDashed className="size-3.5" aria-hidden /> : null}
-      {isDraft ? "Draft" : "Published"}
+      {status !== "PUBLISHED" ? <CircleDashed className="size-3.5" aria-hidden /> : null}
+      {statusLabel(status)}
     </span>
   );
 }

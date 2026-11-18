@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff, toSafeUser } from "@/lib/auth";
+import { canReviewProject, reviewerIds } from "../_utils/project-access";
 import { canSubmitProject } from "@/lib/rbac";
 import { CATEGORIES, SEMESTERS } from "@/lib/config";
 import type { ProjectListItem } from "@/lib/types";
@@ -277,7 +278,14 @@ export async function POST(req: NextRequest) {
         departmentId: department.id,
         ownerId: viewer.id,
         classId: viewer.classId ?? null,
-        status: d.publish ? "PUBLISHED" : "DRAFT",
+        // "Publish" from a team means "send for approval"; only the project's
+        // professor or an admin can make it public directly.
+        status: d.publish
+          ? canReviewProject(viewer, { id: "", ownerId: viewer.id, classId: viewer.classId ?? null, supervisor: d.supervisor || null })
+            ? "PUBLISHED"
+            : "PENDING"
+          : "DRAFT",
+        ...(d.publish ? { submittedAt: new Date() } : {}),
         allowJoinRequests: d.allowJoinRequests,
         lookingForTeammates: d.lookingForTeammates,
         tags: d.tags.map((t) => t.toLowerCase()).join(","),
@@ -308,6 +316,20 @@ export async function POST(req: NextRequest) {
     const likeCount = await db.like.count({
       where: { targetType: "PROJECT", targetId: project.id },
     });
+
+    if (project.status === "PENDING") {
+      const ids = (await reviewerIds(project)).filter((id) => id !== viewer.id);
+      if (ids.length) {
+        await db.notification.createMany({
+          data: ids.map((userId) => ({
+            userId,
+            type: "VERIFICATION",
+            body: `${project.title} is waiting for your approval.`,
+            link: `/project/${project.slug}`,
+          })),
+        });
+      }
+    }
 
     return NextResponse.json({ project: toListItem(project, likeCount) }, { status: 201 });
   } catch (e) {

@@ -92,6 +92,7 @@ import {
   removeMember,
   requestToJoin,
   requestVerification,
+  reviewProject,
   searchUsers,
   setProjectStatus,
   decideVerification,
@@ -1125,6 +1126,127 @@ function MilestoneDialog({
 
 // ---------- view ----------
 
+// ============================================================
+// Approval workflow - shown at the top of the project page.
+// ReviewBar: for the project's professor / admins while it waits for approval
+//            (the page itself is the preview of what will go public).
+// StatusBanner: tells the team where their project stands.
+// ============================================================
+
+function ReviewBar({ slug, onDone }: { slug: string; onDone: () => void }) {
+  const [mode, setMode] = useState<"idle" | "reject">("idle");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const decide = (decision: "APPROVE" | "REJECT") => {
+    setBusy(true);
+    reviewProject(slug, decision, decision === "REJECT" ? note.trim() : undefined)
+      .then(() => {
+        toast.success(decision === "APPROVE" ? "Approved - the project is now public" : "Sent back to the team");
+        setMode("idle");
+        setNote("");
+        onDone();
+      })
+      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save the review"))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <section
+      aria-label="Review this project"
+      className="mt-6 rounded-2xl border border-warning/40 bg-warning-soft/60 p-4 md:p-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Waiting for your approval</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            This is a preview - only the team, its professor and admins can see it until you approve it.
+          </p>
+        </div>
+        {mode === "idle" ? (
+          <div className="flex w-full gap-2 sm:w-auto">
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => setMode("reject")}
+              className="h-10 flex-1 rounded-xl bg-card font-semibold sm:flex-none"
+            >
+              Request changes
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={() => decide("APPROVE")}
+              className="h-10 flex-1 gap-2 rounded-xl font-semibold sm:flex-none"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <BadgeCheck className="size-4" aria-hidden />}
+              Approve and publish
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      {mode === "reject" ? (
+        <div className="mt-4 space-y-3">
+          <Textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="What should the team change? They will see this note."
+            maxLength={1000}
+            rows={3}
+            className="bg-card"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" disabled={busy} onClick={() => setMode("idle")} className="h-9 rounded-lg">
+              Cancel
+            </Button>
+            <Button
+              disabled={busy || note.trim().length < 5}
+              onClick={() => decide("REJECT")}
+              className="h-9 gap-2 rounded-lg font-semibold"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+              Send back to team
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function StatusBanner({ status, note, supervisor }: { status: string; note: string | null; supervisor: string | null }) {
+  if (status === "PUBLISHED") return null;
+  const copy =
+    status === "PENDING"
+      ? {
+          title: "Waiting for approval",
+          body: `${supervisor ? `${supervisor} or an administrator` : "Your professor or an administrator"} will review it. It stays hidden from the public until approved.`,
+          tone: "border-warning/40 bg-warning-soft/60",
+        }
+      : status === "REJECTED"
+        ? {
+            title: "Changes requested",
+            body: "Edit the project, then submit it for approval again.",
+            tone: "border-danger/30 bg-danger-soft/60",
+          }
+        : {
+            title: "Draft - only your team can see this",
+            body: "When it is ready, submit it for approval to publish it.",
+            tone: "border-up-border bg-surface-muted",
+          };
+  return (
+    <section aria-label="Project status" className={cn("mt-6 rounded-2xl border p-4 md:p-5", copy.tone)}>
+      <p className="text-sm font-semibold text-foreground">{copy.title}</p>
+      <p className="mt-0.5 text-sm text-muted-foreground">{copy.body}</p>
+      {status === "REJECTED" && note ? (
+        <blockquote className="mt-3 whitespace-pre-line rounded-xl bg-card px-4 py-3 text-sm text-foreground">
+          {note}
+        </blockquote>
+      ) : null}
+    </section>
+  );
+}
+
 export function DetailView({ slug, navigate }: { slug: string; navigate: Navigate }) {
   const { user, openAuth } = useAppStore();
   const [data, setData] = useState<ProjectDetailResponse | null>(null);
@@ -1301,7 +1423,13 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
     if (next === project.status) return;
     setProjectStatus(slug, next)
       .then(() => {
-        toast.success(next === "PUBLISHED" ? "Project is now live" : "Project moved to drafts");
+        toast.success(
+          next === "DRAFT"
+            ? "Project moved to drafts"
+            : viewer.canReview
+              ? "Project is now live"
+              : "Sent for approval - your professor has been notified"
+        );
         refresh();
       })
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "Couldn't update status"));
@@ -1456,6 +1584,13 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
         </div>
       )}
 
+      {/* Approval workflow */}
+      {viewer.canReview && project.status === "PENDING" ? (
+        <ReviewBar slug={slug} onDone={refresh} />
+      ) : isOwner && project.status !== "PUBLISHED" ? (
+        <StatusBanner status={project.status} note={project.reviewNote} supervisor={project.supervisor} />
+      ) : null}
+
       {/* Header */}
       <header className="mt-8 max-w-3xl">
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
@@ -1468,7 +1603,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <span className="rounded-full border border-up-border bg-card px-2.5 py-1 text-muted-foreground">
             {project.year} · {project.semester}
           </span>
-          {project.status === "DRAFT" ? <StatusBadge status={project.status} /> : null}
+          {project.status !== "PUBLISHED" ? <StatusBadge status={project.status} /> : null}
           {project.lookingForTeammates ? <TeammateWantedChip /> : null}
         </div>
         <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
@@ -1638,13 +1773,25 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           <Select value={project.status} onValueChange={onStatusChange}>
             <SelectTrigger
               aria-label="Project status"
-              className="h-9 w-[150px] rounded-lg border-up-border bg-card"
+              className="h-9 w-[190px] rounded-lg border-up-border bg-card"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="DRAFT">Draft - hidden</SelectItem>
-              <SelectItem value="PUBLISHED">Published</SelectItem>
+              {project.status === "PENDING" ? (
+                <SelectItem value="PENDING" disabled>
+                  Waiting for approval
+                </SelectItem>
+              ) : null}
+              {project.status === "REJECTED" ? (
+                <SelectItem value="REJECTED" disabled>
+                  Changes requested
+                </SelectItem>
+              ) : null}
+              <SelectItem value="PUBLISHED">
+                {viewer.canReview || project.status === "PUBLISHED" ? "Published" : "Submit for approval"}
+              </SelectItem>
             </SelectContent>
           </Select>
           {project.verified ? (
