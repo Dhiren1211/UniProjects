@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { generateTemporaryPassword, hashPassword } from "@/lib/auth";
@@ -126,6 +127,13 @@ export async function POST(req: NextRequest) {
       data: { status: "SENT" },
     });
 
+    await audit(
+      gate.viewer,
+      "password.reset",
+      { type: "USER", id: user.id, label: `${user.displayName} (@${user.username})` },
+      mail.delivered ? "New password emailed" : "Email not delivered - shown to admin"
+    );
+
     return NextResponse.json({
       ok: true,
       delivered: mail.delivered,
@@ -154,6 +162,8 @@ export async function PATCH(req: NextRequest) {
       data: { status: "DISMISSED" },
     });
     if (updated.count === 0) return NextResponse.json({ error: "Request not found" }, { status: 404 });
+    const req0 = await db.passwordResetRequest.findUnique({ where: { id: parsed.data.requestId } });
+    await audit(gate.viewer, "password.dismiss", { type: "REQUEST", id: parsed.data.requestId, label: req0?.email ?? "reset request" });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("PATCH /api/admin/password-resets", e);

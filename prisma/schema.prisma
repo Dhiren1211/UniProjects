@@ -358,3 +358,20 @@ model RateLimit {
 
   @@index([resetAt])
 }
+
+// Audit trail of staff actions (approvals, resets, deletions, settings …).
+// Names are copied in so the log still reads well after a user is deleted.
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  actorName   String
+  action      String // e.g. "user.delete", "project.approve", "password.reset"
+  targetType  String // USER | PROJECT | REQUEST | ANNOUNCEMENT | DEPARTMENT | SETTINGS | REPORT | VERIFICATION
+  targetId    String?
+  targetLabel String
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
+}

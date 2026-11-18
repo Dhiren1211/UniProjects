@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { generateTemporaryPassword, hashPassword } from "@/lib/auth";
@@ -143,6 +144,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const made = results.filter((r) => r.status === "created").length;
+    if (made > 0) {
+      await audit(gate.viewer, "users.import", { type: "USER", label: `${made} student${made > 1 ? "s" : ""}` },
+        `${made} created, ${results.filter((r) => r.status === "skipped").length} skipped, ${results.filter((r) => r.status === "error").length} problems`);
+    }
     return NextResponse.json({ results });
   } catch (e) {
     console.error("POST /api/admin/users/import", e);

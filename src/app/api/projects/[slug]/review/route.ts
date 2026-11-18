@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -95,6 +96,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         })),
       });
     }
+
+    await audit(
+      viewer,
+      d.decision === "APPROVE" ? "project.approve" : "project.reject",
+      { type: "PROJECT", id: project.id, label: project.title },
+      d.note || null
+    );
 
     return NextResponse.json({ ok: true, status: d.decision === "APPROVE" ? "PUBLISHED" : "REJECTED" });
   } catch (e) {

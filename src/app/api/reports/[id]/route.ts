@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/auth";
@@ -32,6 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!report) return NextResponse.json({ error: "Report not found" }, { status: 404 });
 
     await db.report.update({ where: { id: report.id }, data: { status: parsed.data.status } });
+    await audit(viewer, `report.${parsed.data.status.toLowerCase()}`, { type: "REPORT", id: report.id, label: "Report" });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("PATCH /api/reports/[id]", e);

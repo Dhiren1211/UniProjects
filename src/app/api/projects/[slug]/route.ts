@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -365,6 +366,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
     }
 
     await db.project.delete({ where: { id: project.id } });
+    await audit(viewer, "project.delete", { type: "PROJECT", id: project.id, label: project.title });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/projects/[slug]", e);

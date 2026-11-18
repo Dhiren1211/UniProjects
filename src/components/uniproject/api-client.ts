@@ -575,6 +575,30 @@ export async function deleteAdminProject(id: string): Promise<void> {
   await send<{ ok: boolean }>(`/api/admin/projects?id=${encodeURIComponent(id)}`, "DELETE");
 }
 
+export type AuditEntry = {
+  id: string;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  targetLabel: string;
+  details: string | null;
+  createdAt: string;
+};
+
+/** Audit trail (admin). `before` = createdAt of the last row, for the next page. */
+export async function fetchActivity(
+  filters: { q?: string; area?: string; before?: string } = {},
+  signal?: AbortSignal
+): Promise<{ entries: AuditEntry[]; hasMore: boolean }> {
+  const sp = new URLSearchParams();
+  if (filters.q?.trim()) sp.set("q", filters.q.trim());
+  if (filters.area && filters.area !== "ALL") sp.set("area", filters.area);
+  if (filters.before) sp.set("before", filters.before);
+  const qs = sp.toString() ? `?${sp}` : "";
+  return get<{ entries: AuditEntry[]; hasMore: boolean }>(`/api/admin/activity${qs}`, signal);
+}
+
 export type ImportRowInput = {
   row: number;
   studentId: string;

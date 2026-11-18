@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { generateTemporaryPassword, getSessionUser, hashPassword } from "@/lib/auth";
@@ -74,6 +75,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           decidedBy: viewer!.displayName,
         },
       });
+      await audit(viewer, "request.reject", { type: "REQUEST", id, label: `${request.name} (${request.studentId})` }, note || null);
       return NextResponse.json({ request: toRequestDTO(updated) });
     }
 
@@ -146,6 +148,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       professor: request.professor,
     });
 
+    await audit(
+      viewer,
+      "request.approve",
+      { type: "REQUEST", id, label: `${request.name} (${request.studentId})` },
+      `Account ${user.username}${classId ? `, class ${classId}` : ""}`
+    );
+
     return NextResponse.json({
       request: toRequestDTO(updated),
       account: {
@@ -172,7 +181,8 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Administrators only" }, { status: 403 });
     }
     const { id } = await ctx.params;
-    await db.accountRequest.delete({ where: { id } }).catch(() => {});
+    const gone = await db.accountRequest.delete({ where: { id } }).catch(() => null);
+    if (gone) await audit(viewer, "request.delete", { type: "REQUEST", id, label: `${gone.name} (${gone.studentId})` });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/account-requests/[id]", e);

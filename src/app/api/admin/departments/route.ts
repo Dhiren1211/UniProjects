@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import type { AdminDepartmentDTO } from "@/lib/types";
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await audit(gate.viewer, "department.create", { type: "DEPARTMENT", id: created.id, label: `${created.code} - ${created.name}` });
     return NextResponse.json({ department: toDTO(created) }, { status: 201 });
   } catch (e) {
     console.error("POST /api/admin/departments", e);
@@ -208,6 +210,7 @@ export async function PATCH(req: NextRequest) {
       include: { _count: { select: { projects: true } } },
     });
 
+    await audit(gate.viewer, "department.update", { type: "DEPARTMENT", id: updated.id, label: `${updated.code} - ${updated.name}` }, Object.keys(data).join(", ") || null);
     return NextResponse.json({ department: toDTO(updated) });
   } catch (e) {
     console.error("PATCH /api/admin/departments", e);
@@ -242,6 +245,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     await db.department.delete({ where: { id } });
+    await audit(gate.viewer, "department.delete", { type: "DEPARTMENT", id, label: `${dept.code} - ${dept.name}` });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

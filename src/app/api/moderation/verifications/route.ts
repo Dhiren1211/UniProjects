@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser, isStaff } from "@/lib/auth";
@@ -101,6 +102,12 @@ export async function PATCH(req: NextRequest) {
         data: { verified: true },
       });
     }
+
+    await audit(
+      viewer,
+      decision === "APPROVED" ? "verification.approve" : "verification.reject",
+      { type: "PROJECT", id: verification.projectId, label: verification.project.title }
+    );
 
     notify(
       verification.requesterId,

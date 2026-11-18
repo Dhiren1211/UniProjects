@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { canConfigureSite } from "@/lib/rbac";
@@ -52,6 +53,7 @@ export async function PUT(req: NextRequest) {
       );
     }
     const settings = await updateSettings(parsed.data);
+    await audit(viewer, "settings.update", { type: "SETTINGS", label: "Site settings" }, Object.keys(parsed.data).join(", ") || null);
     return NextResponse.json({ settings });
   } catch (e) {
     console.error("PUT /api/settings", e);

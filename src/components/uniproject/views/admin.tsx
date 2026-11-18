@@ -34,6 +34,7 @@ import {
   FolderKanban,
   GraduationCap,
   Handshake,
+  History,
   KeyRound,
   LayoutDashboard,
   ListChecks,
@@ -137,6 +138,7 @@ import {
 import { useAppStore } from "../store";
 import { deleteWithUndo, restoreAt } from "../undo-delete";
 import { ImportStudentsDialog } from "../import-students-dialog";
+import { ActivityLog } from "../activity-log";
 import { BulkBar, ConfirmDialog, CredentialsDialog, runSequential, type Credential } from "../bulk-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
@@ -178,7 +180,8 @@ type TabKey =
   | "moderation"
   | "emails"
   | "settings"
-  | "departments";
+  | "departments"
+  | "activity";
 
 /** Every console tab in display order - adminOnly ones are hidden from moderators. */
 const ALL_TABS: { key: TabKey; label: string; icon: LucideIcon; adminOnly?: boolean }[] = [
@@ -192,6 +195,7 @@ const ALL_TABS: { key: TabKey; label: string; icon: LucideIcon; adminOnly?: bool
   { key: "emails", label: "Emails", icon: Mail, adminOnly: true },
   { key: "settings", label: "Settings", icon: Settings2, adminOnly: true },
   { key: "departments", label: "Departments", icon: Building2, adminOnly: true },
+  { key: "activity", label: "Activity", icon: History, adminOnly: true },
 ];
 
 function tabsForRole(role: string | undefined) {
@@ -237,6 +241,10 @@ const TAB_META: Record<TabKey, { title: string; description: string }> = {
   settings: {
     title: "Site settings",
     description: "Feature toggles and hero copy - changes apply across the whole site.",
+  },
+  activity: {
+    title: "Activity log",
+    description: "Who approved, reset, deleted or changed what - and when.",
   },
   departments: {
     title: "Departments",
@@ -352,6 +360,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
     [noteLoaded]
   );
   const emailsLoaded = useCallback((ok: boolean) => noteLoaded(["emails"], ok), [noteLoaded]);
+  const activityLoaded = useCallback((ok: boolean) => noteLoaded(["activity"], ok), [noteLoaded]);
   const settingsLoaded = useCallback((ok: boolean) => noteLoaded(["settings"], ok), [noteLoaded]);
   const departmentsLoaded = useCallback(
     (ok: boolean) => noteLoaded(["departments"], ok),
@@ -557,6 +566,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
             {isAdmin && tab === "settings" ? (
               <SettingsTab refreshTick={refreshTick} onLoaded={settingsLoaded} />
             ) : null}
+            {isAdmin && tab === "activity" ? <ActivityLog refreshTick={refreshTick} onLoaded={activityLoaded} /> : null}
             {isAdmin && tab === "departments" ? (
               <DepartmentsTab
                 onChanged={syncOverview}

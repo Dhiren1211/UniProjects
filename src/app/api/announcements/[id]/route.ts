@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -36,6 +37,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
     }
     const updated = await db.announcement.update({ where: { id }, data: parsed.data });
+    await audit(viewer, "announcement.update", { type: "ANNOUNCEMENT", id, label: updated.title });
     return NextResponse.json({ announcement: toAnnouncementDTO(updated) });
   } catch (e) {
     console.error("PATCH /api/announcements/[id]", e);
@@ -50,7 +52,8 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Staff only" }, { status: viewer ? 403 : 401 });
     }
     const { id } = await ctx.params;
-    await db.announcement.delete({ where: { id } }).catch(() => {});
+    const gone = await db.announcement.delete({ where: { id } }).catch(() => null);
+    if (gone) await audit(viewer, "announcement.delete", { type: "ANNOUNCEMENT", id, label: gone.title });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/announcements/[id]", e);

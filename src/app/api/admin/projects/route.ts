@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { audit } from "@/lib/audit";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -124,6 +125,13 @@ export async function PATCH(req: NextRequest) {
       include: listInclude,
     });
 
+    await audit(
+      gate.viewer,
+      status === "PUBLISHED" ? "project.approve" : status === "DRAFT" ? "project.unpublish" : "project.update",
+      { type: "PROJECT", id: updated.id, label: updated.title },
+      featured !== undefined ? (featured ? "Featured" : "Unfeatured") : null
+    );
+
     const likeCounts = await likeCountMap("PROJECT", [updated.id]);
 
     return NextResponse.json({ project: toAdminProjectRow(updated, likeCounts.get(updated.id) ?? 0) });
@@ -145,12 +153,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing project id" }, { status: 400 });
     }
 
-    const existing = await db.project.findUnique({ where: { id }, select: { id: true } });
+    const existing = await db.project.findUnique({ where: { id }, select: { id: true, title: true } });
     if (!existing) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     await db.project.delete({ where: { id } });
+    await audit(gate.viewer, "project.delete", { type: "PROJECT", id, label: existing.title });
 
     return NextResponse.json({ ok: true });
   } catch (e) {

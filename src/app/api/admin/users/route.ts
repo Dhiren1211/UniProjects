@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
@@ -300,6 +301,12 @@ export async function POST(req: NextRequest) {
       include: { department: { select: deptSelect } },
     });
 
+    await audit(gate.viewer, "user.create", {
+      type: "USER",
+      id: created.id,
+      label: `${created.displayName} (@${created.username})`,
+    }, roleLabel(d.role));
+
     // Credentials email - same outbox the approval flow uses, so every
     // provisioned account (student or staff) lands in the admin Emails tab.
     const mail = await sendCredentialsEmail({
@@ -357,6 +364,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     await db.user.delete({ where: { id } });
+    await audit(viewer, "user.delete", { type: "USER", id, label: `${target.displayName} (@${target.username})` }, target.role);
 
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -564,6 +572,12 @@ export async function PATCH(req: NextRequest) {
         data: { status: "SENT" },
       });
     }
+
+    const changed = Object.entries(parsed.data)
+      .filter(([k, v]) => k !== "id" && k !== "password" && v !== undefined)
+      .map(([k]) => (k === "role" && role && role !== existing.role ? `role ${existing.role} → ${role}` : k));
+    if (password) changed.push("password reset");
+    await audit(viewer, "user.update", { type: "USER", id, label: `${updated.displayName} (@${updated.username})` }, changed.join(", ") || null);
 
     const projectCount = await db.projectMember.count({ where: { userId: id } });
 

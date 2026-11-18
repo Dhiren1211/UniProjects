@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
     const created = await db.announcement.create({
       data: { ...parsed.data, authorId: viewer!.id },
     });
+    await audit(viewer, "announcement.create", { type: "ANNOUNCEMENT", id: created.id, label: created.title });
     return NextResponse.json({ announcement: toAnnouncementDTO(created) }, { status: 201 });
   } catch (e) {
     console.error("POST /api/announcements", e);
