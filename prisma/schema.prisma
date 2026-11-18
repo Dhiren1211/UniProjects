@@ -330,3 +330,17 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
+
+// Uploaded files (avatars, covers, gallery, hero, resources). Stored in the database
+// because serverless hosts (Vercel) have a read-only, ephemeral filesystem.
+// Served at /uploads/<name> via a rewrite to /api/files/<name>.
+model UploadedFile {
+  id         String   @id @default(cuid())
+  name       String   @unique // e.g. "hero-mv1c5ix4-4f168908e8.jpg"
+  mime       String
+  size       Int
+  data       Bytes
+  kind       String // avatar | cover | gallery | resource | hero
+  uploaderId String?
+  createdAt  DateTime @default(now())
+}

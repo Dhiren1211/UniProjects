@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { getSessionUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { canConfigureSite } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
-// ---------- POST multipart { file, kind } - store a file under /uploads and return its URL ----------
+// ---------- POST multipart { file, kind } - store a file and return its /uploads/<name> URL ----------
+// Files live in the database (UploadedFile) because Vercel's filesystem is read-only;
+// /uploads/<name> is rewritten to /api/files/<name> (see next.config.ts).
 // Restored after it went missing in an earlier commit (every upload in the app 404'd), plus a
 // "hero" kind for the landing page background, which only site administrators may upload.
 
@@ -24,12 +25,26 @@ const EXTS_BY_KIND: Record<Kind, readonly string[]> = {
   resource: [...IMAGE_EXTS, "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "zip", "txt", "md", "csv"],
 };
 
+// Vercel rejects request bodies over 4.5 MB, so every kind is capped at 4 MB
+// (the client downsizes large photos before uploading).
+const MAX_MB = 4;
 const MAX_BYTES_BY_KIND: Record<Kind, number> = {
   avatar: 2 * 1024 * 1024,
-  cover: 6 * 1024 * 1024,
-  gallery: 6 * 1024 * 1024,
-  hero: 8 * 1024 * 1024,
-  resource: 15 * 1024 * 1024,
+  cover: MAX_MB * 1024 * 1024,
+  gallery: MAX_MB * 1024 * 1024,
+  hero: MAX_MB * 1024 * 1024,
+  resource: MAX_MB * 1024 * 1024,
+};
+
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif",
+  pdf: "application/pdf", txt: "text/plain", md: "text/markdown", csv: "text/csv", zip: "application/zip",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 /** The rest of the app validates resource/image URLs as /uploads/<[a-z0-9/-]+>.<ext> - keep names conformant. */
@@ -106,9 +121,16 @@ export async function POST(req: NextRequest) {
     }
 
     const name = `${kind}-${Date.now().toString(36)}-${randomBytes(5).toString("hex")}.${ext}`;
-    const dir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, name), buf);
+    await db.uploadedFile.create({
+      data: {
+        name,
+        mime: MIME_BY_EXT[ext] ?? "application/octet-stream",
+        size: buf.length,
+        data: buf,
+        kind,
+        uploaderId: viewer.id,
+      },
+    });
 
     return NextResponse.json({ url: `/uploads/${name}` });
   } catch (e) {

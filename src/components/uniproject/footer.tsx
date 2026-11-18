@@ -113,7 +113,7 @@ export function Footer({ navigate }: { navigate: Navigate }) {
                 © {new Date().getFullYear()} {UNIVERSITY.name}
               </p>
               <p>
-                Project photographs by the student teams · Campus photograph by Hansol Jeong,{" "}
+                Project photographs by the student teams
                 <a
                   href="https://commons.wikimedia.org/wiki/File:Kyungsung_Univ_by_Ficell_005.jpg"
                   target="_blank"

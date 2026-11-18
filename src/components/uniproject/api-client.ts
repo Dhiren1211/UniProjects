@@ -198,15 +198,55 @@ export async function createTechnology(name: string): Promise<TechnologyDTO> {
 
 export type UploadKind = "avatar" | "cover" | "gallery" | "resource" | "hero";
 
+/** Server-side caps (must match /api/upload - Vercel rejects bodies over 4.5 MB). */
+const UPLOAD_MAX_BYTES: Record<UploadKind, number> = {
+  avatar: 2 * 1024 * 1024,
+  cover: 4 * 1024 * 1024,
+  gallery: 4 * 1024 * 1024,
+  hero: 4 * 1024 * 1024,
+  resource: 4 * 1024 * 1024,
+};
+
+/**
+ * Downsize a too-large photo in the browser (max 2560px edge, JPEG) so it fits
+ * the upload cap. GIFs and non-images are returned untouched.
+ */
+async function shrinkImage(file: File, maxBytes: number): Promise<File> {
+  if (file.size <= maxBytes || !/^image\/(png|jpeg|webp)$/.test(file.type)) return file;
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file;
+  let edge = 2560;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const scale = Math.min(1, edge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+    if (blob && blob.size <= maxBytes) {
+      bitmap.close();
+      return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+    }
+    edge = Math.round(edge * 0.75);
+  }
+  bitmap.close();
+  return file;
+}
+
 /**
  * Upload a file to /api/upload and resolve with its served URL.
  * Uses XHR so callers can render real progress. onProgress gets 0–100.
  */
-export function uploadFile(
-  file: File,
+export async function uploadFile(
+  original: File,
   kind: UploadKind,
   onProgress?: (pct: number) => void
 ): Promise<string> {
+  const maxBytes = UPLOAD_MAX_BYTES[kind];
+  const file = await shrinkImage(original, maxBytes);
+  if (file.size > maxBytes) {
+    throw new Error(`File is too large - the limit is ${Math.round(maxBytes / 1024 / 1024)} MB`);
+  }
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.set("file", file);
