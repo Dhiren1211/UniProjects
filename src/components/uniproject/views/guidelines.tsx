@@ -100,12 +100,12 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
         </div>
       </header>
 
-      <div className="wrap grid gap-10 py-12 md:py-16 lg:grid-cols-12 lg:gap-6">
+      <div className="wrap grid grid-cols-1 gap-10 py-12 md:py-16 lg:grid-cols-12 lg:gap-6">
         {/* ---------- index ---------- */}
-        <nav aria-label="On this page" className="lg:col-span-3">
+        <nav aria-label="On this page" className="min-w-0 lg:col-span-3">
           <div className="lg:sticky lg:top-[104px]">
             <p className="t-label">On this page</p>
-            <ol className="mt-3 flex gap-1 overflow-x-auto border-b border-up-border pb-3 scrollbar-none lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:pb-0">
+            <ol className="-mx-4 mt-3 flex gap-1 overflow-x-auto overscroll-x-contain border-b px-4 lg:mx-0 lg:px-0 border-up-border pb-3 scrollbar-none lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:pb-0">
               {SECTIONS.map((s, i) => {
                 const on = activeId === s.id;
                 return (
@@ -151,7 +151,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
                 <>The coordinator reviews and approves the request, usually within a day or two.</>,
                 <>
                   Your sign-in details are emailed to{" "}
-                  <code className="rounded-md bg-surface-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground">
+                  <code className="rounded-md bg-surface-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground break-all">
                     yourStudentNumber@{UNIVERSITY.domain}
                   </code>
                   .
@@ -162,7 +162,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-up-border-strong font-mono text-[12px] text-foreground">
                     {i + 1}
                   </span>
-                  <span>{item}</span>
+                  <span className="min-w-0">{item}</span>
                 </li>
               ))}
             </ol>
@@ -177,7 +177,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
               {CHECKLIST.map((c) => (
                 <li key={c} className="flex items-start gap-3 px-4 py-3">
                   <Check className="mt-1 size-4 shrink-0 text-primary-700" aria-hidden />
-                  <span>{c}</span>
+                  <span className="min-w-0">{c}</span>
                 </li>
               ))}
             </ul>
