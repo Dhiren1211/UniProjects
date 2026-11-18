@@ -54,6 +54,7 @@ import {
   ShieldCheck,
   Star,
   Trash2,
+  Upload,
   TrendingDown,
   TrendingUp,
   UserCog,
@@ -135,6 +136,7 @@ import {
 } from "../api-client";
 import { useAppStore } from "../store";
 import { deleteWithUndo, restoreAt } from "../undo-delete";
+import { ImportStudentsDialog } from "../import-students-dialog";
 import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import {
   CategoryIcon,
@@ -2515,6 +2517,8 @@ function UsersTab({
   // full "Edit member" dialog (requirement: admins can edit every user from the console)
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
   const [resettingUser, setResettingUser] = useState<ResetTarget | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   // professor university-profile-link editor (requirement: faculty links manageable from the console)
   const [editingFacultyLink, setEditingFacultyLink] = useState<AdminUserRow | null>(null);
   const [facultyLinkInput, setFacultyLinkInput] = useState("");
@@ -2541,7 +2545,7 @@ function UsersTab({
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, role, refreshTick, onLoaded]);
+  }, [debouncedQuery, role, refreshTick, reloadKey, onLoaded]);
 
   const replaceRow = (updated: AdminUserRow) => {
     setRows((prev) => (prev ? prev.map((r) => (r.id === updated.id ? updated : r)) : prev));
@@ -2691,13 +2695,16 @@ function UsersTab({
             Read-only - directory edits are an administrator task
           </p>
         ) : (
-          <Button
-            onClick={() => setDialogOpen(true)}
-            className="rounded-xl font-semibold md:ml-auto"
-          >
-            <Plus className="size-4" aria-hidden />
-            New member
-          </Button>
+          <div className="flex gap-2 md:ml-auto">
+            <Button variant="outline" onClick={() => setImportOpen(true)} className="rounded-xl font-semibold">
+              <Upload className="size-4" aria-hidden />
+              Import
+            </Button>
+            <Button onClick={() => setDialogOpen(true)} className="rounded-xl font-semibold">
+              <Plus className="size-4" aria-hidden />
+              New member
+            </Button>
+          </div>
         )}
       </div>
 
@@ -2937,6 +2944,18 @@ function UsersTab({
           />
         </>
       )}
+
+      {!readOnly ? (
+        <ImportStudentsDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          onImported={() => {
+            setRows(null);
+            setReloadKey((k) => k + 1);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       {!readOnly ? (
         <UserFormDialog

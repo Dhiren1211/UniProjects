@@ -575,6 +575,35 @@ export async function deleteAdminProject(id: string): Promise<void> {
   await send<{ ok: boolean }>(`/api/admin/projects?id=${encodeURIComponent(id)}`, "DELETE");
 }
 
+export type ImportRowInput = {
+  row: number;
+  studentId: string;
+  name: string;
+  capstone?: string;
+  year?: string;
+  professor?: string;
+  dept?: string;
+  email?: string;
+  leader?: boolean;
+};
+
+export type ImportResult = {
+  row: number;
+  studentId: string;
+  name: string;
+  status: "created" | "skipped" | "error";
+  message?: string;
+  emailed?: boolean;
+  /** Only when the credentials email could not be delivered. */
+  password?: string;
+};
+
+/** Bulk-create student accounts (admin). Send at most 50 rows per call. */
+export async function importStudents(rows: ImportRowInput[]): Promise<ImportResult[]> {
+  const data = await send<{ results: ImportResult[] }>("/api/admin/users/import", "POST", { rows });
+  return data.results;
+}
+
 export async function fetchAdminUsers(
   params: { query?: string; role?: string },
   signal?: AbortSignal
