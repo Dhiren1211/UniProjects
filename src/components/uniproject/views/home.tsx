@@ -2,8 +2,7 @@
 
 // ============================================================
 // HomeView - minimal, Swiss-style landing page.
-// Split intro (copy + framed campus photo), a quiet stats row,
-// a numbered "how it works" list and the project grids.
+// Full-bleed campus photo intro, a numbered "how it works" list and the project grids.
 // One accent colour, hairline rules, generous white space.
 // ============================================================
 
@@ -11,10 +10,8 @@ import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { UNIVERSITY } from "@/lib/config";
-import type { StatsDTO } from "@/lib/types";
 import {
   fetchProjects,
-  fetchStats,
   type Navigate,
   type ProjectListItem,
 } from "../api-client";
@@ -29,7 +26,6 @@ export function HomeView({ navigate }: { navigate: Navigate }) {
   const user = useAppStore((s) => s.user);
   const [featured, setFeatured] = useState<ProjectListItem[] | null>(null);
   const [latest, setLatest] = useState<ProjectListItem[] | null>(null);
-  const [stats, setStats] = useState<StatsDTO | null>(null);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -39,9 +35,6 @@ export function HomeView({ navigate }: { navigate: Navigate }) {
     fetchProjects({ sort: "newest" }, ac.signal)
       .then(setLatest)
       .catch(() => !ac.signal.aborted && setLatest([]));
-    fetchStats(ac.signal)
-      .then(setStats)
-      .catch(() => {});
     return () => ac.abort();
   }, []);
 
@@ -63,8 +56,6 @@ export function HomeView({ navigate }: { navigate: Navigate }) {
         }
         user={user}
       />
-
-      <StatsRow stats={stats} />
 
       <HowItWorks signedIn={Boolean(user)} navigate={navigate} />
 
@@ -125,124 +116,81 @@ function Intro({
     <section
       id="top"
       aria-labelledby="home-title"
-      className="border-b border-up-border"
+      className="relative isolate overflow-hidden bg-night"
     >
-      <div className="wrap grid items-center gap-10 py-14 md:grid-cols-[1.1fr_1fr] md:gap-14 md:py-24">
-        <div>
-          <motion.p
-            {...enter(0)}
-            className="flex items-center gap-2 text-[13px] font-medium text-ink-700"
-          >
-            <span aria-hidden className="h-px w-6 bg-primary" />
-            {UNIVERSITY.name} · Capstone design
-          </motion.p>
-
-          <motion.h1
-            {...enter(0.05)}
-            id="home-title"
-            className="mt-5 max-w-[18ch] text-balance text-[36px] font-semibold leading-[1.05] tracking-tight text-foreground md:text-[56px]"
-          >
-            {title}
-          </motion.h1>
-
-          <motion.p
-            {...enter(0.1)}
-            className="mt-6 max-w-[52ch] text-pretty text-[17px] leading-relaxed text-ink-700"
-          >
-            {lead}
-          </motion.p>
-
-          <motion.div
-            {...enter(0.15)}
-            className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
-          >
-            <Button
-              onClick={() => navigate({ name: "projects" })}
-              className="h-11 cursor-pointer gap-2 px-5 text-[15px]"
-            >
-              Browse projects
-              <MArrow />
-            </Button>
-            {!user ? (
-              <Button
-                variant="ghost"
-                onClick={() => navigate({ name: "account-request" })}
-                className="h-11 cursor-pointer px-4 text-[15px] text-foreground"
-              >
-                Request an account
-              </Button>
-            ) : canSubmit(user) ? (
-              <Button
-                variant="ghost"
-                onClick={() => navigate({ name: "create" })}
-                className="h-11 cursor-pointer px-4 text-[15px] text-foreground"
-              >
-                Submit your capstone
-              </Button>
-            ) : null}
-          </motion.div>
-        </div>
-
-        {/* Campus photo - admins change it in Admin → Settings */}
-        <motion.figure
+      {/* Full-bleed campus photo - admins change it in Admin → Settings */}
+      {image ? (
+        <motion.img
+          src={image}
+          alt=""
+          aria-hidden
+          fetchPriority="high"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: reduce ? 0 : 0.1 }}
-          className="relative overflow-hidden rounded-[20px] border border-up-border bg-surface-muted"
+          transition={{ duration: reduce ? 0 : 0.6 }}
+          className="absolute inset-0 -z-20 size-full object-cover"
+        />
+      ) : null}
+      {/* One soft scrim keeps the white text readable on any photo */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 bg-gradient-to-t from-black/75 via-black/45 to-black/25 md:bg-gradient-to-r md:from-black/70 md:via-black/40 md:to-black/5"
+      />
+
+      <div className="wrap flex min-h-[520px] flex-col justify-end py-16 md:min-h-[78vh] md:justify-center md:py-24">
+        <motion.p
+          {...enter(0)}
+          className="flex items-center gap-2 text-[13px] font-medium text-white/80"
         >
-          {image ? (
-            <img
-              src={image}
-              alt={`${UNIVERSITY.name} campus`}
-              width={1200}
-              height={900}
-              fetchPriority="high"
-              className="aspect-[4/3] size-full object-cover"
-            />
-          ) : (
-            <div aria-hidden className="aspect-[4/3] w-full animate-pulse" />
-          )}
-        </motion.figure>
-      </div>
-    </section>
-  );
-}
+          <span aria-hidden className="h-px w-6 bg-white/70" />
+          {UNIVERSITY.name} · Capstone design
+        </motion.p>
 
-// ---------- stats ----------
+        <motion.h1
+          {...enter(0.05)}
+          id="home-title"
+          className="mt-5 max-w-[18ch] text-balance text-[38px] font-semibold leading-[1.05] tracking-tight text-white md:text-[60px]"
+        >
+          {title}
+        </motion.h1>
 
-function StatsRow({ stats }: { stats: StatsDTO | null }) {
-  const items = [
-    { label: "Published projects", value: stats?.projects },
-    { label: "Verified by professors", value: stats?.verified },
-    { label: "Departments", value: stats?.departments },
-    { label: "Students", value: stats?.students },
-  ];
-  return (
-    <section
-      aria-label="Showcase in numbers"
-      className="border-b border-up-border"
-    >
-      <dl className="wrap grid grid-cols-2 md:grid-cols-4">
-        {items.map((it, i) => (
-          <div
-            key={it.label}
-            className={[
-              "py-7 md:py-9",
-              i % 2 === 1 ? "pl-6 md:pl-8" : "",
-              i >= 2 ? "border-t border-up-border md:border-t-0" : "",
-              i > 0 ? "md:border-l md:border-up-border md:pl-8" : "",
-              i % 2 === 1 ? "border-l border-up-border" : "",
-            ].join(" ")}
+        <motion.p
+          {...enter(0.1)}
+          className="mt-6 max-w-[52ch] text-pretty text-[17px] leading-relaxed text-white/85"
+        >
+          {lead}
+        </motion.p>
+
+        <motion.div
+          {...enter(0.15)}
+          className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
+        >
+          <Button
+            onClick={() => navigate({ name: "projects" })}
+            className="h-11 cursor-pointer gap-2 px-5 text-[15px]"
           >
-            <dt className="text-[13px] text-ink-700">{it.label}</dt>
-            <dd className="mt-1 text-[28px] font-semibold tabular-nums tracking-tight text-foreground md:text-[32px]">
-              {it.value ?? (
-                <span className="inline-block h-7 w-10 animate-pulse rounded bg-surface-muted align-middle" />
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
+            Browse projects
+            <MArrow />
+          </Button>
+          {!user ? (
+            <Button
+              variant="outline"
+              onClick={() => navigate({ name: "account-request" })}
+              className="h-11 cursor-pointer border-white/40 bg-transparent px-5 text-[15px] text-white hover:border-white hover:bg-white/10 hover:text-white"
+            >
+              Request an account
+            </Button>
+          ) : canSubmit(user) ? (
+            <Button
+              variant="outline"
+              onClick={() => navigate({ name: "create" })}
+              className="h-11 cursor-pointer border-white/40 bg-transparent px-5 text-[15px] text-white hover:border-white hover:bg-white/10 hover:text-white"
+            >
+              Submit your capstone
+            </Button>
+          ) : null}
+        </motion.div>
+      </div>
     </section>
   );
 }
