@@ -140,9 +140,8 @@ function Intro({
       <div className="wrap flex min-h-[520px] flex-col justify-end py-16 md:min-h-[78vh] md:justify-center md:py-24">
         <motion.p
           {...enter(0)}
-          className="flex items-center gap-2 text-[13px] font-medium text-white/80"
+          className="text-[13px] font-medium text-white/80"
         >
-          <span aria-hidden className="h-px w-6 bg-white/70" />
           {UNIVERSITY.name} · Capstone design
         </motion.p>
 
@@ -156,8 +155,13 @@ function Intro({
 
         <motion.p
           {...enter(0.1)}
-          className="mt-6 max-w-[52ch] text-pretty text-[17px] leading-relaxed text-white/85"
+          className="relative isolate mt-6 max-w-[52ch] text-pretty text-[17px] leading-relaxed text-white"
         >
+          {/* soft, borderless dark glow behind the copy - fades into the photo */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[40px] bg-black/45 blur-2xl"
+          />
           {lead}
         </motion.p>
 
