@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { ROLES, deriveClassId, roleLabel, universityEmail } from "@/lib/rbac";
-import { sendCredentialsEmail } from "@/lib/mailer";
+import { sendCredentialsEmail, sendPasswordResetEmail } from "@/lib/mailer";
 import { resolveProfessorByName } from "../../_utils/serialize";
 import type { AdminUserRow } from "@/lib/types";
 import { requireAdmin, requireStaff } from "../_guard";
@@ -547,9 +547,27 @@ export async function PATCH(req: NextRequest) {
       include: { department: { select: deptSelect } },
     });
 
+    // New password set by the admin: sign the member out everywhere, email the
+    // details, and close any open forgot-password requests for them.
+    let emailLogId: string | undefined;
+    if (password) {
+      await db.session.deleteMany({ where: { userId: id } });
+      const mail = await sendPasswordResetEmail({
+        to: updated.email,
+        name: updated.displayName,
+        loginId: updated.username,
+        tempPassword: password,
+      });
+      emailLogId = mail.logId;
+      await db.passwordResetRequest.updateMany({
+        where: { userId: id, status: "PENDING" },
+        data: { status: "SENT" },
+      });
+    }
+
     const projectCount = await db.projectMember.count({ where: { userId: id } });
 
-    return NextResponse.json({ user: toAdminUserRow(updated, projectCount, 0) });
+    return NextResponse.json({ user: toAdminUserRow(updated, projectCount, 0), emailLogId });
   } catch (e) {
     console.error("PATCH /api/admin/users", e);
     return NextResponse.json({ error: "Failed to update the member" }, { status: 500 });

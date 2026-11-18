@@ -112,7 +112,7 @@ model EmailLog {
   subject   String
   body      String
   kind      String   @default("SYSTEM") // CREDENTIALS | SYSTEM
-  status    String   @default("CONSOLE") // SENT | CONSOLE
+  status    String   @default("CONSOLE") // SENT | FAILED | CONSOLE (stored only, SMTP not configured)
   createdAt DateTime @default(now())
 }
 
@@ -120,7 +120,7 @@ model PasswordResetRequest {
   id        String   @id @default(cuid())
   email     String // the university address the requester typed
   userId    String? // set when the email matched a registered account
-  status    String   @default("SENT") // SENT = temp password emailed | NOT_FOUND = no such account
+  status    String   @default("PENDING") // PENDING = waiting for admin | SENT = new password emailed | NOT_FOUND
   createdAt DateTime @default(now())
 
   @@index([email])

@@ -5573,11 +5573,21 @@ function EmailsTab({
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                    m.status === "SENT" ? "bg-success-soft text-success" : "bg-surface-muted text-muted-foreground"
+                    m.status === "SENT"
+                      ? "bg-success-soft text-success"
+                      : m.status === "FAILED"
+                        ? "bg-danger-soft text-danger"
+                        : "bg-surface-muted text-muted-foreground"
                   )}
-                  title={m.status === "SENT" ? "Sent" : "Logged to the server console"}
+                  title={
+                    m.status === "SENT"
+                      ? "Delivered to the mail server"
+                      : m.status === "FAILED"
+                        ? "Sending failed - check the SMTP settings; the copy here is complete"
+                        : "Saved here only - email sending is not configured"
+                  }
                 >
-                  {m.status === "SENT" ? "sent" : "logged"}
+                  {m.status === "SENT" ? "sent" : m.status === "FAILED" ? "failed" : "not sent"}
                 </span>
               </button>
             </li>
@@ -5593,7 +5603,8 @@ function EmailsTab({
               {open ? (
                 <>
                   To {open.to} · {format(new Date(open.createdAt), "MMM d, yyyy HH:mm")} ·{" "}
-                  {open.kind.toLowerCase()} · {open.status === "SENT" ? "sent" : "logged"}
+                  {open.kind.toLowerCase()} ·{" "}
+                  {open.status === "SENT" ? "sent" : open.status === "FAILED" ? "failed" : "not sent"}
                 </>
               ) : null}
             </DialogDescription>
@@ -5703,14 +5714,14 @@ function ResetsTab({
                   r.status === "PENDING"
                     ? "Set a new password for this member in Users → Edit, then send it to them"
                     : r.status === "SENT"
-                      ? "A temporary password was generated (old automatic flow)"
+                      ? "Handled - a new password was set and emailed"
                       : "Nothing to do - no registered account uses this email"
                 }
               >
                 {r.status === "PENDING"
                   ? "Waiting for admin"
                   : r.status === "SENT"
-                    ? "Temp password issued"
+                    ? "New password sent"
                     : "No match"}
               </span>
             </li>

@@ -57,3 +57,4 @@ server.log
 
 # local AI agent skills
 /.agents/
+!.env.example

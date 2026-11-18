@@ -1,21 +1,66 @@
 // ============================================================
 // Mailer - transactional email with a persistent outbox.
-// This sandbox has no SMTP credentials, so delivery currently
-// "succeeds" by writing the formatted email to the server console
-// (visible in dev.log) AND persisting it in the EmailLog table,
-// which the admin panel surfaces as an "Email outbox".
-// Swap deliver() for a real provider (SMTP/API) when one exists -
-// everything else (formatting, outbox, admin UI) stays the same.
+//
+// Delivery uses SMTP when it is configured (env):
+//   SMTP_USER   - the sending account, e.g. uniprojects.ks@gmail.com
+//   SMTP_PASS   - its password (for Gmail: a 16-character App Password)
+//   SMTP_HOST   - default smtp.gmail.com
+//   SMTP_PORT   - default 465 (SSL)
+//   MAIL_FROM_NAME - display name recipients see, default "UniProjects"
+// Without SMTP_USER/SMTP_PASS mail is only stored in the EmailLog outbox
+// (Admin → Emails), exactly as before. Every message is stored there either way.
 // ============================================================
 
+import nodemailer, { type Transporter } from "nodemailer";
 import { db } from "@/lib/db";
 
 export type MailResult = {
-  /** true once a real provider is wired up; console+outbox delivery for now. */
+  /** true when the SMTP server accepted the message. */
   delivered: boolean;
   /** EmailLog row id, so callers can reference the outbox entry. */
   logId: string;
 };
+
+let transporter: Transporter | null | undefined;
+
+function getTransporter(): Transporter | null {
+  if (transporter !== undefined) return transporter;
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.replace(/\s+/g, ""); // Gmail shows app passwords with spaces
+  if (!user || !pass) return (transporter = null);
+  const port = Number(process.env.SMTP_PORT) || 465;
+  transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com",
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  });
+  return transporter;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+/** Minimal, readable HTML version of the plain-text body. */
+function toHtml(subject: string, body: string): string {
+  const lines = escapeHtml(body)
+    .split("\n")
+    .map((l) =>
+      /^\s{2}\S/.test(l)
+        ? `<div style="font-family:ui-monospace,Consolas,monospace;background:#f3f5f8;padding:2px 10px;border-radius:6px;margin:2px 0">${l.trim()}</div>`
+        : l
+          ? `<p style="margin:0 0 10px">${l}</p>`
+          : ""
+    )
+    .join("");
+  return `<!doctype html><html><body style="margin:0;background:#f6f7f9;padding:24px">
+<div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:28px;font-family:Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.55;color:#10141d">
+<p style="margin:0 0 18px;font-weight:600;font-size:17px">${escapeHtml(subject)}</p>${lines}</div></body></html>`;
+}
 
 async function deliverAndLog(
   to: string,
@@ -23,25 +68,37 @@ async function deliverAndLog(
   body: string,
   kind: "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM"
 ): Promise<MailResult> {
-  const lines = [
-    "",
-    "--------------------------------------------------------------",
-    "  UniProjects - outgoing email",
-    `  To:      ${to}`,
-    `  Subject: ${subject}`,
-    "",
-    ...body.split("\n").map((l) => `  ${l}`),
-    "--------------------------------------------------------------",
-  ];
-  // Never print the body in production - it contains passwords, and hosting
-  // logs are not a safe place for them. The admin outbox (EmailLog) keeps a copy.
-  if (process.env.NODE_ENV !== "production") console.log(lines.join("\n"));
+  const t = getTransporter();
+  let status = "CONSOLE"; // stored only (no SMTP configured)
 
-  const log = await db.emailLog.create({
-    data: { to, subject, body, kind, status: "CONSOLE" },
-  });
-  // delivered=false until an SMTP provider is configured (see header).
-  return { delivered: false, logId: log.id };
+  if (t) {
+    try {
+      const fromName = (process.env.MAIL_FROM_NAME || "UniProjects").replace(/["<>]/g, "");
+      await t.sendMail({
+        from: `"${fromName}" <${process.env.SMTP_USER!.trim()}>`,
+        to,
+        subject,
+        text: body,
+        html: toHtml(subject, body),
+      });
+      status = "SENT";
+    } catch (e) {
+      status = "FAILED";
+      console.error("Mail delivery failed:", kind, e instanceof Error ? e.message : e);
+    }
+  } else if (process.env.NODE_ENV !== "production") {
+    // Dev only - the body may contain passwords, so it never goes to production logs.
+    console.log(`
+--- outgoing email (not sent: SMTP not configured) ---
+To: ${to}
+Subject: ${subject}
+
+${body}
+---`);
+  }
+
+  const log = await db.emailLog.create({ data: { to, subject, body, kind, status } });
+  return { delivered: status === "SENT", logId: log.id };
 }
 
 /**
@@ -85,9 +142,8 @@ export async function sendCredentialsEmail(opts: {
 }
 
 /**
- * Forgot-password - emails a fresh temporary password to a registered
- * university address. The public endpoint responds neutrally either way;
- * every attempt (matched or not) is logged for the admin "Resets" tab.
+ * Password reset by an administrator (after a forgot-password request or on
+ * their own initiative) - sends the member their new sign-in details.
  */
 export async function sendPasswordResetEmail(opts: {
   to: string;
@@ -96,17 +152,17 @@ export async function sendPasswordResetEmail(opts: {
   loginId: string;
   tempPassword: string;
 }): Promise<MailResult> {
-  const subject = "Your UniProjects temporary password";
+  const subject = "Your UniProjects password was reset";
   const body = [
     `Hello ${opts.name},`,
     "",
-    "We received a request to reset your UniProjects password. Here are your new sign-in credentials:",
+    "An administrator has set a new password for your UniProjects account:",
     "",
     `  User ID:  ${opts.loginId}`,
     `  Password: ${opts.tempPassword}`,
     "",
-    "Use them to sign in right away - this password replaces your old one.",
-    "If you did not request this, you can safely ignore this email; your new password is already active.",
+    "Sign in and change it right away from Account settings.",
+    "If you did not ask for this, contact the capstone office.",
     "",
     "- UniProjects, Kyungsung University",
   ].join("\n");
