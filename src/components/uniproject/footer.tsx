@@ -112,17 +112,7 @@ export function Footer({ navigate }: { navigate: Navigate }) {
               <p>
                 © {new Date().getFullYear()} {UNIVERSITY.name}
               </p>
-              <p>
-                Project photographs by the student teams
-                <a
-                  href="https://commons.wikimedia.org/wiki/File:Kyungsung_Univ_by_Ficell_005.jpg"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="link hover:text-foreground"
-                >
-                  Wikimedia Commons
-                </a>
-              </p>
+              <p>Project photographs by the student teams</p>
             </div>
           </div>
       </div>
