@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -529,9 +530,8 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
               <div className="mt-2 grid gap-5 md:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="st-pw-current">Current password</Label>
-                  <Input
+                  <PasswordInput
                     id="st-pw-current"
-                    type="password"
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="••••••••"
@@ -541,9 +541,8 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="st-pw-new">New password</Label>
-                  <Input
+                  <PasswordInput
                     id="st-pw-new"
-                    type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="At least 8 characters"
@@ -554,9 +553,8 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="st-pw-confirm">Confirm new password</Label>
-                  <Input
+                  <PasswordInput
                     id="st-pw-confirm"
-                    type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Re-enter your new password"

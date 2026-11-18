@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { login, requestPasswordReset } from "./api-client";
 import type { Navigate } from "./api-client";
@@ -124,10 +125,9 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                     Forgot password?
                   </button>
                 </div>
-                <Input
+                <PasswordInput
                   id="am-password"
                   name="password"
-                  type="password"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
