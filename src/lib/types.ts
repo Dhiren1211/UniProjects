@@ -244,6 +244,8 @@ export type ApprovalResultDTO = {
     temporaryPassword: string;
   };
   emailLogId: string;
+  /** Whether the credentials email was delivered. */
+  emailed?: boolean;
 };
 
 export type AnnouncementDTO = {

@@ -137,6 +137,8 @@ import {
 import { useAppStore } from "../store";
 import { deleteWithUndo, restoreAt } from "../undo-delete";
 import { ImportStudentsDialog } from "../import-students-dialog";
+import { BulkBar, ConfirmDialog, CredentialsDialog, runSequential, type Credential } from "../bulk-actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
 import {
   CategoryIcon,
@@ -2518,6 +2520,11 @@ function UsersTab({
   const [editing, setEditing] = useState<AdminUserRow | null>(null);
   const [resettingUser, setResettingUser] = useState<ResetTarget | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // bulk selection
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkConfirm, setBulkConfirm] = useState<"reset" | "delete" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkCredentials, setBulkCredentials] = useState<Credential[] | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // professor university-profile-link editor (requirement: faculty links manageable from the console)
   const [editingFacultyLink, setEditingFacultyLink] = useState<AdminUserRow | null>(null);
@@ -2641,6 +2648,44 @@ function UsersTab({
     });
   };
 
+  const selectedRows = (rows ?? []).filter((r) => selected.includes(r.id));
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const bulkReset = async () => {
+    setBulkConfirm(null);
+    setBulkBusy(true);
+    const { done } = await runSequential(selectedRows, "Resetting passwords", (r) =>
+      adminResetPassword({ userId: r.id })
+    );
+    setBulkBusy(false);
+    setSelected([]);
+    const notEmailed = done
+      .filter((d) => d.result.tempPassword)
+      .map((d) => ({ userId: d.result.username, name: d.result.displayName, password: d.result.tempPassword! }));
+    if (notEmailed.length) setBulkCredentials(notEmailed);
+  };
+
+  const bulkDelete = () => {
+    setBulkConfirm(null);
+    const targets = selectedRows;
+    const ids = targets.map((r) => r.id);
+    setSelected([]);
+    deleteWithUndo({
+      label: `${targets.length} member${targets.length > 1 ? "s" : ""}`,
+      commit: async () => {
+        const { failed } = await runSequential(targets, "Deleting members", (r) => deleteAdminUser(r.id));
+        if (failed.length) throw new Error(`${failed.length} could not be deleted`);
+      },
+      onHide: () => setRows((prev) => (prev ? prev.filter((r) => !ids.includes(r.id)) : prev)),
+      onRestore: () => setReloadKey((k) => k + 1), // reload the server's truth
+      onDeleted: () => {
+        setReloadKey((k) => k + 1);
+        onChanged();
+      },
+    });
+  };
+
   const total = rows?.length ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / USERS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
@@ -2733,12 +2778,51 @@ function UsersTab({
         </div>
       ) : (
         <>
+          {!readOnly ? (
+            <div className="mt-3 flex items-center gap-2 px-1 text-xs text-muted-foreground">
+              <Checkbox
+                aria-label="Select all members on this page"
+                checked={
+                  pageRows.filter((r) => r.id !== user?.id).length > 0 &&
+                  pageRows.filter((r) => r.id !== user?.id).every((r) => selected.includes(r.id))
+                }
+                onCheckedChange={(v) => {
+                  const ids = pageRows.filter((r) => r.id !== user?.id).map((r) => r.id);
+                  setSelected((prev) =>
+                    v ? [...new Set([...prev, ...ids])] : prev.filter((id) => !ids.includes(id))
+                  );
+                }}
+              />
+              Select page
+            </div>
+          ) : null}
+          <BulkBar count={selected.length} onClear={() => setSelected([])} busy={bulkBusy}>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-card" disabled={bulkBusy} onClick={() => setBulkConfirm("reset")}>
+              <KeyRound className="size-3.5" aria-hidden />
+              Reset passwords
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-card text-danger hover:text-danger" disabled={bulkBusy} onClick={() => setBulkConfirm("delete")}>
+              <Trash2 className="size-3.5" aria-hidden />
+              Delete
+            </Button>
+          </BulkBar>
           <ul className="mt-3 space-y-2">
             {pageRows.map((row) => (
               <li
                 key={row.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-up-border bg-card p-2.5 shadow-sm"
+                className={cn(
+                  "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-2.5 shadow-sm",
+                  selected.includes(row.id) ? "border-primary/50 bg-primary-50/40" : "border-up-border"
+                )}
               >
+                {!readOnly ? (
+                  <Checkbox
+                    aria-label={`Select ${row.displayName}`}
+                    checked={selected.includes(row.id)}
+                    disabled={row.id === user?.id}
+                    onCheckedChange={() => toggleSelected(row.id)}
+                  />
+                ) : null}
                 <UserAvatar name={row.displayName} avatarUrl={row.avatarUrl} className="size-9" />
               <div className="min-w-0 flex-1 basis-44">
                 <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
@@ -2944,6 +3028,25 @@ function UsersTab({
           />
         </>
       )}
+
+      <ConfirmDialog
+        open={bulkConfirm === "reset"}
+        title={`Reset ${selected.length} password${selected.length > 1 ? "s" : ""}?`}
+        description="Each selected member gets a new password by email and is signed out everywhere. Their old passwords stop working."
+        confirmLabel="Reset and email"
+        onConfirm={bulkReset}
+        onCancel={() => setBulkConfirm(null)}
+      />
+      <ConfirmDialog
+        open={bulkConfirm === "delete"}
+        title={`Delete ${selected.length} member${selected.length > 1 ? "s" : ""}?`}
+        description="Their accounts are removed. You get 5 seconds to undo."
+        confirmLabel="Delete"
+        danger
+        onConfirm={bulkDelete}
+        onCancel={() => setBulkConfirm(null)}
+      />
+      <CredentialsDialog rows={bulkCredentials} onClose={() => setBulkCredentials(null)} />
 
       {!readOnly ? (
         <ImportStudentsDialog
@@ -4658,6 +4761,10 @@ function ApprovalsTab({
   const [filter, setFilter] = useState<ReqFilter>("PENDING");
   const [rows, setRows] = useState<AccountRequestDTO[] | null>(null); // null = loading
   const [reviewing, setReviewing] = useState<AccountRequestDTO | null>(null);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [pickConfirm, setPickConfirm] = useState<"approve" | "reject" | null>(null);
+  const [pickBusy, setPickBusy] = useState(false);
+  const [pickCredentials, setPickCredentials] = useState<Credential[] | null>(null);
   const [deleting, setDeleting] = useState<AccountRequestDTO | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -4730,6 +4837,55 @@ function ApprovalsTab({
         </p>
       </div>
 
+      <BulkBar count={picked.length} onClear={() => setPicked([])} busy={pickBusy}>
+        <Button size="sm" className="h-8 gap-1.5" disabled={pickBusy} onClick={() => setPickConfirm("approve")}>
+          <Check className="size-3.5" aria-hidden />
+          Approve
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 gap-1.5 bg-card" disabled={pickBusy} onClick={() => setPickConfirm("reject")}>
+          <X className="size-3.5" aria-hidden />
+          Reject
+        </Button>
+      </BulkBar>
+      <ConfirmDialog
+        open={pickConfirm !== null}
+        title={`${pickConfirm === "approve" ? "Approve" : "Reject"} ${picked.length} request${picked.length > 1 ? "s" : ""}?`}
+        description={
+          pickConfirm === "approve"
+            ? "Each student gets an account as a team member, placed in their professor's section, and their sign-in details by email. Use Review on a single request to make someone a team leader or change the class."
+            : "The selected requests are marked rejected. The students are not emailed."
+        }
+        confirmLabel={pickConfirm === "approve" ? "Approve all" : "Reject all"}
+        danger={pickConfirm === "reject"}
+        onConfirm={async () => {
+          const decision = pickConfirm === "approve" ? "APPROVED" : "REJECTED";
+          setPickConfirm(null);
+          setPickBusy(true);
+          const targets = (rows ?? []).filter((r) => picked.includes(r.id) && r.status === "PENDING");
+          const { done } = await runSequential(
+            targets,
+            decision === "APPROVED" ? "Approving" : "Rejecting",
+            (r) => decideAccountRequest(r.id, { decision, teamRole: "MEMBER" })
+          );
+          setPickBusy(false);
+          setPicked([]);
+          const ids = done.map((d) => d.item.id);
+          setRows((prev) => (prev ? prev.map((r) => done.find((d) => d.item.id === r.id)?.result.request ?? r) : prev));
+          if (filter === "PENDING") setRows((prev) => (prev ? prev.filter((r) => !ids.includes(r.id)) : prev));
+          onChanged();
+          const notEmailed = done
+            .filter((d) => d.result.account && d.result.emailed === false)
+            .map((d) => ({
+              userId: d.result.account.userId,
+              name: d.result.account.displayName,
+              password: d.result.account.temporaryPassword,
+            }));
+          if (notEmailed.length) setPickCredentials(notEmailed);
+        }}
+        onCancel={() => setPickConfirm(null)}
+      />
+      <CredentialsDialog rows={pickCredentials} onClose={() => setPickCredentials(null)} />
+
       {/* rows */}
       {rows === null ? (
         <div className="mt-3 space-y-2">
@@ -4754,8 +4910,20 @@ function ApprovalsTab({
           {rows.map((r) => (
             <li
               key={r.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-up-border bg-card p-2.5 shadow-sm"
+              className={cn(
+                "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border bg-card p-2.5 shadow-sm",
+                picked.includes(r.id) ? "border-primary/50 bg-primary-50/40" : "border-up-border"
+              )}
             >
+              {r.status === "PENDING" ? (
+                <Checkbox
+                  aria-label={`Select ${r.name}'s request`}
+                  checked={picked.includes(r.id)}
+                  onCheckedChange={() =>
+                    setPicked((prev) => (prev.includes(r.id) ? prev.filter((x) => x !== r.id) : [...prev, r.id]))
+                  }
+                />
+              ) : null}
               <UserAvatar name={r.name} className="size-9" />
               <div className="min-w-0 flex-1 basis-52">
                 <p className="truncate text-sm font-semibold text-foreground">{r.name}</p>

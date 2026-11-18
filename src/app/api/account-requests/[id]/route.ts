@@ -156,6 +156,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         temporaryPassword,
       },
       emailLogId: mail.logId,
+      emailed: mail.delivered,
     });
   } catch (e) {
     console.error("PATCH /api/account-requests/[id]", e);
