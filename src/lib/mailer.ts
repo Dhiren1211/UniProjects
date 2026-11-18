@@ -33,7 +33,9 @@ async function deliverAndLog(
     ...body.split("\n").map((l) => `  ${l}`),
     "--------------------------------------------------------------",
   ];
-  console.log(lines.join("\n"));
+  // Never print the body in production - it contains passwords, and hosting
+  // logs are not a safe place for them. The admin outbox (EmailLog) keeps a copy.
+  if (process.env.NODE_ENV !== "production") console.log(lines.join("\n"));
 
   const log = await db.emailLog.create({
     data: { to, subject, body, kind, status: "CONSOLE" },

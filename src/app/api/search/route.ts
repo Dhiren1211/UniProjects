@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUser, toSafeUser } from "@/lib/auth";
+import { getSessionUser, isStaff, toPublicUser, toSafeUser } from "@/lib/auth";
 import { likeCountMap, projectInclude, toListItem } from "../_utils/serialize";
 import type { ProjectListItem, SafeUserDTO } from "@/lib/types";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const q = req.nextUrl.searchParams.get("q")?.trim() ?? "";
+    const q = (req.nextUrl.searchParams.get("q")?.trim() ?? "").slice(0, 100);
 
     if (!q) {
       return NextResponse.json({ projects: [], users: [] });
@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
     const projects: ProjectListItem[] = projectRows.map((p) =>
       toListItem(p, likes.get(p.id) ?? 0)
     );
-    const users: SafeUserDTO[] = userRows.map((u) => toSafeUser(u));
+    const viewer = await getSessionUser(req);
+    const serialize = isStaff(viewer?.role) ? toSafeUser : toPublicUser;
+    const users: SafeUserDTO[] = userRows.map((u) => serialize(u));
 
     return NextResponse.json({ projects, users });
   } catch (e) {

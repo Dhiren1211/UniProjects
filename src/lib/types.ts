@@ -264,7 +264,7 @@ export type EmailLogDTO = {
 export type PasswordResetRow = {
   id: string;
   email: string;
-  status: "SENT" | "NOT_FOUND";
+  status: "SENT" | "PENDING" | "NOT_FOUND"; // SENT = legacy rows (old auto-reset flow)
   createdAt: string;
   /** The account the email matched (null for NOT_FOUND rows). */
   user: { username: string; displayName: string; role: string } | null;

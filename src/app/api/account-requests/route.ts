@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
@@ -59,6 +60,14 @@ export function toRequestDTO(r: {
 
 export async function POST(req: NextRequest) {
   try {
+    // public form - 5 submissions / hour per IP
+    const gate = await rateLimit(`acctreq:ip:${clientIp(req)}`, 5, 60 * 60);
+    if (!gate.ok) {
+      return NextResponse.json(
+        { error: "Too many requests from this network. Please try again later." },
+        { status: 429 }
+      );
+    }
     const settings = await getSettings();
     if (!settings.accountRequestsOpen) {
       return NextResponse.json(

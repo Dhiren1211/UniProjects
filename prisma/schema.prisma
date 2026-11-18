@@ -344,3 +344,13 @@ model UploadedFile {
   uploaderId String?
   createdAt  DateTime @default(now())
 }
+
+// Fixed-window rate limiting (login, password resets, account requests).
+// Stored in the database because serverless instances share no memory.
+model RateLimit {
+  key     String   @id // e.g. "login:ip:1.2.3.4"
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
+}

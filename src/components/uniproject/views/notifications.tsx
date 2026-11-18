@@ -60,6 +60,7 @@ function viewFor(link: string | null): View | null {
     "/settings": { name: "settings" },
     "/dashboard": { name: "dashboard" },
     "/projects": { name: "projects" },
+    "/admin": { name: "admin" },
   };
   return map[link] ?? null;
 }

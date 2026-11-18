@@ -176,8 +176,8 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 Reset your password
               </DialogTitle>
               <DialogDescription>
-                Enter your university email - if it is registered at UniProjects, a temporary
-                password will be emailed to you.
+                Enter your university email. If it is registered at UniProjects, the capstone
+                office is notified and will send you a new password.
               </DialogDescription>
             </DialogHeader>
 
@@ -204,7 +204,7 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 {busy ? (
                   <Loader2 className="size-4 animate-spin" aria-hidden />
                 ) : (
-                  "Send temporary password"
+                  "Request a new password"
                 )}
               </Button>
               <Button
@@ -227,10 +227,10 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <GraduationCap className="size-4" aria-hidden />
                 </span>
-                Check your inbox
+                Request sent
               </DialogTitle>
               <DialogDescription>
-                A temporary password is on its way to your university email.
+                Your current password still works until the office resets it.
               </DialogDescription>
             </DialogHeader>
 
@@ -245,8 +245,8 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 {sentMessage}
               </p>
               <p className="rounded-xl bg-surface-muted px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-                Students sign in with their student number and staff with their username - the
-                temporary password works for both.
+                Students sign in with their student number and staff with their username. If you
+                remember your password in the meantime, just sign in as usual.
               </p>
               <Button type="button" onClick={goBackToLogin} className="w-full font-semibold">
                 Back to sign in

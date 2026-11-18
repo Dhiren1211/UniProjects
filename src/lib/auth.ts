@@ -30,13 +30,21 @@ export function generateTemporaryPassword(length = 10): string {
   return out;
 }
 
+/** Longest password we will hash - stops multi-megabyte inputs from pinning the CPU. */
+export const MAX_PASSWORD_LENGTH = 200;
+
 export function verifyPassword(password: string, stored: string): boolean {
+  if (password.length > MAX_PASSWORD_LENGTH) return false;
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   const test = scryptSync(password, salt, 64);
   const expected = Buffer.from(hash, "hex");
   return expected.length === test.length && timingSafeEqual(expected, test);
 }
+
+/** Hash of a random value - compared against when no account matches, so login timing
+ *  doesn't reveal whether a username exists. */
+export const DUMMY_PASSWORD_HASH = hashPassword(randomBytes(16).toString("hex"));
 
 // ---------- sessions ----------
 
@@ -55,6 +63,7 @@ export async function createSession(userId: string): Promise<string> {
 export function attachSession(res: NextResponse, token: string) {
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
@@ -64,6 +73,7 @@ export function attachSession(res: NextResponse, token: string) {
 export function clearSession(res: NextResponse) {
   res.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 0,
@@ -142,6 +152,14 @@ export function toSafeUser(u: {
       : null,
     createdAt: u.createdAt.toISOString(),
   };
+}
+
+/**
+ * SafeUser for public responses (directory, search, other people's profiles):
+ * the email address is withheld - only the user themself and staff see it.
+ */
+export function toPublicUser(u: Parameters<typeof toSafeUser>[0]): SafeUser {
+  return { ...toSafeUser(u), email: "" };
 }
 
 /** Resolve the signed-in user from the session cookie (null when guest). */

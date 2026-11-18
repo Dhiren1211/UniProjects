@@ -5669,9 +5669,11 @@ function ResetsTab({
               <span
                 className={cn(
                   "flex size-9 shrink-0 items-center justify-center rounded-xl",
-                  r.status === "SENT"
-                    ? "bg-success-soft text-success"
-                    : "bg-surface-muted text-muted-foreground"
+                  r.status === "PENDING"
+                    ? "bg-warning-soft text-warning"
+                    : r.status === "SENT"
+                      ? "bg-success-soft text-success"
+                      : "bg-surface-muted text-muted-foreground"
                 )}
               >
                 <KeyRound className="size-4" aria-hidden />
@@ -5691,17 +5693,25 @@ function ResetsTab({
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                  r.status === "SENT"
+                  r.status === "PENDING"
+                    ? "bg-warning-soft text-warning"
+                    : r.status === "SENT"
                     ? "bg-success-soft text-success"
                     : "bg-surface-muted text-muted-foreground"
                 )}
                 title={
-                  r.status === "SENT"
-                    ? "A temporary password was generated and emailed to this address"
-                    : "Nothing was sent - no registered account uses this email"
+                  r.status === "PENDING"
+                    ? "Set a new password for this member in Users → Edit, then send it to them"
+                    : r.status === "SENT"
+                      ? "A temporary password was generated (old automatic flow)"
+                      : "Nothing to do - no registered account uses this email"
                 }
               >
-                {r.status === "SENT" ? "Temp password emailed" : "No match"}
+                {r.status === "PENDING"
+                  ? "Waiting for admin"
+                  : r.status === "SENT"
+                    ? "Temp password issued"
+                    : "No match"}
               </span>
             </li>
           ))}

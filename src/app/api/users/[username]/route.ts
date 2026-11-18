@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getSessionUser, toSafeUser } from "@/lib/auth";
+import { getSessionUser, isStaff, toPublicUser, toSafeUser } from "@/lib/auth";
 import { likeCountMap, normalizeSupervisorName, projectInclude, toListItem } from "../../_utils/serialize";
 import type { ProfileResponse, ProjectListItem } from "@/lib/types";
 
@@ -78,7 +78,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     const projects: ProjectListItem[] = projectRows.map((p) => toListItem(p, likes.get(p.id) ?? 0));
 
     const profile: ProfileResponse = {
-      user: toSafeUser(user),
+      // email only for the profile owner and staff
+      user: isSelf || isStaff(viewer?.role) ? toSafeUser(user) : toPublicUser(user),
       projects,
       followerCount,
       followingCount,

@@ -190,8 +190,8 @@ const createSchema = z.object({
   program: z.string().trim().max(80).optional().or(z.literal("")),
   supervisor: z.string().trim().max(80).optional().or(z.literal("")),
   tags: z.array(z.string().trim().min(1).max(30)).max(8).default([]),
-  demoUrl: z.string().trim().url("Demo link must be a valid URL").max(300).optional().or(z.literal("")),
-  repoUrl: z.string().trim().url("Repository link must be a valid URL").max(300).optional().or(z.literal("")),
+  demoUrl: z.string().trim().max(300).refine((v) => /^https?:\/\/\S+$/i.test(v), "Demo link must start with http:// or https://").optional().or(z.literal("")),
+  repoUrl: z.string().trim().max(300).refine((v) => /^https?:\/\/\S+$/i.test(v), "Repository link must start with http:// or https://").optional().or(z.literal("")),
   publish: z.boolean().default(true),
   technologyIds: z.array(z.string()).max(20).default([]),
   coverImage: z

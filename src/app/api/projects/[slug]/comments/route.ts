@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canManageProject } from "../../../_utils/project-access";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -15,6 +16,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     const { slug } = await params;
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    // drafts (and their comments) are private to the team and staff
+    if (project.status !== "PUBLISHED" && !(await canManageProject(await getSessionUser(req), project))) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
 
     const rows = await db.comment.findMany({
       where: { projectId: project.id },
@@ -44,6 +49,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
     const project = await db.project.findUnique({ where: { slug } });
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    if (project.status !== "PUBLISHED" && !(await canManageProject(viewer, project))) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
 
     const parsed = postSchema.safeParse(await req.json());
     if (!parsed.success) {

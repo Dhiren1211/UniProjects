@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getSessionUser, hashPassword, toSafeUser, verifyPassword } from "@/lib/auth";
+import {
+  getSessionUser,
+  hashPassword,
+  isStaff,
+  SESSION_COOKIE,
+  MAX_PASSWORD_LENGTH,
+  toPublicUser,
+  toSafeUser,
+  verifyPassword,
+} from "@/lib/auth";
 import type { UserDirectoryEntry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +68,11 @@ export async function GET(req: NextRequest) {
       : [];
     const countMap = new Map(counts.map((c) => [c.userId, c._count._all]));
 
+    // Emails are only visible to staff - the directory is public.
+    const viewer = await getSessionUser(req);
+    const serialize = isStaff(viewer?.role) ? toSafeUser : toPublicUser;
     const users: UserDirectoryEntry[] = rows.map((u) => ({
-      ...toSafeUser(u),
+      ...serialize(u),
       projectCount: countMap.get(u.id) ?? 0,
     }));
 
@@ -81,6 +93,16 @@ export async function GET(req: NextRequest) {
 
 // ---------- PATCH - update the viewer's own profile ----------
 
+/** Only real web links - blocks javascript:, data: and other dangerous schemes. */
+const httpUrl = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(300, `${label} is too long`)
+    .refine((v) => /^https?:\/\/[^\s/$.?#][^\s]*$/i.test(v), {
+      message: `${label} must be a full link starting with https://`,
+    });
+
 const patchSchema = z.object({
   displayName: z.string().trim().min(1, "Name cannot be empty").max(80).optional(),
   // nullable: the settings view sends null for empty optional fields to clear them
@@ -89,8 +111,8 @@ const patchSchema = z.object({
   skills: z
     .union([z.array(z.string().trim().min(1).max(40)).max(30), z.string().trim().max(600)])
     .optional(),
-  website: z.union([z.string().trim().max(300), z.literal("")]).nullable().optional(),
-  github: z.union([z.string().trim().max(300), z.literal("")]).nullable().optional(),
+  website: z.union([httpUrl("Website"), z.literal("")]).nullable().optional(),
+  github: z.union([httpUrl("GitHub link"), z.literal("")]).nullable().optional(),
   // PROFESSOR only - link to the faculty member's official university profile page
   universityProfileUrl: z
     .union([
@@ -129,7 +151,11 @@ const patchSchema = z.object({
     ])
     .optional(),
   currentPassword: z.string().optional(),
-  newPassword: z.string().min(8, "New password must be at least 8 characters").optional(),
+  newPassword: z
+    .string()
+    .min(8, "New password must be at least 8 characters")
+    .max(MAX_PASSWORD_LENGTH, "Password is too long")
+    .optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -204,6 +230,14 @@ export async function PATCH(req: NextRequest) {
       data,
       include: { department: { select: deptSelect } },
     });
+
+    // A password change signs out every other device.
+    if (d.newPassword) {
+      const current = req.cookies.get(SESSION_COOKIE)?.value;
+      await db.session.deleteMany({
+        where: { userId: viewer.id, ...(current ? { token: { not: current } } : {}) },
+      });
+    }
 
     return NextResponse.json({ user: toSafeUser(updated) });
   } catch (e) {
