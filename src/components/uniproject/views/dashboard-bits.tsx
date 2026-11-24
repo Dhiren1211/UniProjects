@@ -79,11 +79,11 @@ export function IdentityCard({ user }: { user: SafeUserDTO }) {
             @{user.username}
             {user.role === "STUDENT" ? (
               user.isTeamLeader ? (
-                <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
+                <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-primary-700">
                   Team Leader
                 </span>
               ) : (
-                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[0.6875rem] font-semibold text-muted-foreground">
                   Member
                 </span>
               )
@@ -101,7 +101,7 @@ export function IdentityCard({ user }: { user: SafeUserDTO }) {
         {user.classId ? (
           <li className="flex items-center justify-between gap-3">
             <span className="shrink-0 text-muted-foreground">Section</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[0.75rem] font-semibold text-foreground">
               <Users className="size-3.5 text-primary-700" aria-hidden />
               {user.classId}
             </span>

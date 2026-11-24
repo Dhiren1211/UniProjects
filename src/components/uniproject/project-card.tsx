@@ -63,7 +63,7 @@ export function ProjectCard({
         {project.featured ? (
           <span
             className={cn(
-              "absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-primary-700 shadow-sm",
+              "absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.75rem] font-semibold text-primary-700 shadow-sm",
               project.coverImage ? "bg-background/85" : "bg-background/85"
             )}
           >
@@ -75,7 +75,7 @@ export function ProjectCard({
           {project.verified ? <VerifiedBadge /> : null}
           <span
             className={cn(
-              "rounded-full border border-transparent bg-background/85 px-2 py-0.5 text-[13px] font-medium text-foreground"
+              "rounded-full border border-transparent bg-background/85 px-2 py-0.5 text-[0.875rem] font-medium text-foreground"
             )}
           >
             {project.department.code}
@@ -91,7 +91,7 @@ export function ProjectCard({
         <h3 className="mt-1.5 line-clamp-1 text-lg font-medium tracking-tight text-foreground transition-colors group-hover:text-primary">
           {project.title}
         </h3>
-        <p className="mt-1.5 line-clamp-2 text-[15px] leading-relaxed text-ink-700">
+        <p className="mt-1.5 line-clamp-2 text-[1rem] leading-relaxed text-ink-700">
           {project.summary}
         </p>
 
@@ -101,13 +101,13 @@ export function ProjectCard({
             {project.technologies.slice(0, 3).map((t) => (
               <span
                 key={t.id}
-                className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                className="rounded-full bg-surface-muted px-2 py-0.5 text-[0.75rem] font-medium text-muted-foreground"
               >
                 {t.name}
               </span>
             ))}
             {project.technologies.length > 3 ? (
-              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[0.75rem] font-medium text-muted-foreground">
                 +{project.technologies.length - 3}
               </span>
             ) : null}

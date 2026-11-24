@@ -47,7 +47,7 @@ type Row =
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-up-border bg-background px-1 font-sans text-[10px] font-medium text-muted-foreground">
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-up-border bg-background px-1 font-sans text-[0.6875rem] font-medium text-muted-foreground">
       {children}
     </kbd>
   );
@@ -217,7 +217,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
       i === active ? "bg-surface-muted" : "hover:bg-surface-muted/70"
     }`;
 
-  const sectionCls = "px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-500";
+  const sectionCls = "px-1 pb-1 pt-3 text-[0.75rem] font-semibold uppercase tracking-[0.14em] text-ink-500";
 
   return (
     <Dialog open={searchOpen} onOpenChange={(v) => { setSearchOpen(v); if (!v) { setQ(""); setResults(null); resetSelection(); } }}>
@@ -250,7 +250,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
             aria-expanded={rows.length > 0}
             aria-controls="search-palette-rows"
             aria-activedescendant={rows[active] ? `search-row-${active}` : undefined}
-            className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+            className="h-14 flex-1 bg-transparent text-[1rem] outline-none placeholder:text-muted-foreground"
           />
           {loading ? (
             <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" aria-hidden />
@@ -340,7 +340,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
                       {p.category} · {p.year}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-ink-500">
+                  <span className="shrink-0 text-[0.75rem] tabular-nums text-ink-500">
                     {formatViews(p.views)}
                   </span>
                 </button>
@@ -391,7 +391,7 @@ export function SearchDialog({ navigate }: { navigate: Navigate }) {
         </div>
 
         {/* keyboard hint bar */}
-        <div className="flex items-center gap-4 border-t border-up-border bg-surface-muted/60 px-4 py-2.5 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-4 border-t border-up-border bg-surface-muted/60 px-4 py-2.5 text-[0.75rem] text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd>

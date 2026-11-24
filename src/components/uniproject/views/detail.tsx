@@ -195,7 +195,7 @@ function SidebarCard({
   return (
     <section className="rounded-2xl border border-up-border bg-card p-5 shadow-card">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <h2 className="text-[0.75rem] font-semibold uppercase tracking-widest text-muted-foreground">
           {title}
         </h2>
         {action}
@@ -259,7 +259,7 @@ function ResourceRow({
       </a>
       {uploaded ? (
         <>
-          <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
             {extOf(resource.url)}
           </span>
           <Download className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -658,7 +658,7 @@ function ManageTeamDialog({
                   <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
                 </div>
                 {m.role === "OWNER" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[0.75rem] font-semibold text-warning">
                     <Crown className="size-3" aria-hidden />
                     Owner
                   </span>
@@ -1750,7 +1750,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
           aria-label="Owner tools"
           className="mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-primary-100 bg-primary-50/50 p-4"
         >
-          <span className="mr-1 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary-700">
+          <span className="mr-1 inline-flex items-center gap-1.5 text-[0.875rem] font-medium text-primary-700">
             <Pencil className="size-3.5" aria-hidden />
             Owner tools
           </span>
@@ -1847,7 +1847,7 @@ export function DetailView({ slug, navigate }: { slug: string; navigate: Navigat
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               About the project
             </h2>
-            <div className="mt-4 whitespace-pre-line text-[15px] leading-relaxed text-foreground/90">
+            <div className="mt-4 whitespace-pre-line text-[1rem] leading-relaxed text-foreground/90">
               {project.description}
             </div>
 
@@ -2215,8 +2215,8 @@ function VerificationReview({
         <BadgeCheck className="size-[18px]" aria-hidden />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[15px] font-medium text-foreground">Verification requested</p>
-        <p className="text-[13px] text-ink-700">
+        <p className="text-[1rem] font-medium text-foreground">Verification requested</p>
+        <p className="text-[0.875rem] text-ink-700">
           {request.requester} asked {timeAgo(request.createdAt)}. Review the project below, then approve or reject.
         </p>
       </div>

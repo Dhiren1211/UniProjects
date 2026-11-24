@@ -76,7 +76,7 @@ async function main() {
       { key: "searchEnabled", value: "true" },
       { key: "accountRequestsOpen", value: "true" },
       { key: "siteName", value: "UniProjects" },
-      { key: "heroTitle", value: "Kyungsung University Capstone Showcase" },
+      { key: "heroTitle", value: "Capstone Contest..." },
       {
         key: "heroSubtitle",
         value:

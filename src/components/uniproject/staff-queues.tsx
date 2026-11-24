@@ -243,7 +243,7 @@ export function VerificationQueueCard({
       )}
 
       {rows !== null && !failed && decided.length > 0 ? (
-        <p className="mt-3 border-t border-up-border pt-2.5 text-[11px] text-muted-foreground">
+        <p className="mt-3 border-t border-up-border pt-2.5 text-[0.75rem] text-muted-foreground">
           Most recent decision {timeAgo(decided[0].createdAt)} -{" "}
           {decided[0].status === "APPROVED" ? "approved" : "rejected"} “{decided[0].project.title}”
         </p>
@@ -379,7 +379,7 @@ export function ReportsQueueCard({
       )}
 
       {rows !== null && !failed && resolved.length > 0 ? (
-        <p className="mt-3 border-t border-up-border pt-2.5 text-[11px] text-muted-foreground">
+        <p className="mt-3 border-t border-up-border pt-2.5 text-[0.75rem] text-muted-foreground">
           {resolved.length} resolved report{resolved.length === 1 ? "" : "s"} on record
         </p>
       ) : null}

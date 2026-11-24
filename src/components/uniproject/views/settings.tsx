@@ -319,7 +319,7 @@ function SettingsForm({ user }: { user: SafeUserDTO }) {
                 ) : (
                   <ImagePlus className="size-4" aria-hidden />
                 )}
-                <span className="px-1 text-center text-[11px] font-medium leading-tight">
+                <span className="px-1 text-center text-[0.75rem] font-medium leading-tight">
                   {uploading ? `Uploading ${uploadPct}%` : "Upload your own"}
                 </span>
                 {uploading ? (

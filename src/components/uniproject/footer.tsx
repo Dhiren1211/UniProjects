@@ -11,7 +11,7 @@ import { canSubmit, requireAuth, useAppStore } from "./store";
 import type { Navigate } from "./api-client";
 
 const linkCls =
-  "link inline-flex min-h-[32px] items-center gap-1 rounded text-[15px] text-ink-700 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "link inline-flex min-h-[32px] items-center gap-1 rounded text-[1rem] text-ink-700 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 function Column({ head, children }: { head: string; children: React.ReactNode }) {
   return (
@@ -108,7 +108,7 @@ export function Footer({ navigate }: { navigate: Navigate }) {
               </Column>
             </div>
 
-            <div className="mt-12 flex flex-col gap-2 text-[13px] text-ink-500 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-12 flex flex-col gap-2 text-[0.875rem] text-ink-500 sm:flex-row sm:items-center sm:justify-between">
               <p>
                 © {new Date().getFullYear()} {UNIVERSITY.name}
               </p>

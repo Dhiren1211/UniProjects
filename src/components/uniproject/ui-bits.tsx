@@ -52,7 +52,7 @@ export function timeAgo(iso: string) {
 export function VerifiedBadge({ withLabel = false }: { withLabel?: boolean }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-semibold text-success"
+      className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-1 text-[0.75rem] font-semibold text-success"
       title="Verified by faculty"
     >
       <BadgeCheck className="size-3.5" aria-hidden />
@@ -83,7 +83,7 @@ export function StatusBadge({ status }: { status: string }) {
           : "bg-success-soft text-success";
   return (
     <span
-      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold", tone)}
+      className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.75rem] font-semibold", tone)}
     >
       {status !== "PUBLISHED" ? <CircleDashed className="size-3.5" aria-hidden /> : null}
       {statusLabel(status)}
@@ -93,7 +93,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function TeammateWantedChip() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-[0.75rem] font-semibold text-primary-700">
       <Users className="size-3.5" aria-hidden />
       Open to teammates
     </span>
@@ -102,7 +102,7 @@ export function TeammateWantedChip() {
 
 export function FeaturedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-background/85 px-2.5 py-1 text-[11px] font-semibold text-primary-700 shadow-sm">
+    <span className="inline-flex items-center gap-1 rounded-full bg-background/85 px-2.5 py-1 text-[0.75rem] font-semibold text-primary-700 shadow-sm">
       <Star className="size-3 fill-current" aria-hidden />
       Featured
     </span>
@@ -112,7 +112,7 @@ export function FeaturedBadge() {
 export function StaffBadge({ role }: { role: string }) {
   if (role !== "ADMIN" && role !== "MODERATOR" && role !== "PROFESSOR") return null;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-info-soft px-2 py-0.5 text-[10px] font-semibold text-info">
+    <span className="inline-flex items-center gap-1 rounded-full bg-info-soft px-2 py-0.5 text-[0.6875rem] font-semibold text-info">
       <ShieldCheck className="size-3" aria-hidden />
       {role === "ADMIN" ? "Admin" : role === "MODERATOR" ? "Moderator" : "Professor"}
     </span>
@@ -142,7 +142,7 @@ export function RoleBadge({ role, className }: { role: string; className?: strin
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold",
         tone,
         className
       )}
@@ -214,7 +214,7 @@ export function MemberAvatar({
     <span
       aria-hidden
       className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-semibold",
         AVATAR_STYLES[idx],
         ring && "ring-2 ring-white",
         className

@@ -114,15 +114,20 @@ export async function sendCredentialsEmail(opts: {
   roleLabel?: string;
   classId?: string | null;
   professor?: string | null;
+  /** True when the account came from an approved account request. */
+  approved?: boolean;
 }): Promise<MailResult> {
   const subject = "Your UniProjects account is ready";
   const section =
     opts.classId && opts.professor
       ? [`You have been placed in class ${opts.classId} under Professor ${opts.professor}.`]
       : opts.roleLabel
-        ? [`Your account was created with the role: ${opts.roleLabel}.`]
+        ? [
+            `Your account was created with the role: ${opts.roleLabel}.`,
+            ...(opts.classId ? [`Your teaching section is ${opts.classId}.`] : []),
+          ]
         : [];
-  const intro = opts.classId
+  const intro = opts.approved || opts.classId
     ? "Your account request has been approved. Here are your sign-in credentials:"
     : "Your account has been provisioned by an administrator. Here are your sign-in credentials:";
   const body = [

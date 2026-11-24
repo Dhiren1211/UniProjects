@@ -44,7 +44,7 @@ export function HomeView({ navigate }: { navigate: Navigate }) {
     <>
       <Intro
         navigate={navigate}
-        title={settings?.heroTitle ?? "Kyungsung University Capstone Showcase"}
+        title={settings?.heroTitle ?? "Capstone Contest..."}
         lead={
           settings?.heroSubtitle ??
           "Student teams turn a year of capstone design work into published, searchable projects that are supervised, verified and open to everyone."
@@ -140,7 +140,7 @@ function Intro({
       <div className="wrap flex min-h-[520px] flex-col justify-end py-16 md:min-h-[78vh] md:justify-center md:py-24">
         <motion.p
           {...enter(0)}
-          className="text-[13px] font-medium text-white/80"
+          className="text-[0.875rem] font-medium text-white/80"
         >
           {UNIVERSITY.name} · Capstone design
         </motion.p>
@@ -148,14 +148,14 @@ function Intro({
         <motion.h1
           {...enter(0.05)}
           id="home-title"
-          className="mt-5 max-w-[18ch] text-balance text-[38px] font-semibold leading-[1.05] tracking-tight text-white md:text-[60px]"
+          className="mt-5 max-w-[18ch] text-balance text-[2.375rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3.75rem]"
         >
           {title}
         </motion.h1>
 
         <motion.p
           {...enter(0.1)}
-          className="relative isolate mt-6 max-w-[52ch] text-pretty text-[17px] leading-relaxed text-white"
+          className="relative isolate mt-6 max-w-[52ch] text-pretty text-[1.0625rem] leading-relaxed text-white"
         >
           {/* soft, borderless dark glow behind the copy - fades into the photo */}
           <span
@@ -169,30 +169,45 @@ function Intro({
           {...enter(0.15)}
           className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
         >
-          <Button
-            onClick={() => navigate({ name: "projects" })}
-            className="h-11 cursor-pointer gap-2 px-5 text-[15px]"
-          >
-            Browse projects
-            <MArrow />
-          </Button>
+          {/* Signed out: "Request an account  or  Browse projects" */}
           {!user ? (
-            <Button
-              variant="outline"
-              onClick={() => navigate({ name: "account-request" })}
-              className="h-11 cursor-pointer border-white/40 bg-transparent px-5 text-[15px] text-white hover:border-white hover:bg-white/10 hover:text-white"
-            >
-              Request an account
-            </Button>
-          ) : canSubmit(user) ? (
-            <Button
-              variant="outline"
-              onClick={() => navigate({ name: "create" })}
-              className="h-11 cursor-pointer border-white/40 bg-transparent px-5 text-[15px] text-white hover:border-white hover:bg-white/10 hover:text-white"
-            >
-              Submit your capstone
-            </Button>
-          ) : null}
+            <>
+              <Button
+                onClick={() => navigate({ name: "account-request" })}
+                className="h-12 cursor-pointer gap-2 px-6 text-base"
+              >
+                Request an account
+                <MArrow />
+              </Button>
+              <span className="text-center text-base font-medium text-white/80 sm:px-1">or</span>
+              <Button
+                variant="outline"
+                onClick={() => navigate({ name: "projects" })}
+                className="h-12 cursor-pointer border-white/40 bg-transparent px-6 text-base text-white hover:border-white hover:bg-white/10 hover:text-white"
+              >
+                Browse projects
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={() => navigate({ name: "projects" })}
+                className="h-12 cursor-pointer gap-2 px-6 text-base"
+              >
+                Browse projects
+                <MArrow />
+              </Button>
+              {canSubmit(user) ? (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate({ name: "create" })}
+                  className="h-12 cursor-pointer border-white/40 bg-transparent px-6 text-base text-white hover:border-white hover:bg-white/10 hover:text-white"
+                >
+                  Submit your capstone
+                </Button>
+              ) : null}
+            </>
+          )}
         </motion.div>
       </div>
     </section>
@@ -245,7 +260,7 @@ function HowItWorks({
           <button
             type="button"
             onClick={() => navigate({ name: "guidelines" })}
-            className="link mt-5 inline-flex cursor-pointer items-center gap-1.5 text-[15px] font-medium text-primary-700 outline-none focus-visible:outline-2 focus-visible:outline-ring"
+            className="link mt-5 inline-flex cursor-pointer items-center gap-1.5 text-[1.2rem] font-medium text-primary-700 outline-none focus-visible:outline-2 focus-visible:outline-ring"
           >
             Read the guidelines
             <MArrow />
@@ -260,15 +275,15 @@ function HowItWorks({
             >
               <span
                 aria-hidden
-                className="text-[15px] font-medium tabular-nums text-primary-700"
+                className="text-[1.3rem] font-medium tabular-nums text-primary-700"
               >
                 {String(i + 1).padStart(2, "0")}
               </span>
               <div>
-                <h3 className="text-lg font-medium text-foreground">
+                <h3 className="text-[1.3rem] font-medium text-foreground">
                   {step.title}
                 </h3>
-                <p className="mt-1.5 max-w-[60ch] text-[15px] leading-relaxed text-ink-700">
+                <p className="mt-1.5 max-w-[60ch] text-[1.2rem] leading-relaxed text-ink-700">
                   {step.body}
                 </p>
               </div>
@@ -295,11 +310,11 @@ function SectionHead({
     <div>
       <h2
         id={id}
-        className="text-[26px] font-semibold leading-tight tracking-tight text-foreground md:text-[32px]"
+        className="text-[1.625rem] font-semibold leading-tight tracking-tight text-foreground md:text-[2rem]"
       >
         {title}
       </h2>
-      <p className="mt-2 max-w-[48ch] text-[15px] text-ink-700 md:text-base">
+      <p className="mt-2 max-w-[48ch] text-[1rem] text-ink-700 md:text-base">
         {line}
       </p>
     </div>
@@ -339,7 +354,7 @@ function ProjectSection({
             <button
               type="button"
               onClick={() => navigate({ name: "projects" })}
-              className="link inline-flex cursor-pointer items-center gap-1.5 text-[15px] font-medium text-foreground outline-none focus-visible:outline-2 focus-visible:outline-ring"
+              className="link inline-flex cursor-pointer items-center gap-1.5 text-[1rem] font-medium text-foreground outline-none focus-visible:outline-2 focus-visible:outline-ring"
             >
               View all
               <MArrow />
@@ -381,7 +396,7 @@ function EmptyProjects({
       <p className="text-lg font-medium text-foreground">
         No projects published yet
       </p>
-      <p className="mx-auto mt-2 max-w-[44ch] text-[15px] text-ink-700">
+      <p className="mx-auto mt-2 max-w-[44ch] text-[1rem] text-ink-700">
         Projects appear here as soon as capstone teams publish them.
       </p>
       {action ? (

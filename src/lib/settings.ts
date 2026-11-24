@@ -21,11 +21,14 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   searchEnabled: true,
   accountRequestsOpen: true,
   siteName: "UniProjects",
-  heroTitle: "Kyungsung University Capstone Showcase",
+  heroTitle: "Capstone Contest...",
   heroSubtitle:
     "Student teams turn a year of capstone design work into published, searchable projects that are supervised, verified and open to everyone.",
   heroImage: "/hero/ksu-central-library.jpg",
 };
+
+/** The old seeded hero title - databases that still hold it get the new default. */
+const LEGACY_HERO_TITLE = "Kyungsung University Capstone Showcase";
 
 type RawValue = string | number | boolean;
 
@@ -48,7 +51,10 @@ export async function getSettings(): Promise<SiteSettings> {
     accountRequestsOpen:
       (map.get("accountRequestsOpen") ?? String(DEFAULT_SETTINGS.accountRequestsOpen)) === "true",
     siteName: map.get("siteName") ?? DEFAULT_SETTINGS.siteName,
-    heroTitle: map.get("heroTitle") ?? DEFAULT_SETTINGS.heroTitle,
+    heroTitle:
+      !map.get("heroTitle") || map.get("heroTitle") === LEGACY_HERO_TITLE
+        ? DEFAULT_SETTINGS.heroTitle
+        : map.get("heroTitle")!,
     heroSubtitle: map.get("heroSubtitle") ?? DEFAULT_SETTINGS.heroSubtitle,
     heroImage: map.get("heroImage") ?? DEFAULT_SETTINGS.heroImage,
   };

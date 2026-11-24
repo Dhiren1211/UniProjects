@@ -243,7 +243,7 @@ export function AdminDashboard({ user, navigate }: { user: SafeUserDTO; navigate
                         </span>
                       ) : null}
                     </span>
-                    <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+                    <span className="shrink-0 whitespace-nowrap text-[0.75rem] font-medium text-muted-foreground">
                       {timeAgo(item.createdAt)}
                     </span>
                   </li>

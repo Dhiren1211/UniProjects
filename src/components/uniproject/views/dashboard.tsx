@@ -146,17 +146,17 @@ function StudentDashboard({ user, navigate }: { user: SafeUserDTO; navigate: Nav
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <StatusBadge status={project.status} />
                     {project.verified ? <VerifiedBadge withLabel /> : null}
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
                       <Eye className="size-3" aria-hidden />
                       {formatViews(project.views)}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 text-[0.75rem] text-muted-foreground">
                       <Users className="size-3" aria-hidden />
                       {project.members.length} member{project.members.length === 1 ? "" : "s"}
                     </span>
                   </div>
                   {project.supervisor ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="mt-1 text-[0.75rem] text-muted-foreground">
                       Supervisor · {project.supervisor}
                     </p>
                   ) : null}

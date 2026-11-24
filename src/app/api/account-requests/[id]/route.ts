@@ -32,6 +32,24 @@ const decideSchema = z.object({
   note: z.string().trim().max(300).optional().or(z.literal("")),
 });
 
+/** Audit label - "Name (studentId)" or "Name (email)" for professors. */
+function requestLabel(r: { name: string; studentId: string | null; email: string | null }) {
+  return `${r.name} (${r.studentId ?? r.email ?? "-"})`;
+}
+
+/** "Ji-woo Han" / "jiwoo.han" → "jiwoo.han" - Latin slug for usernames. */
+function slugifyUsername(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 30);
+}
+
+const USERNAME_RE = /^[a-z0-9][a-z0-9._]{1,29}$/;
+
 // Unambiguous alphabet kept in src/lib/auth.ts - generateTemporaryPassword().
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -75,32 +93,119 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
           decidedBy: viewer!.displayName,
         },
       });
-      await audit(viewer, "request.reject", { type: "REQUEST", id, label: `${request.name} (${request.studentId})` }, note || null);
+      await audit(viewer, "request.reject", { type: "REQUEST", id, label: requestLabel(request) }, note || null);
       return NextResponse.json({ request: toRequestDTO(updated) });
     }
 
-    // ---------- APPROVE ----------
+    // ---------- APPROVE (professor) ----------
+    // Professors sign in with a username taken from their email's local part;
+    // their teaching section (classID) is optional and set by the admin.
+    if (request.role === "PROFESSOR") {
+      const email = request.email ?? "";
+      let username = slugifyUsername(email.split("@")[0] ?? "");
+      if (!USERNAME_RE.test(username)) username = slugifyUsername(request.name);
+      if (!email || !USERNAME_RE.test(username)) {
+        return NextResponse.json(
+          { error: "Could not derive a username from this request - create the account manually in Members." },
+          { status: 400 }
+        );
+      }
+      const clash = await db.user.findFirst({
+        where: { OR: [{ username }, { email }] },
+        select: { id: true },
+      });
+      if (clash) {
+        return NextResponse.json(
+          { error: `User ID “${username}” or email ${email} is already taken - the professor may already have an account.` },
+          { status: 409 }
+        );
+      }
+
+      const profClassId = classIdOverride?.trim() || null;
+      const temporaryPassword = generateTemporaryPassword();
+      const user = await db.user.create({
+        data: {
+          username,
+          displayName: request.name,
+          email,
+          passwordHash: hashPassword(temporaryPassword),
+          role: "PROFESSOR",
+          classId: profClassId,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+        select: { id: true, username: true, displayName: true, email: true },
+      });
+
+      const updated = await db.accountRequest.update({
+        where: { id },
+        data: {
+          status: "APPROVED",
+          classId: profClassId,
+          decisionNote: note || null,
+          decidedAt: new Date(),
+          decidedBy: viewer!.displayName,
+          createdUserId: user.id,
+        },
+      });
+
+      const mail = await sendCredentialsEmail({
+        to: email,
+        name: user.displayName,
+        username: user.username,
+        password: temporaryPassword,
+        roleLabel: "Professor",
+        classId: profClassId,
+        approved: true,
+      });
+
+      await audit(
+        viewer,
+        "request.approve",
+        { type: "REQUEST", id, label: requestLabel(request) },
+        `Professor account ${user.username}${profClassId ? `, class ${profClassId}` : ""}`
+      );
+
+      return NextResponse.json({
+        request: toRequestDTO(updated),
+        account: {
+          userId: user.username,
+          displayName: user.displayName,
+          email: user.email,
+          classId: profClassId ?? "",
+          temporaryPassword,
+        },
+        emailLogId: mail.logId,
+        emailed: mail.delivered,
+      });
+    }
+
+    // ---------- APPROVE (student) ----------
+    const studentId = request.studentId ?? "";
+    const capstone = request.capstone ?? "I";
+    const year = request.year ?? new Date().getFullYear();
+    const professor = request.professor ?? "";
     // ClassID: explicit override wins; otherwise the student joins the
     // teaching section of the registered professor they picked; only when
     // no professor match exists does the deterministic derivation apply.
     let classId = classIdOverride?.trim() || "";
-    if (!classId && request.professor) {
-      const prof = await resolveProfessorByName(request.professor);
+    if (!classId && professor) {
+      const prof = await resolveProfessorByName(professor);
       if (prof?.classId) classId = prof.classId;
     }
     if (!classId) {
-      classId = deriveClassId(request.capstone, request.year, request.professor);
+      classId = deriveClassId(capstone, year, professor);
     }
-    const email = universityEmail(request.studentId);
+    const email = universityEmail(studentId);
 
     // The student number becomes the login userID - make sure it is free.
     const clash = await db.user.findFirst({
-      where: { OR: [{ username: request.studentId }, { email }, { studentId: request.studentId }] },
+      where: { OR: [{ username: studentId }, { email }, { studentId }] },
       select: { id: true, username: true },
     });
     if (clash) {
       return NextResponse.json(
-        { error: `User ID “${request.studentId}” is already taken - the student may already have an account.` },
+        { error: `User ID “${studentId}” is already taken - the student may already have an account.` },
         { status: 409 }
       );
     }
@@ -109,16 +214,16 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
     const user = await db.user.create({
       data: {
-        username: request.studentId, // userID = student number
+        username: studentId, // userID = student number
         displayName: request.name,
         email,
         passwordHash: hashPassword(temporaryPassword),
         role: "STUDENT",
-        studentId: request.studentId,
+        studentId,
         classId,
-        capstone: request.capstone,
-        cohortYear: request.year,
-        professorName: request.professor,
+        capstone,
+        cohortYear: year,
+        professorName: professor || null,
         isTeamLeader: teamRole === "LEADER",
         emailVerified: true,
         emailVerifiedAt: new Date(),
@@ -145,13 +250,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       username: user.username,
       password: temporaryPassword,
       classId,
-      professor: request.professor,
+      professor,
+      approved: true,
     });
 
     await audit(
       viewer,
       "request.approve",
-      { type: "REQUEST", id, label: `${request.name} (${request.studentId})` },
+      { type: "REQUEST", id, label: requestLabel(request) },
       `Account ${user.username}${classId ? `, class ${classId}` : ""}`
     );
 
@@ -182,7 +288,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     }
     const { id } = await ctx.params;
     const gone = await db.accountRequest.delete({ where: { id } }).catch(() => null);
-    if (gone) await audit(viewer, "request.delete", { type: "REQUEST", id, label: `${gone.name} (${gone.studentId})` });
+    if (gone) await audit(viewer, "request.delete", { type: "REQUEST", id, label: requestLabel(gone) });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/account-requests/[id]", e);

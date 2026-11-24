@@ -675,7 +675,7 @@ function ConsoleSidebar({
         <button
           type="button"
           onClick={() => navigate({ name: "home" })}
-          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[0.875rem] font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeft className="size-4" aria-hidden />
           Back to site
@@ -709,7 +709,7 @@ function ConsoleTopBar({
         <span aria-hidden className="h-8 w-px bg-up-border" />
         <div className="min-w-0 flex-1">
           <p className="text-base font-bold leading-tight tracking-tight text-foreground">Console</p>
-          <p className="truncate text-[11px] text-muted-foreground">Kyungsung University</p>
+          <p className="truncate text-[0.75rem] text-muted-foreground">Kyungsung University</p>
         </div>
         <StaffBadge role={user.role} />
       </div>
@@ -737,7 +737,7 @@ function ConsoleTopBar({
                 {showCount ? (
                   <span
                     className={cn(
-                      "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold",
+                      "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem] font-bold",
                       active ? "bg-card text-danger" : "bg-danger-soft text-danger"
                     )}
                   >
@@ -772,7 +772,7 @@ function ContentHeader({
     <div className={cn("flex flex-wrap items-end justify-between gap-x-4 gap-y-3", className)}>
       <div className="min-w-0">
         <h1 className="text-xl font-bold tracking-tight text-foreground md:text-2xl">{title}</h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
+        <p className="mt-0.5 text-[0.875rem] text-muted-foreground">{description}</p>
       </div>
       <div className="flex items-center gap-3 pb-0.5">
         <span aria-live="polite" className="hidden text-xs text-muted-foreground sm:block">
@@ -964,7 +964,7 @@ function SystemMiniCard({
       </div>
       <p
         className={cn(
-          "mt-1 pl-[18px] text-[11px] leading-relaxed",
+          "mt-1 pl-[18px] text-[0.75rem] leading-relaxed",
           dark ? "text-white/50" : "text-muted-foreground"
         )}
       >
@@ -1015,7 +1015,7 @@ function CoverThumb({
 
 function DeptChip({ code, accent }: { code: string; accent?: string | null }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2.5 py-0.5 text-[0.75rem] font-semibold text-foreground">
       <DeptDot accent={accent ?? "teal"} className="size-1.5" />
       {code}
     </span>
@@ -1025,7 +1025,7 @@ function DeptChip({ code, accent }: { code: string; accent?: string | null }) {
 function RoleChip({ role }: { role: string }) {
   if (role === "STUDENT") {
     return (
-      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
         Student
       </span>
     );
@@ -1105,7 +1105,7 @@ function HeroStatCard({
       {trend ? (
         <p
           className={cn(
-            "mt-1.5 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold",
+            "mt-1.5 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[0.75rem] font-bold",
             trendDown ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
           )}
         >
@@ -1189,7 +1189,7 @@ function AttentionCard({
           {allClear ? <BadgeCheck className="size-4.5" aria-hidden /> : <AlertTriangle className="size-4.5" aria-hidden />}
         </span>
         {allClear ? (
-          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-bold text-success">
+          <span className="rounded-full bg-success-soft px-2.5 py-1 text-[0.75rem] font-bold text-success">
             All clear
           </span>
         ) : null}
@@ -1272,13 +1272,13 @@ function WelcomeBand({
     >
       <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-[0.75rem] font-semibold uppercase tracking-widest text-muted-foreground">
             {today} · {UNIVERSITY.shortName} showcase
           </p>
           <h2 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-2xl">
             {greeting}, {userName.split(" ")[0]}
           </h2>
-          <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-xl text-[0.875rem] leading-relaxed text-muted-foreground">
             {pending > 0
               ? `${pending} ${pending === 1 ? "item needs" : "items need"} your review - the rest of the showcase is healthy and live.`
               : "Everything is reviewed - the showcase is healthy and live."}
@@ -1466,7 +1466,7 @@ function ActivityCard({
       caption="Latest actions across the platform"
       className={className}
       right={
-        <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+        <span className="shrink-0 rounded-full bg-surface-muted px-2.5 py-1 text-[0.75rem] font-semibold text-muted-foreground">
           {items.length}
         </span>
       }
@@ -1522,7 +1522,7 @@ function ActivityRow({
           <span className="block truncate text-xs text-muted-foreground">{item.detail}</span>
         ) : null}
       </span>
-      <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-muted-foreground">
+      <span className="shrink-0 whitespace-nowrap text-[0.75rem] font-medium text-muted-foreground">
         {timeAgo(item.createdAt)}
       </span>
     </>
@@ -1586,7 +1586,7 @@ function GrowthChartCard({
       caption={`New signups per month · ${total} total`}
       className={className}
       right={
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-bold text-primary-700">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-[0.75rem] font-bold text-primary-700">
           <span aria-hidden className="size-2 rounded-full bg-primary-500" />
           Signups
         </span>
@@ -1744,7 +1744,7 @@ function RoleDonutCard({
               <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground">
                 {total.toLocaleString()}
               </p>
-              <p className="text-[11px] font-medium text-muted-foreground">Total members</p>
+              <p className="text-[0.75rem] font-medium text-muted-foreground">Total members</p>
             </div>
           </div>
           <ul className="min-w-0 flex-1 space-y-2.5">
@@ -1798,7 +1798,7 @@ function RecentProjectsCard({
         <div className="scrollbar-none mt-3 overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
-              <tr className="border-y border-up-border bg-surface-muted/50 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <tr className="border-y border-up-border bg-surface-muted/50 text-left text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 <th scope="col" className="px-4 py-2 font-bold md:px-5">
                   Project
                 </th>
@@ -1898,7 +1898,7 @@ function StatusChip({ project }: { project: ProjectListItem }) {
     <span className="inline-flex items-center gap-1.5">
       <span
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+          "inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide",
           project.status === "PUBLISHED"
             ? "bg-success-soft text-success"
             : project.status === "PENDING"
@@ -1912,7 +1912,7 @@ function StatusChip({ project }: { project: ProjectListItem }) {
       </span>
       {project.featured ? (
         <span
-          className="inline-flex items-center rounded-full bg-warning-soft px-1.5 py-0.5 text-[10px] font-bold text-warning"
+          className="inline-flex items-center rounded-full bg-warning-soft px-1.5 py-0.5 text-[0.6875rem] font-bold text-warning"
           title="Featured on campus"
         >
           <Star className="size-3" aria-hidden />
@@ -1949,7 +1949,7 @@ function SectionsCard({ byClass, className }: { byClass: AdminOverviewDTO["byCla
         <div className="scrollbar-none mt-3 overflow-x-auto">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
-              <tr className="border-y border-up-border bg-surface-muted/50 text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <tr className="border-y border-up-border bg-surface-muted/50 text-left text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 <th scope="col" className="px-4 py-2 font-bold md:px-5">
                   ClassID
                 </th>
@@ -1968,7 +1968,7 @@ function SectionsCard({ byClass, className }: { byClass: AdminOverviewDTO["byCla
               {byClass.map((c) => (
                 <tr key={c.classId} className="transition-colors hover:bg-surface-muted/40">
                   <td className="px-4 py-2.5 md:px-5">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[11px] font-semibold text-foreground">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-0.5 text-[0.75rem] font-semibold text-foreground">
                       <Users className="size-3 text-primary-700" aria-hidden />
                       {c.classId}
                     </span>
@@ -2124,7 +2124,7 @@ function QuickActionsCard({
               {action.count ? (
                 <span
                   className={cn(
-                    "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold",
+                    "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[0.6875rem] font-bold",
                     action.danger ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning"
                   )}
                 >
@@ -2388,7 +2388,7 @@ function ProjectsTab({
                   {!row.hasSourceLink ? (
                     <span
                       title="No source link - this project has no demo or repository URL"
-                      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-semibold text-warning"
+                      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[0.6875rem] font-semibold text-warning"
                     >
                       <AlertTriangle className="size-3" aria-hidden />
                       No source link
@@ -2854,12 +2854,12 @@ function UsersTab({
                 <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
                   <span className="truncate">{row.displayName}</span>
                   {row.id === user?.id ? (
-                    <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                    <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[0.6875rem] font-bold text-primary-700">
                       You
                     </span>
                   ) : null}
                   {row.isTeamLeader ? (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-bold text-primary-700">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-1.5 py-0.5 text-[0.6875rem] font-bold text-primary-700">
                       <GraduationCap className="size-3" aria-hidden />
                       Team Leader
                     </span>
@@ -2873,7 +2873,7 @@ function UsersTab({
                 <RoleChip role={row.role} />
                 {row.studentId ? (
                   <span
-                    className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground"
+                    className="rounded-full bg-surface-muted px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-muted-foreground"
                     title="Student ID"
                   >
                     {row.studentId}
@@ -2881,7 +2881,7 @@ function UsersTab({
                 ) : null}
                 {row.classId ? (
                   <span
-                    className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[10px] font-semibold text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[0.6875rem] font-semibold text-foreground"
                     title="Section"
                   >
                     <Users className="size-3 text-primary-700" aria-hidden />
@@ -2893,7 +2893,7 @@ function UsersTab({
                     href={row.universityProfileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[10px] font-semibold text-primary-700 hover:underline"
+                    className="inline-flex items-center gap-1 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[0.6875rem] font-semibold text-primary-700 hover:underline"
                     title={row.universityProfileUrl}
                   >
                     <ExternalLink className="size-3" aria-hidden />
@@ -3406,7 +3406,7 @@ function EditUserDialog({
           </div>
 
           <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
               Identity
             </p>
             <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -3533,7 +3533,7 @@ function EditUserDialog({
 
           {isStudent ? (
             <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 Section
               </p>
               <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -3608,7 +3608,7 @@ function EditUserDialog({
 
           {isProfessor ? (
             <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 Teaching section
               </p>
               <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -3959,7 +3959,7 @@ function UserFormDialog({
           </div>
 
           <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
               Credentials
             </p>
             <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -4100,7 +4100,7 @@ function UserFormDialog({
 
           {isStudent ? (
             <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 Section (requirement 6)
               </p>
             <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -4186,7 +4186,7 @@ function UserFormDialog({
 
           {role === "PROFESSOR" ? (
             <div className="rounded-xl border border-up-border bg-surface-muted/40 p-3.5">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                 Teaching section
               </p>
               <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
@@ -4441,7 +4441,7 @@ function DepartmentsTab({
                 <p className="mt-auto pt-2.5 text-xs font-medium text-muted-foreground">
                   {d.projectCount ?? 0} {(d.projectCount ?? 0) === 1 ? "project" : "projects"}
                   {d.capstoneLabel ? (
-                    <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                    <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[0.6875rem] font-semibold text-muted-foreground">
                       {d.capstoneLabel}
                     </span>
                   ) : null}
@@ -4755,7 +4755,7 @@ function RequestStatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide",
         tone
       )}
     >
@@ -4952,14 +4952,25 @@ function ApprovalsTab({
               ) : null}
               <UserAvatar name={r.name} className="size-9" />
               <div className="min-w-0 flex-1 basis-52">
-                <p className="truncate text-sm font-semibold text-foreground">{r.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  <span className="font-semibold tabular-nums text-foreground">{r.studentId}</span>
-                  {" · "}
-                  Capstone {r.capstone} · {r.year} · {r.professor}
+                <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                  {r.name}
+                  {r.role === "PROFESSOR" ? (
+                    <span className="rounded-full bg-primary-50 px-1.5 py-px text-[0.75rem] font-semibold text-primary-700">
+                      Professor
+                    </span>
+                  ) : null}
                 </p>
+                {r.role === "PROFESSOR" ? (
+                  <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+                ) : (
+                  <p className="truncate text-xs text-muted-foreground">
+                    <span className="font-semibold tabular-nums text-foreground">{r.studentId}</span>
+                    {" · "}
+                    Capstone {r.capstone} · {r.year} · {r.professor}
+                  </p>
+                )}
                 {r.decisionNote ? (
-                  <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground">
+                  <p className="mt-0.5 truncate text-[0.75rem] italic text-muted-foreground">
                     “{r.decisionNote}”
                   </p>
                 ) : null}
@@ -4978,7 +4989,7 @@ function ApprovalsTab({
                 </Button>
               ) : (
                 <>
-                  <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground md:inline">
+                  <span className="hidden whitespace-nowrap text-[0.75rem] text-muted-foreground md:inline">
                     {r.decidedBy ? `by ${r.decidedBy}` : ""}
                     {r.decidedAt ? ` · ${timeAgo(r.decidedAt)}` : ""}
                   </span>
@@ -5074,11 +5085,17 @@ function ReviewRequestDialog({
   // back to the deterministic capstone · year · professor derivation
   useEffect(() => {
     if (!request) return;
-    const key = normalizeProfessorName(request.professor);
-    const prof = professors.find((p) => normalizeProfessorName(p.displayName) === key);
-    setClassId(
-      prof?.classId || deriveClassIdClient(request.capstone, request.year, request.professor)
-    );
+    if (request.role === "PROFESSOR") {
+      setClassId(""); // a professor's teaching section is optional
+    } else {
+      const professor = request.professor ?? "";
+      const key = normalizeProfessorName(professor);
+      const prof = professors.find((p) => normalizeProfessorName(p.displayName) === key);
+      setClassId(
+        prof?.classId ||
+          deriveClassIdClient(request.capstone ?? "I", request.year ?? new Date().getFullYear(), professor)
+      );
+    }
     setTeamRole("MEMBER");
     setNote("");
     setRejectMode(false);
@@ -5145,7 +5162,7 @@ function ReviewRequestDialog({
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-up-border bg-surface-muted/40 px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                       User ID
                     </p>
                     <p className="truncate font-mono text-sm font-semibold text-foreground">
@@ -5165,7 +5182,7 @@ function ReviewRequestDialog({
 
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-up-border bg-surface-muted/40 px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <p className="text-[0.75rem] font-bold uppercase tracking-wider text-muted-foreground">
                       Temporary password
                     </p>
                     <p className="truncate font-mono text-sm font-semibold text-foreground">
@@ -5188,13 +5205,15 @@ function ReviewRequestDialog({
                   Email sent to {result.account.email} - saved in the email outbox.
                 </p>
 
+                {result.account.classId ? (
                 <p className="flex items-center gap-2 text-xs text-muted-foreground">
                   Section
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[11px] font-semibold text-foreground">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-up-border bg-surface-muted/60 px-2 py-0.5 text-[0.75rem] font-semibold text-foreground">
                     <Users className="size-3 text-primary-700" aria-hidden />
                     {result.account.classId}
                   </span>
                 </p>
+                ) : null}
               </div>
 
               <DialogFooter>
@@ -5212,32 +5231,47 @@ function ReviewRequestDialog({
               <DialogHeader>
                 <DialogTitle>Review request</DialogTitle>
                 <DialogDescription>
-                  Approving provisions the student account immediately.
+                  Approving provisions the{" "}
+                  {request.role === "PROFESSOR" ? "professor" : "student"} account immediately.
                 </DialogDescription>
               </DialogHeader>
 
               {/* read-only summary */}
               <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-xl border border-up-border bg-surface-muted/40 p-3.5 text-sm">
-                <dt className="text-xs font-semibold text-muted-foreground">Student ID</dt>
-                <dd className="font-medium tabular-nums text-foreground">{request.studentId}</dd>
+                <dt className="text-xs font-semibold text-muted-foreground">Role</dt>
+                <dd className="font-medium text-foreground">
+                  {request.role === "PROFESSOR" ? "Professor" : "Student"}
+                </dd>
+                {request.role === "PROFESSOR" ? null : (
+                  <>
+                    <dt className="text-xs font-semibold text-muted-foreground">Student ID</dt>
+                    <dd className="font-medium tabular-nums text-foreground">{request.studentId}</dd>
+                  </>
+                )}
                 <dt className="text-xs font-semibold text-muted-foreground">Name</dt>
                 <dd className="font-medium text-foreground">{request.name}</dd>
-                <dt className="text-xs font-semibold text-muted-foreground">Capstone</dt>
-                <dd className="font-medium text-foreground">
-                  Capstone {request.capstone} · {request.year}
-                </dd>
-                <dt className="text-xs font-semibold text-muted-foreground">Professor</dt>
-                <dd className="font-medium text-foreground">{request.professor}</dd>
+                {request.role === "PROFESSOR" ? null : (
+                  <>
+                    <dt className="text-xs font-semibold text-muted-foreground">Capstone</dt>
+                    <dd className="font-medium text-foreground">
+                      Capstone {request.capstone} · {request.year}
+                    </dd>
+                    <dt className="text-xs font-semibold text-muted-foreground">Professor</dt>
+                    <dd className="font-medium text-foreground">{request.professor}</dd>
+                  </>
+                )}
                 <dt className="text-xs font-semibold text-muted-foreground">Email</dt>
                 <dd className="flex items-center gap-1.5 font-medium text-muted-foreground">
                   <Mail className="size-3.5 shrink-0" aria-hidden />
-                  a{request.studentId}@ks.ac.kr
+                  {request.role === "PROFESSOR" ? request.email : `a${request.studentId}@ks.ac.kr`}
                 </dd>
               </dl>
 
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="review-class">ClassID</Label>
+                  <Label htmlFor="review-class">
+                    {request.role === "PROFESSOR" ? "Teaching section ClassID (optional)" : "ClassID"}
+                  </Label>
                   <Input
                     id="review-class"
                     value={classId}
@@ -5247,11 +5281,13 @@ function ReviewRequestDialog({
                     className="uppercase"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Prefilled from the professor's registered class - or capstone · year ·
-                    professor when they have none. Edit if the section differs.
+                    {request.role === "PROFESSOR"
+                      ? "Students who pick this professor join this section. Leave empty to set it later in Members."
+                      : "Prefilled from the professor's registered class - or capstone · year · professor when they have none. Edit if the section differs."}
                   </p>
                 </div>
 
+                {request.role === "PROFESSOR" ? null : (
                 <div className="space-y-1.5">
                   <Label>Team role</Label>
                   <div
@@ -5286,13 +5322,14 @@ function ReviewRequestDialog({
                         >
                           {opt.label}
                         </span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                        <span className="mt-0.5 block text-[0.75rem] leading-snug text-muted-foreground">
                           {opt.hint}
                         </span>
                       </button>
                     ))}
                   </div>
                 </div>
+                )}
 
                 <div className="space-y-1.5">
                   <Label htmlFor="review-note">
@@ -5498,7 +5535,7 @@ function AnnouncementsTab({
                 <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
                   <span className="truncate">{a.title}</span>
                   {a.pinned ? (
-                    <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10px] font-bold text-warning">
+                    <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[0.6875rem] font-bold text-warning">
                       Pinned
                     </span>
                   ) : null}
@@ -5506,7 +5543,7 @@ function AnnouncementsTab({
                 <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
                   {a.body}
                 </p>
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                <p className="mt-1.5 text-[0.75rem] text-muted-foreground">
                   Posted {format(new Date(a.createdAt), "MMM d, yyyy")}
                   {a.updatedAt !== a.createdAt
                     ? ` · edited ${format(new Date(a.updatedAt), "MMM d, yyyy")}`
@@ -5864,7 +5901,7 @@ function EmailsTab({
                 </span>
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    "rounded-full px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide",
                     m.kind === "CREDENTIALS"
                       ? "bg-info-soft text-info"
                       : m.kind === "PASSWORD_RESET"
@@ -5876,7 +5913,7 @@ function EmailsTab({
                 </span>
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    "rounded-full px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide",
                     m.status === "SENT"
                       ? "bg-success-soft text-success"
                       : m.status === "FAILED"
@@ -5913,7 +5950,7 @@ function EmailsTab({
               ) : null}
             </DialogDescription>
           </DialogHeader>
-          <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-up-border bg-surface-muted/40 p-4 font-mono text-[13px] leading-relaxed text-foreground">
+          <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-up-border bg-surface-muted/40 p-4 font-mono text-[0.875rem] leading-relaxed text-foreground">
             {open?.body}
           </pre>
         </DialogContent>
@@ -6160,7 +6197,7 @@ function ResetsTab({
               </span>
               <span
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  "rounded-full px-2 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide",
                   r.status === "PENDING"
                     ? "bg-warning-soft text-warning"
                     : r.status === "SENT"
@@ -6361,7 +6398,7 @@ function SettingsTab({
             </label>
           ))}
         </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 text-[0.75rem] leading-relaxed text-muted-foreground">
           Tip: closing account requests keeps the public page online with a “requests are closed”
           notice instead of the form.
         </p>
@@ -6461,7 +6498,7 @@ function SettingsTab({
               ) : (
                 <span
                   aria-hidden
-                  className="flex h-20 w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-up-border-strong bg-surface-muted/50 text-[10px] font-semibold text-muted-foreground"
+                  className="flex h-20 w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-up-border-strong bg-surface-muted/50 text-[0.6875rem] font-semibold text-muted-foreground"
                 >
                   {form.heroImage ? "broken link" : "no image"}
                 </span>

@@ -190,7 +190,7 @@ export function NotificationsView({ navigate }: { navigate: Navigate }) {
               >
                 {f === "all" ? "All" : "Unread"}
                 {f === "unread" && unread > 0 ? (
-                  <span className="rounded-full bg-primary px-1.5 font-mono text-[11px] leading-[18px] text-primary-foreground">
+                  <span className="rounded-full bg-primary px-1.5 font-mono text-[0.75rem] leading-[1.125rem] text-primary-foreground">
                     {unread}
                   </span>
                 ) : null}
@@ -263,13 +263,13 @@ export function NotificationsView({ navigate }: { navigate: Navigate }) {
                         <span className="min-w-0 flex-1">
                           <span
                             className={cn(
-                              "block text-[15px] leading-relaxed",
+                              "block text-[1rem] leading-relaxed",
                               n.read ? "text-ink-700" : "font-medium text-foreground",
                             )}
                           >
                             {n.body}
                           </span>
-                          <span className="mt-1 block text-[13px] text-ink-500">
+                          <span className="mt-1 block text-[0.875rem] text-ink-500">
                             {t.label} · {timeAgo(n.createdAt)}
                           </span>
                         </span>
@@ -294,7 +294,7 @@ function Frame({ subtitle, children }: { subtitle: string; children: React.React
     <>
       <header className="border-b border-up-border">
         <div className="wrap py-12 md:py-16">
-          <h1 className="text-[34px] leading-[1.08] text-foreground md:text-[48px]">Notifications</h1>
+          <h1 className="text-[2.125rem] leading-[1.08] text-foreground md:text-[3rem]">Notifications</h1>
           <p className="mt-3 text-lg text-ink-700" aria-live="polite">
             {subtitle}
           </p>

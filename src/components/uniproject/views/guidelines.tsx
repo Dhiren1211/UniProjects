@@ -92,7 +92,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
       <header className="border-b border-up-border">
         <div className="wrap py-14 md:py-20">
           <p className="t-label">{UNIVERSITY.name} · Capstone design</p>
-          <h1 className="mt-4 text-[34px] leading-[1.08] text-foreground md:text-[48px]">Guidelines</h1>
+          <h1 className="mt-4 text-[2.125rem] leading-[1.08] text-foreground md:text-[3rem]">Guidelines</h1>
           <p className="mt-4 max-w-[62ch] text-lg leading-8 text-ink-700">
             How the showcase works, from requesting an account to seeing your capstone verified.
             Read it once and you know the whole flow.
@@ -115,13 +115,13 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
                       onClick={() => jump(s.id)}
                       aria-current={on ? "true" : undefined}
                       className={cn(
-                        "flex min-h-[40px] w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 text-left text-[15px] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-ring lg:-ml-px lg:rounded-none lg:border-l-2",
+                        "flex min-h-[40px] w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 text-left text-[1rem] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-ring lg:-ml-px lg:rounded-none lg:border-l-2",
                         on
                           ? "bg-primary-50 font-medium text-foreground lg:border-primary lg:bg-transparent"
                           : "text-ink-700 hover:text-foreground lg:border-transparent",
                       )}
                     >
-                      <span className="font-mono text-[13px] text-ink-500">0{i + 1}</span>
+                      <span className="font-mono text-[0.875rem] text-ink-500">0{i + 1}</span>
                       {s.label}
                     </button>
                   </li>
@@ -151,7 +151,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
                 <>The coordinator reviews and approves the request, usually within a day or two.</>,
                 <>
                   Your sign-in details are emailed to{" "}
-                  <code className="rounded-md bg-surface-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground break-all">
+                  <code className="rounded-md bg-surface-muted px-1.5 py-0.5 font-mono text-[0.875rem] text-foreground break-all">
                     yourStudentNumber@{UNIVERSITY.domain}
                   </code>
                   .
@@ -159,7 +159,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
                 <>Sign in with your student ID, then change the generated password in Account settings.</>,
               ].map((item, i) => (
                 <li key={i} className="flex gap-3">
-                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-up-border-strong font-mono text-[12px] text-foreground">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-up-border-strong font-mono text-[0.75rem] text-foreground">
                     {i + 1}
                   </span>
                   <span className="min-w-0">{item}</span>
@@ -205,9 +205,9 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
             <ol className="grid gap-px overflow-hidden rounded-[16px] border border-up-border bg-up-border sm:grid-cols-2">
               {TIMELINE.map((t) => (
                 <li key={t.title} className="bg-card p-5">
-                  <p className="font-mono text-[13px] text-primary-700">{t.when}</p>
+                  <p className="font-mono text-[0.875rem] text-primary-700">{t.when}</p>
                   <p className="mt-2 font-medium text-foreground">{t.title}</p>
-                  <p className="mt-1 text-[15px] leading-relaxed text-ink-700">{t.body}</p>
+                  <p className="mt-1 text-[1rem] leading-relaxed text-ink-700">{t.body}</p>
                 </li>
               ))}
             </ol>
@@ -224,7 +224,7 @@ export function GuidelinesView({ navigate }: { navigate: Navigate }) {
             </dl>
           </Section>
 
-          <p className="pt-8 text-[15px] text-ink-700">
+          <p className="pt-8 text-[1rem] text-ink-700">
             {user ? (
               <>
                 Check your{" "}
@@ -274,8 +274,8 @@ function Section({
       aria-labelledby={`${id}-h`}
       className="scroll-mt-[104px] border-b border-up-border py-10 first:pt-0 last:border-b-0"
     >
-      <p className="font-mono text-[13px] text-ink-500">0{n}</p>
-      <h2 id={`${id}-h`} className="mt-2 text-[26px] leading-tight text-foreground md:text-[30px]">
+      <p className="font-mono text-[0.875rem] text-ink-500">0{n}</p>
+      <h2 id={`${id}-h`} className="mt-2 text-[1.625rem] leading-tight text-foreground md:text-[1.875rem]">
         {title}
       </h2>
       <div className="mt-5 max-w-[68ch] text-base leading-7 text-ink-700">{children}</div>

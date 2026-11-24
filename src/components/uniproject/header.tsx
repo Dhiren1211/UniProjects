@@ -170,7 +170,7 @@ export function Header({
                   onClick={() => navigate({ name: item.view })}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "relative flex h-11 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[15px] font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-ring",
+                    "relative flex h-11 items-center gap-1 whitespace-nowrap rounded-lg px-3 text-[1rem] font-medium outline-none transition-colors focus-visible:outline-2 focus-visible:outline-ring",
                     isActive ? "text-foreground" : "text-ink-700 hover:text-foreground",
                   )}
                 >
@@ -209,7 +209,7 @@ export function Header({
             <button
               type="button"
               onClick={() => openAuth("login")}
-              className="hidden h-11 items-center rounded-lg px-3 text-[15px] font-medium text-ink-700 outline-none transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:flex"
+              className="hidden h-11 items-center rounded-lg px-3 text-[1rem] font-medium text-ink-700 outline-none transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:flex"
             >
               Sign in
             </button>
@@ -222,7 +222,7 @@ export function Header({
 
           {canSubmit(user) ? (
             <div className="ml-2 hidden lg:block">
-              <Button onClick={onSubmitClick} className="h-10 gap-1.5 px-4 text-[15px]">
+              <Button onClick={onSubmitClick} className="h-10 gap-1.5 px-4 text-[1rem]">
                 <Plus className="size-4" aria-hidden />
                 Submit project
               </Button>
@@ -320,8 +320,8 @@ export function Header({
                                 aria-current={isActive ? "page" : undefined}
                                 className={
                                   isActive
-                                    ? "flex min-h-[44px] w-full items-center gap-3 rounded-xl bg-primary-50 px-3 py-2.5 text-[15px] font-semibold text-primary-700 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    : "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                    ? "flex min-h-[44px] w-full items-center gap-3 rounded-xl bg-primary-50 px-3 py-2.5 text-[1rem] font-semibold text-primary-700 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    : "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[1rem] font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                                 }
                               >
                                 <item.icon
@@ -465,7 +465,7 @@ function NotifBell({ navigate }: { navigate: Navigate }) {
           {unread > 0 ? (
             <span
               aria-hidden
-              className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+              className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[0.6875rem] font-bold text-primary-foreground"
             >
               {unread > 9 ? "9+" : unread}
             </span>

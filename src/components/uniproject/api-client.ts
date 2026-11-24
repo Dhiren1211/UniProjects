@@ -110,13 +110,16 @@ export async function updateSiteSettings(patch: Partial<SiteSettings>): Promise<
 
 // ---------- account requests (public intake → admin approval) ----------
 
-export type AccountRequestInput = {
-  studentId: string;
-  name: string;
-  capstone: "I" | "II" | "III";
-  year: number;
-  professor: string;
-};
+export type AccountRequestInput =
+  | {
+      role: "STUDENT";
+      studentId: string;
+      name: string;
+      capstone: "I" | "II" | "III";
+      year: number;
+      professor: string;
+    }
+  | { role: "PROFESSOR"; email: string; name: string };
 
 export async function submitAccountRequest(
   input: AccountRequestInput

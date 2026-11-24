@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, IdCard, Loader2, Lock, UserCheck } from "lucide-react";
+import { CheckCircle2, GraduationCap, IdCard, Loader2, Lock, Presentation, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,16 +26,27 @@ import {
   type Navigate,
 } from "../api-client";
 import { useAppStore } from "../store";
+import { cn } from "@/lib/utils";
 
 
 const YEARS = [2023, 2024, 2025, 2026];
 
 const STUDENT_ID_RE = /^\d{6,10}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type RequestRole = "STUDENT" | "PROFESSOR";
+
+const ROLE_OPTIONS: { value: RequestRole; label: string; hint: string; icon: typeof GraduationCap }[] = [
+  { value: "STUDENT", label: "Student", hint: "I'm taking a capstone course", icon: GraduationCap },
+  { value: "PROFESSOR", label: "Professor", hint: "I teach or supervise capstone", icon: Presentation },
+];
 
 export function AccountRequestView({ navigate }: { navigate: Navigate }) {
   const settings = useAppStore((s) => s.settings);
   const user = useAppStore((s) => s.user);
+  const [role, setRole] = useState<RequestRole>("STUDENT");
   const [studentId, setStudentId] = useState("");
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [capstone, setCapstone] = useState<"I" | "II" | "III" | "">("");
   const [year, setYear] = useState("");
@@ -46,6 +57,7 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
+    role: RequestRole;
     request: AccountRequestDTO;
     universityEmail: string;
     message: string;
@@ -53,6 +65,8 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
 
   const closed = settings?.accountRequestsOpen === false;
   const idOk = STUDENT_ID_RE.test(studentId.trim());
+  const emailOk = EMAIL_RE.test(email.trim());
+  const isStudent = role === "STUDENT";
 
   // Registered professors feed the picker - students who pick one inherit
   // that professor's class ID.
@@ -80,12 +94,36 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (busy) return;
-    if (!idOk) {
-      setError("Enter your 6–10 digit student number");
-      return;
-    }
     if (name.trim().length < 2) {
       setError("Enter your full name");
+      return;
+    }
+    if (!isStudent) {
+      if (!emailOk) {
+        setError("Enter your university email address");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await submitAccountRequest({
+          role: "PROFESSOR",
+          email: email.trim().toLowerCase(),
+          name: name.trim(),
+        });
+        setSuccess({ ...res, role: "PROFESSOR" });
+        toast.success(res.message || "Request submitted");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not submit the request";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (!idOk) {
+      setError("Enter your 6–10 digit student number");
       return;
     }
     if (!capstone) {
@@ -104,13 +142,14 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
     setError(null);
     try {
       const res = await submitAccountRequest({
+        role: "STUDENT",
         studentId: studentId.trim(),
         name: name.trim(),
         capstone: capstone as "I" | "II" | "III",
         year: Number(year),
         professor: professor.trim(),
       });
-      setSuccess(res);
+      setSuccess({ ...res, role: "STUDENT" });
       toast.success(res.message || "Request submitted");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not submit the request";
@@ -134,6 +173,7 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
         <ClosedNotice />
       ) : success ? (
         <SuccessCard
+          role={success.role}
           message={success.message}
           universityEmail={success.universityEmail}
           name={success.request.name}
@@ -146,11 +186,12 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
               <IdCard className="size-5" aria-hidden />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-              Request a student account
+              Request an account
             </h1>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Accounts are provisioned by the capstone coordinator - there is no public signup.
+            Tell us whether you&apos;re a student or a professor.
           </p>
 
           {/* form */}
@@ -160,6 +201,60 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
             noValidate
           >
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label id="ar-role-label">I am a</Label>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="ar-role-label"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  {ROLE_OPTIONS.map((opt) => {
+                    const active = role === opt.value;
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => {
+                          setRole(opt.value);
+                          setError(null);
+                        }}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-2.5 rounded-xl border p-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                          active
+                            ? "border-primary-500 bg-primary-50"
+                            : "border-up-border bg-card hover:border-up-border-strong"
+                        )}
+                      >
+                        <Icon
+                          className={cn(
+                            "mt-0.5 size-4 shrink-0",
+                            active ? "text-primary-700" : "text-muted-foreground"
+                          )}
+                          aria-hidden
+                        />
+                        <span>
+                          <span
+                            className={cn(
+                              "block text-sm font-semibold",
+                              active ? "text-primary-700" : "text-foreground"
+                            )}
+                          >
+                            {opt.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                            {opt.hint}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {isStudent ? (
               <div className="space-y-1.5">
                 <Label htmlFor="ar-student-id">Student ID</Label>
                 <Input
@@ -180,6 +275,7 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
                   <span className="font-mono font-medium text-foreground">{emailHint}</span>
                 </p>
               </div>
+              ) : null}
 
               <div className="space-y-1.5">
                 <Label htmlFor="ar-name">Full name</Label>
@@ -196,6 +292,31 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
                 />
               </div>
 
+              {!isStudent ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ar-email">University email</Label>
+                  <Input
+                    id="ar-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="name@ks.ac.kr"
+                    autoComplete="email"
+                    maxLength={200}
+                    aria-invalid={email.length > 0 && !emailOk}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    No student ID needed. Your credentials will be emailed here, and your
+                    username will be the part before the @.
+                  </p>
+                </div>
+              ) : null}
+
+              {isStudent ? (
+              <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="ar-capstone">Capstone Design</Label>
@@ -263,6 +384,8 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
                   name.
                 </p>
               </div>
+              </>
+              ) : null}
 
               {error ? (
                 <p className="text-xs font-medium text-danger" role="alert">
@@ -279,7 +402,8 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
               </Button>
 
               <p className="text-center text-xs leading-relaxed text-muted-foreground">
-                Already approved? Sign in with your student ID and the password emailed to you.
+                Already approved? Sign in with your{" "}
+                {isStudent ? "student ID" : "username"} and the password emailed to you.
               </p>
             </div>
           </form>
@@ -291,10 +415,12 @@ export function AccountRequestView({ navigate }: { navigate: Navigate }) {
 
 /** Success state - the coordinator now takes over. */
 function SuccessCard({
+  role,
   message,
   universityEmail,
   name,
 }: {
+  role: RequestRole;
   message: string;
   universityEmail: string;
   name: string;
@@ -309,12 +435,15 @@ function SuccessCard({
       </h1>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{message}</p>
       <p className="mx-auto mt-4 w-fit rounded-xl bg-surface-muted px-4 py-2.5 text-sm">
-        <span className="text-muted-foreground">University email: </span>
+        <span className="text-muted-foreground">
+          {role === "PROFESSOR" ? "Email: " : "University email: "}
+        </span>
         <span className="font-mono font-semibold text-foreground">{universityEmail}</span>
       </p>
       <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
         Please wait for the coordinator to approve your request - your password will arrive at
-        that address. Sign in with your student ID once it does.
+        that address. Sign in with your {role === "PROFESSOR" ? "username" : "student ID"} once it
+        does.
       </p>
     </div>
   );

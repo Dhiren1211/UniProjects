@@ -134,7 +134,7 @@ export function ProjectsView({
   return (
     <>
       <div className="wrap py-8 md:py-10">
-        <h1 className="mb-6 text-[30px] leading-tight text-foreground md:text-[36px]">Projects</h1>
+        <h1 className="mb-6 text-[1.875rem] leading-tight text-foreground md:text-[2.25rem]">Projects</h1>
 
         {/* ---------- toolbar ---------- */}
         <div className="rounded-[16px] border border-up-border bg-card p-3 md:p-4">
@@ -150,7 +150,7 @@ export function ProjectsView({
                   placeholder="Search by title, team, supervisor or tag"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  className="h-11 rounded-[10px] bg-background pl-10 text-[15px]"
+                  className="h-11 rounded-[10px] bg-background pl-10 text-[1rem]"
                 />
                 {q ? (
                   <button
@@ -234,7 +234,7 @@ export function ProjectsView({
         {/* ---------- results bar ---------- */}
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2" aria-live="polite">
-            <p className="text-[15px] text-foreground">
+            <p className="text-[1rem] text-foreground">
               {loading ? (
                 "Loading projects…"
               ) : error ? (
@@ -252,7 +252,7 @@ export function ProjectsView({
                 key={f.label}
                 type="button"
                 onClick={f.clear}
-                className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-[13px] font-medium text-primary-700 outline-none transition-colors hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-ring"
+                className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-[0.875rem] font-medium text-primary-700 outline-none transition-colors hover:bg-primary-100 focus-visible:outline-2 focus-visible:outline-ring"
               >
                 {f.label}
                 <X className="size-3.5" aria-hidden />
@@ -263,7 +263,7 @@ export function ProjectsView({
               <button
                 type="button"
                 onClick={clearAll}
-                className="link text-[13px] font-medium text-ink-700 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                className="link text-[0.875rem] font-medium text-ink-700 outline-none hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
               >
                 Clear all
               </button>

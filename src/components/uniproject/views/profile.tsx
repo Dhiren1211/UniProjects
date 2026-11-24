@@ -191,7 +191,7 @@ export function ProfileView({ username, navigate }: { username: string; navigate
               <p className="mt-1 text-sm text-muted-foreground">@{user.username}</p>
 
               {user.bio ? (
-                <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-foreground/90">
+                <p className="mt-3 whitespace-pre-line text-[1rem] leading-relaxed text-foreground/90">
                   {user.bio}
                 </p>
               ) : null}
@@ -301,7 +301,7 @@ export function ProfileView({ username, navigate }: { username: string; navigate
               <s.icon className="size-4" aria-hidden />
             </span>
             <p className="mt-3 text-2xl font-bold tabular-nums tracking-tight text-foreground">{s.value}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mt-1 text-[0.75rem] font-semibold uppercase tracking-wide text-muted-foreground">
               {s.label}
             </p>
           </div>

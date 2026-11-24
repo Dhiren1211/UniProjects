@@ -190,9 +190,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Responsive type scale: every rem-based size (text, spacing, widths) grows
+     with the screen, so large monitors don't show a tiny page.
+     Percentages keep the visitor's own browser font setting in charge. */
   html {
     scroll-behavior: auto;
+    font-size: 100%; /* 16px */
   }
+  @media (min-width: 1280px) { html { font-size: 106.25%; } } /* 17px */
+  @media (min-width: 1536px) { html { font-size: 112.5%; } }  /* 18px */
+  @media (min-width: 1920px) { html { font-size: 125%; } }    /* 20px */
+  @media (min-width: 2560px) { html { font-size: 150%; } }    /* 24px */
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-text);
@@ -217,19 +225,20 @@
 }
 
 @layer components {
-  /* One .wrap for header, sections and footer: 1280 wide, gutters 80 / 48 / 24 */
+  /* One .wrap for header, sections and footer: 80rem wide (scales with the
+     root size on big screens), gutters 80 / 48 / 24 */
   .wrap {
-    width: min(100% - 48px, 1280px);
+    width: min(100% - 48px, 80rem);
     margin-inline: auto;
   }
-  @media (min-width: 640px) { .wrap { width: min(100% - 96px, 1280px); } }
-  @media (min-width: 1024px) { .wrap { width: min(100% - 160px, 1280px); } }
+  @media (min-width: 640px) { .wrap { width: min(100% - 96px, 80rem); } }
+  @media (min-width: 1024px) { .wrap { width: min(100% - 160px, 80rem); } }
 
-  /* Labels: 13px / 500, sentence case, never tracked capitals */
-  .t-label { font-size: 13px; font-weight: 500; line-height: 16px; color: var(--up-ink-500); }
+  /* Labels: 14px / 500, sentence case, never tracked capitals */
+  .t-label { font-size: 0.875rem; font-weight: 500; line-height: 1.25rem; color: var(--up-ink-500); }
 
   /* The drawn arrow carried by every primary (data-buttons="arrow") */
-  .m-arrow { width: 16px; height: 16px; transition: transform 160ms ease-out; }
+  .m-arrow { width: 1rem; height: 1rem; transition: transform 160ms ease-out; }
   :where(button, a):hover > .m-arrow { transform: translateX(3px); }
 
   /* Drawn link underline */

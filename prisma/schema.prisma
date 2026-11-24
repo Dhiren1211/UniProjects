@@ -71,11 +71,13 @@ model Session {
 // derived university address (<studentId>@ks.ac.kr).
 model AccountRequest {
   id            String    @id @default(cuid())
-  studentId     String    @unique
+  role          String    @default("STUDENT") // STUDENT | PROFESSOR
+  studentId     String?   @unique // students only
+  email         String?   @unique // professors only - students use a<studentId>@ks.ac.kr
   name          String
-  capstone      String // "I" | "II" | "III"
-  year          Int // capstone course year
-  professor     String
+  capstone      String? // "I" | "II" | "III" - students only
+  year          Int? // capstone course year - students only
+  professor     String? // students only
   status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
   decisionNote  String?
   classId       String? // finalized at approval time

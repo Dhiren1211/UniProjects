@@ -45,7 +45,7 @@ export function AnnouncementsView() {
       <header className="border-b border-up-border">
         <div className="wrap py-14 md:py-20">
           <p className="t-label">{UNIVERSITY.name} · Capstone office</p>
-          <h1 className="mt-4 text-[34px] leading-[1.08] text-foreground md:text-[48px]">Announcements</h1>
+          <h1 className="mt-4 text-[2.125rem] leading-[1.08] text-foreground md:text-[3rem]">Announcements</h1>
           <p className="mt-4 max-w-[62ch] text-lg leading-8 text-ink-700">
             Updates from the capstone office: deadlines, review windows and showcase news.
             {rows && rows.length > 0
@@ -104,11 +104,11 @@ export function AnnouncementsView() {
                 >
                   {/* meta column */}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 lg:col-span-3 lg:flex-col lg:items-start">
-                    <time dateTime={a.createdAt} className="font-mono text-[13px] text-ink-500">
+                    <time dateTime={a.createdAt} className="font-mono text-[0.875rem] text-ink-500">
                       {formatDate(a.createdAt)}
                     </time>
                     {a.pinned ? (
-                      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-primary-700">
+                      <span className="inline-flex items-center gap-1 text-[0.875rem] font-medium text-primary-700">
                         <Pin className="size-3.5" aria-hidden />
                         Pinned
                       </span>
@@ -117,12 +117,12 @@ export function AnnouncementsView() {
 
                   {/* notice */}
                   <article className="min-w-0 lg:col-span-8 lg:col-start-5">
-                    <h2 className="text-xl leading-snug text-foreground md:text-[22px]">{a.title}</h2>
+                    <h2 className="text-xl leading-snug text-foreground md:text-[1.375rem]">{a.title}</h2>
                     <p className="mt-3 max-w-[68ch] whitespace-pre-line text-base leading-7 text-ink-700">
                       {a.body}
                     </p>
                     {edited ? (
-                      <p className="mt-3 text-[13px] text-ink-500">Edited {formatDate(a.updatedAt)}</p>
+                      <p className="mt-3 text-[0.875rem] text-ink-500">Edited {formatDate(a.updatedAt)}</p>
                     ) : null}
                   </article>
                 </li>

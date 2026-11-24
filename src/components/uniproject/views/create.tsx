@@ -1679,7 +1679,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                         {coverDrag ? "Drop to upload" : "Click to upload or drag & drop"}
                       </p>
                       <p className="text-xs">JPG, PNG, WebP or GIF - up to 6 MB</p>
-                      <p className="text-[11px] text-muted-foreground/80">
+                      <p className="text-[0.75rem] text-muted-foreground/80">
                         You'll crop it to fit before it uploads
                       </p>
                     </>
@@ -1820,7 +1820,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                     className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-up-border-strong bg-card text-muted-foreground transition-colors duration-200 hover:border-primary-400 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Plus className="size-5" aria-hidden />
-                    <span className="text-[11px] font-semibold">Add photo</span>
+                    <span className="text-[0.75rem] font-semibold">Add photo</span>
                   </button>
                 ) : null}
               </div>
@@ -2043,7 +2043,7 @@ export function CreateProjectView({ editSlug, navigate }: { editSlug?: string; n
                           <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
                         </div>
                         {m.role === "OWNER" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[11px] font-semibold text-warning">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2.5 py-1 text-[0.75rem] font-semibold text-warning">
                             <Crown className="size-3" aria-hidden />
                             Owner
                           </span>

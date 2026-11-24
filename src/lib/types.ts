@@ -220,11 +220,13 @@ export type SiteSettings = {
 
 export type AccountRequestDTO = {
   id: string;
-  studentId: string;
+  role: "STUDENT" | "PROFESSOR";
+  studentId: string | null; // students only
+  email: string | null; // professors only
   name: string;
-  capstone: string; // I | II | III
-  year: number;
-  professor: string;
+  capstone: string | null; // I | II | III - students only
+  year: number | null; // students only
+  professor: string | null; // students only
   status: "PENDING" | "APPROVED" | "REJECTED";
   decisionNote: string | null;
   classId: string | null;

@@ -143,7 +143,7 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
 
               <div className="flex items-center gap-3" aria-hidden>
                 <span className="h-px flex-1 bg-up-border" />
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <span className="text-[0.75rem] font-medium uppercase tracking-wider text-muted-foreground">
                   No account?
                 </span>
                 <span className="h-px flex-1 bg-up-border" />
