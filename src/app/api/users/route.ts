@@ -12,6 +12,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import type { UserDirectoryEntry } from "@/lib/types";
+import { isFromOurPages } from "@/lib/same-site";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,14 @@ const deptSelect = {
   capstoneLabel: true,
 } as const;
 
-// ---------- GET - student / member directory ----------
+// ---------- GET - member directory ----------
+//
+// Who gets what:
+//   staff               full directory (emails included)
+//   signed-in members   search only (2+ characters, 10 results) - the teammate pickers
+//   ?role=PROFESSOR     professor names only, for the public request form's picker,
+//                       and only when asked by our own pages
+//   anyone else         401
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,7 +41,29 @@ export async function GET(req: NextRequest) {
     const teammates = sp.get("teammates");
     const sort = sp.get("sort")?.trim();
     const role = sp.get("role")?.trim();
-    const take = Math.min(Number(sp.get("pageSize")) || 60, 100);
+
+    const viewer = await getSessionUser(req);
+    const staffViewer = isStaff(viewer?.role);
+
+    if (!staffViewer && role === "PROFESSOR") {
+      if (!isFromOurPages(req)) {
+        return NextResponse.json({ error: "Not available" }, { status: 403 });
+      }
+      const profs = await db.user.findMany({
+        where: { role: "PROFESSOR" },
+        orderBy: { displayName: "asc" },
+        take: 200,
+        select: { id: true, displayName: true },
+      });
+      return NextResponse.json({ users: profs });
+    }
+    if (!viewer) {
+      return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
+    }
+    if (!staffViewer && query.length < 2) {
+      return NextResponse.json({ users: [] });
+    }
+    const take = staffViewer ? Math.min(Number(sp.get("pageSize")) || 60, 100) : 10;
 
     const where: Record<string, unknown> = {};
     if (query) {
@@ -46,14 +76,10 @@ export async function GET(req: NextRequest) {
     }
     if (dept) where.department = { code: dept };
     if (teammates === "1") where.lookingForTeammates = true;
-    // Public role filter - the account-request form uses ?role=PROFESSOR to
-    // list every registered professor in its "Professor" picker.
     if (role && ["STUDENT", "PROFESSOR", "MODERATOR", "ADMIN"].includes(role)) {
       where.role = role;
     }
-    // Administrator accounts are not listed for the public (their usernames are sign-in names).
-    const viewer = await getSessionUser(req);
-    const staffViewer = isStaff(viewer?.role);
+    // Administrator accounts are never listed for members (their usernames are sign-in names).
     if (!staffViewer) where.AND = [{ role: { not: "ADMIN" } }];
 
     const rows = await db.user.findMany({
@@ -72,7 +98,7 @@ export async function GET(req: NextRequest) {
       : [];
     const countMap = new Map(counts.map((c) => [c.userId, c._count._all]));
 
-    // Emails are only visible to staff - the directory is public.
+    // Emails and student numbers are only visible to staff.
     const serialize = staffViewer ? toSafeUser : toPublicUser;
     const users: UserDirectoryEntry[] = rows.map((u) => ({
       ...serialize(u),

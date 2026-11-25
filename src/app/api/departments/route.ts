@@ -1,10 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
+import { isFromOurPages } from "@/lib/same-site";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+// Department list for the site's own pages (project filters, forms).
+// Not served to direct visits or other websites.
+export async function GET(req: NextRequest) {
   try {
+    if (!isFromOurPages(req) && !(await getSessionUser(req))) {
+      return NextResponse.json({ error: "Not available" }, { status: 403 });
+    }
     const departments = await db.department.findMany({
       orderBy: { sortOrder: "asc" },
       include: {

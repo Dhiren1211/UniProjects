@@ -16,6 +16,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ projects: [], users: [] });
     }
 
+    // People results are for signed-in members only; visitors search projects.
+    const viewer = await getSessionUser(req);
+    const staffViewer = isStaff(viewer?.role);
+
     const [projectRows, userRows] = await Promise.all([
       db.project.findMany({
         where: {
@@ -30,35 +34,45 @@ export async function GET(req: NextRequest) {
         take: 6,
         include: projectInclude,
       }),
-      db.user.findMany({
-        where: {
-          OR: [
-            { username: { contains: q } },
-            { displayName: { contains: q } },
-            { program: { contains: q } },
-            { skills: { contains: q } },
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 6,
-        include: {
-          department: {
-            select: { id: true, name: true, code: true, tagline: true, website: true, capstoneLabel: true, accent: true },
-          },
-        },
-      }),
+      !viewer
+        ? Promise.resolve([])
+        : db.user.findMany({
+            where: {
+              ...(staffViewer ? {} : { role: { not: "ADMIN" } }),
+              OR: [
+                { username: { contains: q } },
+                { displayName: { contains: q } },
+                { program: { contains: q } },
+                { skills: { contains: q } },
+              ],
+            },
+            orderBy: { createdAt: "desc" },
+            take: 6,
+            include: {
+              department: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  tagline: true,
+                  website: true,
+                  capstoneLabel: true,
+                  accent: true,
+                },
+              },
+            },
+          }),
     ]);
 
-    const likes = await likeCountMap("PROJECT", projectRows.map((p) => p.id));
-    const projects: ProjectListItem[] = projectRows.map((p) =>
-      toListItem(p, likes.get(p.id) ?? 0)
+    const likes = await likeCountMap(
+      "PROJECT",
+      projectRows.map((p) => p.id),
     );
-    const viewer = await getSessionUser(req);
-    const serialize = isStaff(viewer?.role) ? toSafeUser : toPublicUser;
-    // Administrator accounts are not listed for the public (their usernames are sign-in names).
-    const users: SafeUserDTO[] = userRows
-      .filter((u) => isStaff(viewer?.role) || u.role !== "ADMIN")
-      .map((u) => serialize(u));
+    const projects: ProjectListItem[] = projectRows.map((p) =>
+      toListItem(p, likes.get(p.id) ?? 0),
+    );
+    const serialize = staffViewer ? toSafeUser : toPublicUser;
+    const users: SafeUserDTO[] = userRows.map((u) => serialize(u));
 
     return NextResponse.json({ projects, users });
   } catch (e) {
