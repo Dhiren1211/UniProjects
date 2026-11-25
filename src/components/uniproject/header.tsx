@@ -152,7 +152,7 @@ export function Header({
         <button
           type="button"
           onClick={() => navigate({ name: "home" })}
-          aria-label="UniProjects, Kyungsung University: home"
+          aria-label="Capstone Contest, Kyungsung University: home"
           className="flex shrink-0 items-center rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <img src={UNIVERSITY.logo} alt="" className="h-8 w-auto md:h-9 dark:hidden" />

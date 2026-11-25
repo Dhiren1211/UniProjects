@@ -99,7 +99,7 @@ export function AuthModal({ navigate }: { navigate: Navigate }) {
                 <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <GraduationCap className="size-4" aria-hidden />
                 </span>
-                Sign in to UniProjects
+                Sign in to Capstone Contest
               </DialogTitle>
               <DialogDescription>
                 Sign in to follow projects, join teams, and submit your capstone.

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site-url";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -28,14 +29,15 @@ const dmMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "UniProjects: capstone projects from Kyungsung University students",
+  metadataBase: new URL(SITE_URL),
+  title: "Capstone Contest: capstone projects from Kyungsung University students",
   description:
     "Browse verified capstone design projects built by student teams across every Kyungsung University department, each reviewed by a supervising professor.",
-  keywords: ["university projects", "student showcase", "capstone", "Kyungsung University", "UniProjects"],
+  keywords: ["university projects", "student showcase", "capstone", "Kyungsung University", "Capstone Contest"],
   icons: { icon: "/ks-logo.svg" },
   openGraph: {
     type: "website",
-    title: "UniProjects: capstone projects from Kyungsung University students",
+    title: "Capstone Contest: capstone projects from Kyungsung University students",
     description: "Verified capstone design projects from every Kyungsung University department.",
     images: ["/hero/campus.jpg"],
   },

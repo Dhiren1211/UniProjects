@@ -51,6 +51,10 @@ export async function GET(req: NextRequest) {
     if (role && ["STUDENT", "PROFESSOR", "MODERATOR", "ADMIN"].includes(role)) {
       where.role = role;
     }
+    // Administrator accounts are not listed for the public (their usernames are sign-in names).
+    const viewer = await getSessionUser(req);
+    const staffViewer = isStaff(viewer?.role);
+    if (!staffViewer) where.AND = [{ role: { not: "ADMIN" } }];
 
     const rows = await db.user.findMany({
       where,
@@ -69,8 +73,7 @@ export async function GET(req: NextRequest) {
     const countMap = new Map(counts.map((c) => [c.userId, c._count._all]));
 
     // Emails are only visible to staff - the directory is public.
-    const viewer = await getSessionUser(req);
-    const serialize = isStaff(viewer?.role) ? toSafeUser : toPublicUser;
+    const serialize = staffViewer ? toSafeUser : toPublicUser;
     const users: UserDirectoryEntry[] = rows.map((u) => ({
       ...serialize(u),
       projectCount: countMap.get(u.id) ?? 0,

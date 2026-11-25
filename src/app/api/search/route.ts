@@ -55,7 +55,10 @@ export async function GET(req: NextRequest) {
     );
     const viewer = await getSessionUser(req);
     const serialize = isStaff(viewer?.role) ? toSafeUser : toPublicUser;
-    const users: SafeUserDTO[] = userRows.map((u) => serialize(u));
+    // Administrator accounts are not listed for the public (their usernames are sign-in names).
+    const users: SafeUserDTO[] = userRows
+      .filter((u) => isStaff(viewer?.role) || u.role !== "ADMIN")
+      .map((u) => serialize(u));
 
     return NextResponse.json({ projects, users });
   } catch (e) {

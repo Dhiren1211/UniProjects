@@ -490,7 +490,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
         navigate={navigate}
       />
 
-      <main className="min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6">
+      <div className="min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6">
           {/* < lg: brand + scrollable pills replace the sidebar */}
           <ConsoleTopBar
             tab={tab}
@@ -591,7 +591,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
               </motion.div>
             </AnimatePresence>
           </div>
-      </main>
+      </div>
     </div>
   );
 }

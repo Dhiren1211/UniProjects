@@ -16,8 +16,8 @@ export async function POST(req: NextRequest) {
 
     const result = await sendSystemEmail(
       me.email,
-      "UniProjects test email",
-      `Hello ${me.displayName},\n\nThis is a test message from Admin → Settings → Email delivery.\nIf you can read this, outgoing email works.\n\n- UniProjects`
+      "Capstone Contest test email",
+      `Hello ${me.displayName},\n\nThis is a test message from Admin → Settings → Email delivery.\nIf you can read this, outgoing email works.\n\n- Capstone Contest`
     );
     await audit(gate.viewer, "settings.mailtest", { type: "SETTINGS", label: "email delivery" }, result.delivered ? `sent to ${me.email}` : "not delivered");
     return NextResponse.json({ delivered: result.delivered, to: me.email });

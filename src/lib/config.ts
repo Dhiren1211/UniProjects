@@ -1,5 +1,5 @@
 // ============================================================
-// UniProjects - app-level config for a SINGLE university.
+// Capstone Contest - app-level config for a SINGLE university.
 // Change this file to rebrand the whole system.
 //
 // Brand: Kyungsung University (경성대학교), Busan - est. 1955.

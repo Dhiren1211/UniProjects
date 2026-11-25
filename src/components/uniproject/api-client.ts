@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// UniProjects - typed fetch client. THE contract used by all
+// Capstone Contest - typed fetch client. THE contract used by all
 // views. Backend routes must match these paths + payloads.
 // ============================================================
 

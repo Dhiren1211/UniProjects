@@ -129,6 +129,11 @@ function decryptSecret(stored: string): string | null {
   }
 }
 
+/** Sender name; the old "UniProjects" default becomes the new site name. */
+function legacyName(v: string | undefined): string {
+  return !v || v === "UniProjects" ? "Capstone Contest" : v;
+}
+
 function envMail(): MailConfig | null {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.replace(/\s+/g, "");
@@ -138,7 +143,7 @@ function envMail(): MailConfig | null {
     port: Number(process.env.SMTP_PORT) || 465,
     user,
     pass,
-    fromName: process.env.MAIL_FROM_NAME?.trim() || "UniProjects",
+    fromName: legacyName(process.env.MAIL_FROM_NAME?.trim()),
   };
 }
 
@@ -152,7 +157,7 @@ async function panelMail() {
     user: m.get("mail.user") || "",
     pass,
     hasStoredPass: Boolean(stored),
-    fromName: m.get("mail.fromName") || "UniProjects",
+    fromName: legacyName(m.get("mail.fromName")),
   };
 }
 
@@ -183,7 +188,7 @@ export async function getMailSettingsView(): Promise<MailSettingsView> {
     host: shown?.host ?? "smtp.gmail.com",
     port: shown?.port ?? 465,
     user: shown?.user ?? "",
-    fromName: shown?.fromName ?? "UniProjects",
+    fromName: shown?.fromName ?? "Capstone Contest",
     hasPassword: Boolean(active),
     source,
     passwordUnreadable: p.hasStoredPass && !p.pass,

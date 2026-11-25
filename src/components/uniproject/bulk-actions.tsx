@@ -148,7 +148,7 @@ export function CredentialsDialog({ rows, onClose }: { rows: Credential[] | null
             className="gap-1.5"
             onClick={() =>
               downloadCsv(
-                "uniprojects-credentials.csv",
+                "capstone-contest-credentials.csv",
                 ["userId", "name", "password"],
                 (rows ?? []).map((r) => [r.userId, r.name, r.password])
               )

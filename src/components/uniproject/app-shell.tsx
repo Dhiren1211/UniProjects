@@ -13,6 +13,7 @@ import { Footer } from "./footer";
 import { Header } from "./header";
 import { SearchDialog } from "./search-dialog";
 import { useAppStore } from "./store";
+import { locationToView, viewTitle, viewToPath } from "./routes";
 import { CreateProjectView } from "./views/create";
 import { DetailView } from "./views/detail";
 import { HomeView } from "./views/home";
@@ -26,7 +27,7 @@ import { ProfileView } from "./views/profile";
 import { ProjectsView } from "./views/projects";
 import { SettingsView } from "./views/settings";
 
-export function UniProjectApp() {
+export function UniProjectApp({ initial }: { initial?: View }) {
   const { setUser, setAuthLoaded, setSettings } = useAppStore();
 
   // hydrate the session + public site settings once on mount
@@ -44,17 +45,33 @@ export function UniProjectApp() {
     return () => ac.abort();
   }, []);
 
-  return <AppBody />;
+  return <AppBody initial={initial ?? { name: "home" }} />;
 }
 
-function AppBody() {
-  const [view, setView] = useState<View>({ name: "home" });
+function AppBody({ initial }: { initial: View }) {
+  const [view, setView] = useState<View>(initial);
   const reduceMotion = useReducedMotion();
+  const siteName = useAppStore((s) => s.settings?.siteName) || "Capstone Contest";
 
+  // Every view has a real URL: push it on navigation, follow Back / Forward.
   const navigate: Navigate = (v) => {
+    const url = viewToPath(v);
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.pushState(null, "", url);
+    }
     setView(v);
     window.scrollTo({ top: 0 });
   };
+
+  useEffect(() => {
+    const onPop = () => setView(locationToView());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    document.title = viewTitle(view, siteName);
+  }, [view, siteName]);
 
   const active =
     view.name === "project"

@@ -145,7 +145,7 @@ export function MailSettingsCard() {
         </p>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
         <div className="space-y-1.5">
           <Label htmlFor="mail-host">SMTP host</Label>
           <Input
@@ -172,7 +172,7 @@ export function MailSettingsCard() {
             id="mail-user"
             value={form.user}
             onChange={(e) => setForm({ ...form, user: e.target.value })}
-            placeholder="uniprojects.ks@gmail.com"
+            placeholder="name@gmail.com"
             autoComplete="off"
           />
         </div>
@@ -182,7 +182,7 @@ export function MailSettingsCard() {
             id="mail-from"
             value={form.fromName}
             onChange={(e) => setForm({ ...form, fromName: e.target.value })}
-            placeholder="UniProjects"
+            placeholder="Capstone Contest"
             maxLength={80}
           />
         </div>

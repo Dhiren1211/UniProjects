@@ -245,7 +245,7 @@ const STEPS = [
 ];
 
 const SIGNED_IN_FIRST = {
-  title: "Your account is active",
+  title: "Your account is active", 
   body: "You're signed in. Your dashboard shows deadlines, your section and your team.",
 };
 

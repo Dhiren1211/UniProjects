@@ -1,4 +1,4 @@
-# UniProjects - Kyungsung University Capstone Showcase
+# Capstone Contest - Kyungsung University capstone projects
 
 A minimal, role-based capstone project showcase for a single university. Students are
 provisioned by the capstone coordinator (no public signup), team leaders submit projects,

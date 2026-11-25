@@ -7,7 +7,7 @@
 //   SMTP_PASS   - its password (for Gmail: a 16-character App Password)
 //   SMTP_HOST   - default smtp.gmail.com
 //   SMTP_PORT   - default 465 (SSL)
-//   MAIL_FROM_NAME - display name recipients see, default "UniProjects"
+//   MAIL_FROM_NAME - display name recipients see, default "Capstone Contest"
 // Without SMTP_USER/SMTP_PASS mail is only stored in the EmailLog outbox
 // (Admin → Emails), exactly as before. Every message is stored there either way.
 // ============================================================
@@ -126,7 +126,7 @@ export async function sendCredentialsEmail(opts: {
   /** True when the account came from an approved account request. */
   approved?: boolean;
 }): Promise<MailResult> {
-  const subject = "Your UniProjects account is ready";
+  const subject = "Your Capstone Contest account is ready";
   const section =
     opts.classId && opts.professor
       ? [`You have been placed in class ${opts.classId} under Professor ${opts.professor}.`]
@@ -150,7 +150,7 @@ export async function sendCredentialsEmail(opts: {
     ...section,
     "Please sign in and change your password from your profile settings.",
     "",
-    "- UniProjects, Kyungsung University",
+    "- Capstone Contest, Kyungsung University",
   ].join("\n");
   return deliverAndLog(opts.to, subject, body, "CREDENTIALS");
 }
@@ -166,11 +166,11 @@ export async function sendPasswordResetEmail(opts: {
   loginId: string;
   tempPassword: string;
 }): Promise<MailResult> {
-  const subject = "Your UniProjects password was reset";
+  const subject = "Your Capstone Contest password was reset";
   const body = [
     `Hello ${opts.name},`,
     "",
-    "An administrator has set a new password for your UniProjects account:",
+    "An administrator has set a new password for your Capstone Contest account:",
     "",
     `  User ID:  ${opts.loginId}`,
     `  Password: ${opts.tempPassword}`,
@@ -178,7 +178,7 @@ export async function sendPasswordResetEmail(opts: {
     "Sign in and change it right away from Account settings.",
     "If you did not ask for this, contact the capstone office.",
     "",
-    "- UniProjects, Kyungsung University",
+    "- Capstone Contest, Kyungsung University",
   ].join("\n");
   return deliverAndLog(opts.to, subject, body, "PASSWORD_RESET");
 }

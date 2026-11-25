@@ -20,7 +20,7 @@ export type SiteSettings = {
 export const DEFAULT_SETTINGS: SiteSettings = {
   searchEnabled: true,
   accountRequestsOpen: true,
-  siteName: "UniProjects",
+  siteName: "Capstone Contest",
   heroTitle: "Capstone Contest...",
   heroSubtitle:
     "Explore student ideas, discover working projects, and celebrate a year of capstone design.",
@@ -53,7 +53,10 @@ export async function getSettings(): Promise<SiteSettings> {
     searchEnabled: (map.get("searchEnabled") ?? String(DEFAULT_SETTINGS.searchEnabled)) === "true",
     accountRequestsOpen:
       (map.get("accountRequestsOpen") ?? String(DEFAULT_SETTINGS.accountRequestsOpen)) === "true",
-    siteName: map.get("siteName") ?? DEFAULT_SETTINGS.siteName,
+    siteName:
+      !map.get("siteName") || map.get("siteName") === "UniProjects"
+        ? DEFAULT_SETTINGS.siteName
+        : map.get("siteName")!,
     heroTitle:
       !map.get("heroTitle") || map.get("heroTitle") === LEGACY_HERO_TITLE
         ? DEFAULT_SETTINGS.heroTitle

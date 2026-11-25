@@ -286,7 +286,7 @@ export function ImportStudentsDialog({
                   className="mt-2 gap-1.5 bg-card"
                   onClick={() =>
                     download(
-                      "uniprojects-credentials.csv",
+                      "capstone-contest-credentials.csv",
                       "studentId,name,password\n" +
                         withPasswords.map((r) => [r.studentId, r.name, r.password!].map(csvCell).join(",")).join("\n")
                     )

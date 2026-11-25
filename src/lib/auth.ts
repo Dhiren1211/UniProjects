@@ -156,10 +156,11 @@ export function toSafeUser(u: {
 
 /**
  * SafeUser for public responses (directory, search, other people's profiles):
- * the email address is withheld - only the user themself and staff see it.
+ * the email address and student number are withheld - only the user
+ * themself and staff see them.
  */
 export function toPublicUser(u: Parameters<typeof toSafeUser>[0]): SafeUser {
-  return { ...toSafeUser(u), email: "" };
+  return { ...toSafeUser(u), email: "", studentId: null };
 }
 
 /** Resolve the signed-in user from the session cookie (null when guest). */

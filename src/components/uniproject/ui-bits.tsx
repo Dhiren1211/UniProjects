@@ -1,4 +1,4 @@
-// Small shared UI pieces for UniProjects
+// Small shared UI pieces for Capstone Contest
 
 import { useEffect, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";

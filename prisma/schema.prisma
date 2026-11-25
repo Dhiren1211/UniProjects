@@ -8,7 +8,7 @@ datasource db {
 }
 
 // ============================================================
-// UniProjects - FULL platform for a SINGLE university.
+// Capstone Contest - FULL platform for a SINGLE university.
 // The university itself is app-level config (src/lib/config.ts).
 // ============================================================
 

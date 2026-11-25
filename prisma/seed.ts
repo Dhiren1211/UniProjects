@@ -35,7 +35,7 @@ const technologies = [
 ];
 
 async function main() {
-  console.log("Resetting UniProjects data…");
+  console.log("Resetting Capstone Contest data…");
   await db.notification.deleteMany();
   await db.report.deleteMany();
   await db.verification.deleteMany();
@@ -75,7 +75,7 @@ async function main() {
     data: [
       { key: "searchEnabled", value: "true" },
       { key: "accountRequestsOpen", value: "true" },
-      { key: "siteName", value: "UniProjects" },
+      { key: "siteName", value: "Capstone Contest" },
       { key: "heroTitle", value: "Capstone Contest..." },
       {
         key: "heroSubtitle",

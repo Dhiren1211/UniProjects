@@ -1,5 +1,5 @@
 // ============================================================
-// UniProjects - shared API payload types (the contract between
+// Capstone Contest - shared API payload types (the contract between
 // backend route handlers and frontend views).
 // ============================================================
 
