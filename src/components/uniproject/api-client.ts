@@ -151,7 +151,7 @@ export async function resetMailSettings(): Promise<MailSettingsDTO> {
 }
 
 export function sendTestEmail(): Promise<{ delivered: boolean; to: string }> {
-  return send("/api/admin/mail-settings/test", "POST");
+  return send("/api/admin/mail-settings/send-test", "POST");
 }
 
 // ---------- account requests (public intake → admin approval) ----------
