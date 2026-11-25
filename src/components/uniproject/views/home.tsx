@@ -47,7 +47,7 @@ export function HomeView({ navigate }: { navigate: Navigate }) {
         title={settings?.heroTitle ?? "Capstone Contest..."}
         lead={
           settings?.heroSubtitle ??
-          "Student teams turn a year of capstone design work into published, searchable projects that are supervised, verified and open to everyone."
+          "Explore student ideas, discover working projects, and celebrate a year of capstone design."
         }
         image={
           settings
@@ -131,68 +131,63 @@ function Intro({
           className="absolute inset-0 -z-20 size-full object-cover"
         />
       ) : null}
-      {/* One soft scrim keeps the white text readable on any photo */}
+      {/* Deep navy wash on the copy side, fading out so the photo shows on the right */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 bg-gradient-to-t from-black/75 via-black/45 to-black/25 md:bg-gradient-to-r md:from-black/70 md:via-black/40 md:to-black/5"
+        className="absolute inset-0 -z-10 bg-gradient-to-t from-[#06215f] via-[#0a2c7a]/80 to-[#0a2c7a]/20 md:bg-gradient-to-r md:from-[#06215f] md:via-[#0a2c7a]/75 md:via-45% md:to-transparent md:to-75%"
       />
 
-      <div className="wrap flex min-h-[520px] flex-col justify-end py-16 md:min-h-[78vh] md:justify-center md:py-24">
+      <div className="wrap flex min-h-[560px] flex-col justify-end py-16 md:min-h-[80vh] md:justify-center md:py-24">
         <motion.p
           {...enter(0)}
-          className="text-[0.875rem] font-medium text-white/80"
+          className="text-[0.8125rem] font-semibold uppercase tracking-[0.4em] text-white md:text-[0.9375rem]"
         >
-          {UNIVERSITY.name} · Capstone design
+          {UNIVERSITY.name}
         </motion.p>
 
         <motion.h1
           {...enter(0.05)}
           id="home-title"
-          className="mt-5 max-w-[18ch] text-balance text-[2.375rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3.75rem]"
+          className="mt-5 font-display text-[3.5rem] font-extrabold leading-[0.95] tracking-[-0.03em] text-white sm:text-[4.5rem] md:text-[6.5rem]"
         >
-          {title}
+          <TwoToneTitle text={title} />
         </motion.h1>
 
         <motion.p
           {...enter(0.1)}
-          className="relative isolate mt-6 max-w-[52ch] text-pretty text-[1.0625rem] leading-relaxed text-white"
+          className="mt-6 max-w-[38ch] text-pretty text-[1.1875rem] font-medium leading-snug text-white md:text-[1.5rem]"
         >
-          {/* soft, borderless dark glow behind the copy - fades into the photo */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -inset-x-6 -inset-y-4 -z-10 rounded-[40px] bg-black/45 blur-2xl"
-          />
           {lead}
         </motion.p>
 
         <motion.div
           {...enter(0.15)}
-          className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center"
+          className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6"
         >
           {/* Signed out: "Request an account  or  Browse projects" */}
           {!user ? (
             <>
               <Button
+                variant="outline"
                 onClick={() => navigate({ name: "account-request" })}
-                className="h-12 cursor-pointer gap-2 px-6 text-base"
+                className={HERO_OUTLINE}
               >
                 Request an account
-                <MArrow />
               </Button>
-              <span className="text-center text-base font-medium text-white/80 sm:px-1">or</span>
+              <span className="text-center text-lg font-medium text-white">or</span>
               <Button
-                variant="outline"
                 onClick={() => navigate({ name: "projects" })}
-                className="h-12 cursor-pointer border-white/40 bg-transparent px-6 text-base text-white hover:border-white hover:bg-white/10 hover:text-white"
+                className={HERO_SOLID}
               >
                 Browse projects
+                <MArrow />
               </Button>
             </>
           ) : (
             <>
               <Button
                 onClick={() => navigate({ name: "projects" })}
-                className="h-12 cursor-pointer gap-2 px-6 text-base"
+                className={HERO_SOLID}
               >
                 Browse projects
                 <MArrow />
@@ -201,7 +196,7 @@ function Intro({
                 <Button
                   variant="outline"
                   onClick={() => navigate({ name: "create" })}
-                  className="h-12 cursor-pointer border-white/40 bg-transparent px-6 text-base text-white hover:border-white hover:bg-white/10 hover:text-white"
+                  className={HERO_OUTLINE}
                 >
                   Submit your capstone
                 </Button>
@@ -211,6 +206,24 @@ function Intro({
         </motion.div>
       </div>
     </section>
+  );
+}
+
+const HERO_SOLID =
+  "h-14 cursor-pointer gap-2 rounded-xl px-7 text-lg font-bold shadow-lg shadow-black/20";
+const HERO_OUTLINE =
+  "h-14 cursor-pointer rounded-xl border-2 border-white/90 bg-transparent px-7 text-lg font-medium text-white hover:border-white hover:bg-white/10 hover:text-white";
+
+/** "Capstone Contest..." → white first line, light-blue last word on its own line. */
+function TwoToneTitle({ text }: { text: string }) {
+  const t = text.trim();
+  const cut = t.lastIndexOf(" ");
+  if (cut < 0) return <>{t}</>;
+  return (
+    <>
+      <span className="block">{t.slice(0, cut)}</span>
+      <span className="block text-[#a8d4ff]">{t.slice(cut + 1)}</span>
+    </>
   );
 }
 

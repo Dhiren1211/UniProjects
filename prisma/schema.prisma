@@ -347,6 +347,7 @@ model UploadedFile {
   size       Int
   data       Bytes
   kind       String // avatar | cover | gallery | resource | hero
+  compressed Boolean  @default(false) // already re-encoded by the image compressor
   uploaderId String?
   createdAt  DateTime @default(now())
 }

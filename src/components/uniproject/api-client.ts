@@ -17,6 +17,7 @@ import type {
   DepartmentDTO,
   EmailLogDTO,
   JoinRequestDTO,
+  MailSettingsDTO,
   NotificationDTO,
   PasswordResetRow,
   ProfileResponse,
@@ -27,6 +28,8 @@ import type {
   SearchResults,
   SiteSettings,
   StatsDTO,
+  StorageConfigDTO,
+  StorageReportDTO,
   TechnologyDTO,
   VerificationDTO,
 } from "@/lib/types";
@@ -106,6 +109,49 @@ export async function fetchSettings(signal?: AbortSignal): Promise<SiteSettings>
 export async function updateSiteSettings(patch: Partial<SiteSettings>): Promise<SiteSettings> {
   const data = await send<{ settings: SiteSettings }>("/api/settings", "PUT", patch);
   return data.settings;
+}
+
+// ---------- admin: storage + image compression ----------
+
+export function fetchStorageReport(signal?: AbortSignal): Promise<StorageReportDTO> {
+  return get<StorageReportDTO>("/api/admin/storage", signal);
+}
+
+export async function updateStorageConfig(patch: Partial<StorageConfigDTO>): Promise<StorageConfigDTO> {
+  const data = await send<{ config: StorageConfigDTO }>("/api/admin/storage", "PUT", patch);
+  return data.config;
+}
+
+/** One batch of the "compress existing images" job - call until remaining is 0. */
+export function compressExistingImages(): Promise<{ processed: number; savedBytes: number; remaining: number }> {
+  return send("/api/admin/storage/compress", "POST");
+}
+
+// ---------- admin: email delivery (SMTP) ----------
+
+export async function fetchMailSettings(signal?: AbortSignal): Promise<MailSettingsDTO> {
+  const data = await get<{ mail: MailSettingsDTO }>("/api/admin/mail-settings", signal);
+  return data.mail;
+}
+
+export async function saveMailSettings(input: {
+  host: string;
+  port: number;
+  user: string;
+  fromName: string;
+  pass?: string;
+}): Promise<MailSettingsDTO> {
+  const data = await send<{ mail: MailSettingsDTO }>("/api/admin/mail-settings", "PUT", input);
+  return data.mail;
+}
+
+export async function resetMailSettings(): Promise<MailSettingsDTO> {
+  const data = await send<{ mail: MailSettingsDTO }>("/api/admin/mail-settings", "DELETE");
+  return data.mail;
+}
+
+export function sendTestEmail(): Promise<{ delivered: boolean; to: string }> {
+  return send("/api/admin/mail-settings/test", "POST");
 }
 
 // ---------- account requests (public intake → admin approval) ----------

@@ -33,6 +33,7 @@ import {
   Flag,
   FolderKanban,
   GraduationCap,
+  HardDrive,
   Handshake,
   History,
   KeyRound,
@@ -139,6 +140,8 @@ import { useAppStore } from "../store";
 import { deleteWithUndo, restoreAt } from "../undo-delete";
 import { ImportStudentsDialog } from "../import-students-dialog";
 import { ActivityLog } from "../activity-log";
+import { StorageTab } from "../storage-tab";
+import { MailSettingsCard } from "../mail-settings-card";
 import { BulkBar, ConfirmDialog, CredentialsDialog, runSequential, type Credential } from "../bulk-actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ApprovalQueueCard, ReportsQueueCard, VerificationQueueCard } from "../staff-queues";
@@ -180,6 +183,7 @@ type TabKey =
   | "moderation"
   | "emails"
   | "settings"
+  | "storage"
   | "departments"
   | "activity";
 
@@ -194,6 +198,7 @@ const ALL_TABS: { key: TabKey; label: string; icon: LucideIcon; adminOnly?: bool
   { key: "resets", label: "Resets", icon: KeyRound, adminOnly: true },
   { key: "emails", label: "Emails", icon: Mail, adminOnly: true },
   { key: "settings", label: "Settings", icon: Settings2, adminOnly: true },
+  { key: "storage", label: "Storage", icon: HardDrive, adminOnly: true },
   { key: "departments", label: "Departments", icon: Building2, adminOnly: true },
   { key: "activity", label: "Activity", icon: History, adminOnly: true },
 ];
@@ -240,7 +245,11 @@ const TAB_META: Record<TabKey, { title: string; description: string }> = {
   },
   settings: {
     title: "Site settings",
-    description: "Feature toggles and hero copy - changes apply across the whole site.",
+    description: "Feature toggles, hero copy and email delivery - changes apply across the whole site.",
+  },
+  storage: {
+    title: "Storage",
+    description: "How much of the database is used and free, what fills it, and image compression.",
   },
   activity: {
     title: "Activity log",
@@ -362,6 +371,7 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
   const emailsLoaded = useCallback((ok: boolean) => noteLoaded(["emails"], ok), [noteLoaded]);
   const activityLoaded = useCallback((ok: boolean) => noteLoaded(["activity"], ok), [noteLoaded]);
   const settingsLoaded = useCallback((ok: boolean) => noteLoaded(["settings"], ok), [noteLoaded]);
+  const storageLoaded = useCallback((ok: boolean) => noteLoaded(["storage"], ok), [noteLoaded]);
   const departmentsLoaded = useCallback(
     (ok: boolean) => noteLoaded(["departments"], ok),
     [noteLoaded]
@@ -565,6 +575,9 @@ export function AdminView({ navigate, initialTab }: { navigate: Navigate; initia
             ) : null}
             {isAdmin && tab === "settings" ? (
               <SettingsTab refreshTick={refreshTick} onLoaded={settingsLoaded} />
+            ) : null}
+            {isAdmin && tab === "storage" ? (
+              <StorageTab refreshTick={refreshTick} onLoaded={storageLoaded} />
             ) : null}
             {isAdmin && tab === "activity" ? <ActivityLog refreshTick={refreshTick} onLoaded={activityLoaded} /> : null}
             {isAdmin && tab === "departments" ? (
@@ -1343,14 +1356,15 @@ function OverviewTab({
 
   if (!overview) {
     return (
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0 space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="@container">
+      <div className="grid grid-cols-1 gap-5 @min-[76rem]:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="@container min-w-0 space-y-5">
+          <div className="grid grid-cols-1 gap-4 @min-[28rem]:grid-cols-2 @min-[56rem]:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-36 w-full rounded-2xl" />
             ))}
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @min-[44rem]:grid-cols-2">
             <Skeleton className="h-72 w-full rounded-2xl" />
             <Skeleton className="h-72 w-full rounded-2xl" />
           </div>
@@ -1360,6 +1374,7 @@ function OverviewTab({
           <Skeleton className="h-80 w-full rounded-2xl" />
           <Skeleton className="h-64 w-full rounded-2xl" />
         </div>
+      </div>
       </div>
     );
   }
@@ -1373,7 +1388,7 @@ function OverviewTab({
       : null;
 
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
       {/* ---------- welcome band ---------- */}
       <WelcomeBand
         overview={overview}
@@ -1381,11 +1396,13 @@ function OverviewTab({
         onQueues={() => onQuickAction("moderation")}
       />
 
-      {/* main grid - dashboard column + activity rail (reference console layout) */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 space-y-4">
+      {/* main grid - dashboard column + activity rail (reference console layout).
+          Container queries: columns follow the space actually available, so the
+          larger type on big screens never squeezes the cards. */}
+      <div className="grid grid-cols-1 gap-4 @min-[76rem]:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="@container min-w-0 space-y-4">
           {/* ---------- primary KPIs ---------- */}
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 @min-[28rem]:grid-cols-2 @min-[56rem]:grid-cols-4">
             <HeroStatCard
               label="Total users"
               value={overview.users}
@@ -1422,7 +1439,7 @@ function OverviewTab({
           </div>
 
           {/* ---------- charts row ---------- */}
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 @min-[44rem]:grid-cols-2">
             <GrowthChartCard data={overview.signupsByMonth} />
             <RoleDonutCard overview={overview} />
           </div>
@@ -1438,8 +1455,8 @@ function OverviewTab({
           <SectionsCard byClass={overview.byClass} />
         </div>
 
-        {/* ---------- right rail ---------- */}
-        <div className="min-w-0 space-y-4">
+        {/* ---------- right rail (below the cards, two-up, when there's no room) ---------- */}
+        <div className="grid min-w-0 grid-cols-1 content-start items-start gap-4 @min-[44rem]:grid-cols-2 @min-[76rem]:grid-cols-1">
           <ActivityCard items={overview.activity} navigate={navigate} />
           <QuickActionsCard overview={overview} onAction={onQuickAction} isAdmin={isAdmin} />
           <SystemCard storage={overview.storage} />
@@ -2102,7 +2119,7 @@ function QuickActionsCard({
   ];
   return (
     <Panel title="Quick actions" caption="Jump into the most common tasks" className={className}>
-      <div className="mt-3 grid gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2">
         {actions.map((action) => {
           const Icon = action.icon;
           return (
@@ -6527,6 +6544,11 @@ function SettingsTab({
         ) : (
           <p className="text-xs text-muted-foreground">All changes saved</p>
         )}
+      </div>
+
+      {/* email delivery - saved separately, applies immediately */}
+      <div className="mt-2 lg:col-span-2">
+        <MailSettingsCard />
       </div>
     </div>
   );

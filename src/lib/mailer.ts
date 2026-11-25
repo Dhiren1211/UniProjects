@@ -1,7 +1,8 @@
 // ============================================================
 // Mailer - transactional email with a persistent outbox.
 //
-// Delivery uses SMTP when it is configured (env):
+// Delivery uses SMTP when it is configured - Admin → Settings → Email
+// delivery (stored in the database) wins; otherwise the env values:
 //   SMTP_USER   - the sending account, e.g. uniprojects.ks@gmail.com
 //   SMTP_PASS   - its password (for Gmail: a 16-character App Password)
 //   SMTP_HOST   - default smtp.gmail.com
@@ -13,6 +14,7 @@
 
 import nodemailer, { type Transporter } from "nodemailer";
 import { db } from "@/lib/db";
+import { getMailConfig, type MailConfig } from "@/lib/admin-config";
 
 export type MailResult = {
   /** true when the SMTP server accepted the message. */
@@ -21,24 +23,28 @@ export type MailResult = {
   logId: string;
 };
 
-let transporter: Transporter | null | undefined;
+// One transporter per distinct config - rebuilt when the admin changes the settings.
+let cached: { key: string; transporter: Transporter } | null = null;
 
-function getTransporter(): Transporter | null {
-  if (transporter !== undefined) return transporter;
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.replace(/\s+/g, ""); // Gmail shows app passwords with spaces
-  if (!user || !pass) return (transporter = null);
-  const port = Number(process.env.SMTP_PORT) || 465;
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST?.trim() || "smtp.gmail.com",
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
-  });
-  return transporter;
+async function getTransporter(): Promise<{ t: Transporter; cfg: MailConfig } | null> {
+  const cfg = await getMailConfig();
+  if (!cfg) return null;
+  const key = JSON.stringify([cfg.host, cfg.port, cfg.user, cfg.pass]);
+  if (cached?.key !== key) {
+    cached = {
+      key,
+      transporter: nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.port === 465,
+        auth: { user: cfg.user, pass: cfg.pass },
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
+      }),
+    };
+  }
+  return { t: cached.transporter, cfg };
 }
 
 function escapeHtml(s: string): string {
@@ -68,14 +74,17 @@ async function deliverAndLog(
   body: string,
   kind: "CREDENTIALS" | "PASSWORD_RESET" | "SYSTEM"
 ): Promise<MailResult> {
-  const t = getTransporter();
+  const smtp = await getTransporter().catch((e) => {
+    console.error("Mail settings could not be loaded:", e instanceof Error ? e.message : e);
+    return null;
+  });
   let status = "CONSOLE"; // stored only (no SMTP configured)
 
-  if (t) {
+  if (smtp) {
     try {
-      const fromName = (process.env.MAIL_FROM_NAME || "UniProjects").replace(/["<>]/g, "");
-      await t.sendMail({
-        from: `"${fromName}" <${process.env.SMTP_USER!.trim()}>`,
+      const fromName = smtp.cfg.fromName.replace(/["<>]/g, "");
+      await smtp.t.sendMail({
+        from: `"${fromName}" <${smtp.cfg.user}>`,
         to,
         subject,
         text: body,

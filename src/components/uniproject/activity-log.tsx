@@ -58,6 +58,8 @@ const VERBS: Record<string, string> = {
   "report.dismissed": "dismissed a report",
   "report.open": "reopened a report",
   "settings.update": "changed",
+  "settings.compress": "compressed",
+  "settings.mailtest": "sent a test of",
 };
 
 function tone(action: string) {

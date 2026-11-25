@@ -23,12 +23,15 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   siteName: "UniProjects",
   heroTitle: "Capstone Contest...",
   heroSubtitle:
-    "Student teams turn a year of capstone design work into published, searchable projects that are supervised, verified and open to everyone.",
+    "Explore student ideas, discover working projects, and celebrate a year of capstone design.",
   heroImage: "/hero/ksu-central-library.jpg",
 };
 
 /** The old seeded hero title - databases that still hold it get the new default. */
 const LEGACY_HERO_TITLE = "Kyungsung University Capstone Showcase";
+/** The previous default subtitle - stored copies get the new default. */
+const LEGACY_HERO_SUBTITLE =
+  "Student teams turn a year of capstone design work into published, searchable projects that are supervised, verified and open to everyone.";
 
 type RawValue = string | number | boolean;
 
@@ -55,7 +58,10 @@ export async function getSettings(): Promise<SiteSettings> {
       !map.get("heroTitle") || map.get("heroTitle") === LEGACY_HERO_TITLE
         ? DEFAULT_SETTINGS.heroTitle
         : map.get("heroTitle")!,
-    heroSubtitle: map.get("heroSubtitle") ?? DEFAULT_SETTINGS.heroSubtitle,
+    heroSubtitle:
+      !map.get("heroSubtitle") || map.get("heroSubtitle") === LEGACY_HERO_SUBTITLE
+        ? DEFAULT_SETTINGS.heroSubtitle
+        : map.get("heroSubtitle")!,
     heroImage: map.get("heroImage") ?? DEFAULT_SETTINGS.heroImage,
   };
 }

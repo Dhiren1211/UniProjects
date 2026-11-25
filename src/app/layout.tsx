@@ -11,6 +11,7 @@ const urbanist = localFont({
     { path: "./fonts/urbanist-400.woff2", weight: "400", style: "normal" },
     { path: "./fonts/urbanist-500.woff2", weight: "500", style: "normal" },
     { path: "./fonts/urbanist-600.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/urbanist-800.woff2", weight: "800", style: "normal" },
   ],
   variable: "--font-urbanist",
   display: "swap",

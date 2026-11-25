@@ -216,6 +216,35 @@ export type SiteSettings = {
   heroImage: string;
 };
 
+// ===== Admin → Storage (database capacity + image compression) =====
+
+export type StorageConfigDTO = {
+  capacityMb: number;
+  compress: boolean;
+  maxEdge: number;
+  quality: number;
+};
+
+export type StorageReportDTO = {
+  capacityBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  categories: { key: string; label: string; hint: string; bytes: number; files: number | null }[];
+  images: { total: number; uncompressed: number };
+  config: StorageConfigDTO;
+};
+
+/** Admin → Settings → Email delivery. The password itself is never sent. */
+export type MailSettingsDTO = {
+  host: string;
+  port: number;
+  user: string;
+  fromName: string;
+  hasPassword: boolean;
+  source: "panel" | "env" | "none";
+  passwordUnreadable: boolean;
+};
+
 // ===== Account requests (public intake → admin approval) =====
 
 export type AccountRequestDTO = {

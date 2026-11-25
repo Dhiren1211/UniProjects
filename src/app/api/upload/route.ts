@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { getSessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { canConfigureSite } from "@/lib/rbac";
+import { getStorageConfig } from "@/lib/admin-config";
+import { compressImage, isCompressible } from "@/lib/image-compress";
 
 export const dynamic = "force-dynamic";
 
@@ -120,14 +122,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "That file isn't a valid image" }, { status: 415 });
     }
 
-    const name = `${kind}-${Date.now().toString(36)}-${randomBytes(5).toString("hex")}.${ext}`;
+    // Admin → Storage: optionally shrink images (scaled + re-encoded as WebP).
+    let data = buf;
+    let finalExt = ext;
+    let mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
+    let compressed = false;
+    if (isCompressible(ext)) {
+      const cfg = await getStorageConfig();
+      if (cfg.compress) {
+        const out = await compressImage(buf, ext, cfg, {
+          maxEdge: kind === "avatar" ? 512 : kind === "hero" ? 2560 : undefined,
+        });
+        data = Buffer.from(out.data);
+        finalExt = out.ext;
+        mime = out.mime;
+        compressed = true; // even when the original was kept, it was already small
+      }
+    }
+
+    const name = `${kind}-${Date.now().toString(36)}-${randomBytes(5).toString("hex")}.${finalExt}`;
     await db.uploadedFile.create({
       data: {
         name,
-        mime: MIME_BY_EXT[ext] ?? "application/octet-stream",
-        size: buf.length,
-        data: buf,
+        mime,
+        size: data.length,
+        data,
         kind,
+        compressed,
         uploaderId: viewer.id,
       },
     });
